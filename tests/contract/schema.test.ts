@@ -4,6 +4,7 @@ import {
   capabilityCatalogWireSchema,
   fieldSchema,
   operationResultSchema,
+  resourceDetailSchema,
   queryResultSchema,
   resourceTypeSchema,
 } from "../../packages/pms-contracts/src/index.js";
@@ -66,17 +67,46 @@ describe("PMS connector shared schemas", () => {
     })).toThrow();
   });
 
+  it("accepts exact resource details and preserves workflow metadata", () => {
+    const detail = resourceDetailSchema.parse({
+      resourceType: "story",
+      resourceId: 27,
+      entityVersion: 4,
+      details: { title: "登录故事", topicId: 19 },
+    });
+    expect(detail.details).toEqual({ title: "登录故事", topicId: 19 });
+  });
+
   it("keeps normalized fields strict while accepting the backend wire shape", () => {
     expect(fieldSchema.safeParse({ type: "string" }).success).toBe(false);
     expect(fieldSchema.safeParse({ type: "string", label: "标题" }).success).toBe(true);
-    expect(capabilityCatalogWireSchema.safeParse({
+    const catalog = capabilityCatalogWireSchema.parse({
       version: "ai-v1",
       resources: [{
         type: "topic",
+        workflow: {
+          nodes: [{
+            key: "requirements",
+            label: "需求",
+            position: 0,
+            components: [{
+              key: "analysis",
+              label: "分析",
+              fields: [],
+              actions: [],
+              saveContract: { operation: "requirement.analysis.save" },
+            }],
+          }],
+        },
         actions: [],
       }],
       scopes: [],
       workflowTypes: [],
-    }).success).toBe(true);
+      features: { richWorkflowContext: true },
+    });
+    expect(catalog.features?.richWorkflowContext).toBe(true);
+    expect(catalog.resources[0]?.workflow?.nodes[0]?.components[0]?.saveContract).toEqual({
+      operation: "requirement.analysis.save",
+    });
   });
 });

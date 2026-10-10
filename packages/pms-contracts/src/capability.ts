@@ -57,6 +57,7 @@ export const workflowComponentSchema = z.object({
   label: z.string().min(1),
   fields: z.union([z.record(z.string(), fieldSchema), z.array(fieldSchema)]),
   actions: z.array(z.string()).default([]),
+  saveContract: z.record(z.string(), z.unknown()).optional(),
 });
 
 const wireWorkflowComponentSchema = z.object({
@@ -64,6 +65,7 @@ const wireWorkflowComponentSchema = z.object({
   label: z.string().min(1),
   fields: z.union([z.record(z.string(), wireFieldSchema), z.array(wireFieldSchema)]),
   actions: z.array(z.string()).default([]),
+  saveContract: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const workflowNodeSchema = z.object({
@@ -128,6 +130,7 @@ export const capabilityCatalogWireSchema = z.object({
   version: z.string().min(1),
   resources: z.array(wireResourceCapabilitySchema),
   scopes: z.array(z.string()),
+  features: z.record(z.string(), z.boolean()).optional(),
   workflowTypes: z.array(wireWorkflowTypeCapabilitySchema).default([]),
   viewer: z.object({
     id: z.number().int().positive(),
@@ -142,6 +145,7 @@ export const capabilityCatalogSchema = z.object({
   version: z.string().min(1),
   resources: z.array(resourceCapabilitySchema),
   scopes: z.array(z.string()),
+  features: z.record(z.string(), z.boolean()).optional(),
   workflowTypes: z.array(workflowTypeCapabilitySchema).default([]),
   viewer: z.object({
     id: z.number().int().positive(),

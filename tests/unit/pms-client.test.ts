@@ -3,6 +3,60 @@ import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/sr
 import { OutputWriter } from "../../apps/pms-cli/src/output/OutputWriter.js";
 
 describe("PMS CLI client protocol", () => {
+  it("reads an exact resource without falling back to a list query", async () => {
+    const requests: string[] = [];
+    const client = new PmsHttpClient({
+      baseUrl: "http://localhost:8080/api",
+      auth: new StaticTokenProvider("short-token"),
+      clientId: "pms-cli",
+      fetchImpl: async (input) => {
+        requests.push(String(input));
+        return new Response(JSON.stringify({
+          code: 200,
+          data: {
+            resourceType: "topic",
+            resourceId: 19,
+            entityVersion: null,
+            details: { title: "订单专题", storyCount: 2 },
+          },
+        }), { status: 200 });
+      },
+    });
+
+    const result = await client.get({ type: "topic", id: 19 });
+
+    expect(result.details).toMatchObject({ title: "订单专题", storyCount: 2 });
+    expect(requests).toEqual(["http://localhost:8080/api/integration/ai/v1/resources/topic/19"]);
+  });
+
+  it("preserves resource details and workflow metadata from context", async () => {
+    const client = new PmsHttpClient({
+      baseUrl: "http://localhost:8080/api",
+      auth: new StaticTokenProvider("short-token"),
+      clientId: "pms-cli",
+      fetchImpl: async () => new Response(JSON.stringify({
+        code: 200,
+        data: {
+          resourceType: "project",
+          resourceId: 7,
+          version: 9,
+          resourceDetails: { ownerId: 3, projectLevel: 2 },
+          currentNode: null,
+          workflow: { templateVersionId: 12, templateVersionNo: 4, nodes: [] },
+          relations: [{ resourceType: "topic", resourceId: 19, label: "专题", readable: true }],
+          allowedActions: [],
+        },
+      }), { status: 200 }),
+    });
+
+    const context = await client.context({ type: "project", id: 7 });
+
+    expect(context.resourceDetails).toEqual({ ownerId: 3, projectLevel: 2 });
+    expect(context.workflow?.templateVersionId).toBe(12);
+    expect(context.workflow?.templateVersionNo).toBe(4);
+    expect(context.relations).toEqual([{ resourceType: "topic", resourceId: 19, label: "专题", readable: true }]);
+  });
+
   it("uses the read-only preview facade before a write", async () => {
     let requestUrl = "";
     const client = new PmsHttpClient({

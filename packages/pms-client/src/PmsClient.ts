@@ -6,6 +6,7 @@ import {
   operationPreviewSchema,
   queryRequestSchema,
   queryResultSchema,
+  resourceDetailSchema,
   resourceRefSchema,
   workflowContextResponseSchema,
   type AutomaticOperationRequest,
@@ -14,6 +15,7 @@ import {
   type OperationPreview,
   type QueryRequest,
   type QueryResult,
+  type ResourceDetail,
   type ResourceRef,
   type WorkflowContext,
 } from "../../pms-contracts/src/index.js";
@@ -26,6 +28,7 @@ import type { PmsClientId } from "./RequestContext.js";
 export interface PmsClient {
   capabilities(): Promise<CapabilityCatalog>;
   query(request: QueryRequest): Promise<QueryResult>;
+  get(resource: ResourceRef): Promise<ResourceDetail>;
   context(resource: ResourceRef): Promise<WorkflowContext>;
   preview(request: AutomaticOperationRequest): Promise<OperationPreview>;
   execute(request: AutomaticOperationRequest): Promise<OperationResult>;
@@ -97,6 +100,18 @@ export class PmsHttpClient implements PmsClient {
     return queryResultSchema.parse(data);
   }
 
+  async get(resource: ResourceRef): Promise<ResourceDetail> {
+    const parsed = resourceRefSchema.extend({
+      id: z.number().int().positive(),
+    }).parse(resource);
+    const data = await this.requestData(
+      `integration/ai/v1/resources/${encodeURIComponent(parsed.type)}/${parsed.id}`,
+      { method: "GET" },
+      true,
+    );
+    return resourceDetailSchema.parse(data);
+  }
+
   async context(resource: ResourceRef): Promise<WorkflowContext> {
     const parsed = resourceRefSchema.extend({
       id: z.number().int().positive(),
@@ -110,13 +125,17 @@ export class PmsHttpClient implements PmsClient {
     return {
       resource: { type: raw.resourceType, id: raw.resourceId },
       version: raw.version,
+      ...(raw.entityVersion !== undefined ? { entityVersion: raw.entityVersion } : {}),
+      ...(raw.resourceDetails !== undefined ? { resourceDetails: raw.resourceDetails } : {}),
       currentNode: raw.currentNode ?? undefined,
       workflow: raw.workflow
         ? {
           templateVersionId: raw.workflow.templateVersionId ?? undefined,
+          templateVersionNo: raw.workflow.templateVersionNo ?? undefined,
           nodes: raw.workflow.nodes,
         }
         : undefined,
+      ...(raw.relations !== undefined ? { relations: raw.relations } : {}),
       allowedActions: raw.allowedActions,
     };
   }

@@ -52,4 +52,40 @@ describe("capability catalog normalization", () => {
       referenceType: "user",
     });
   });
+
+  it("preserves workflow save contracts and catalog feature flags", () => {
+    const catalog = parseCapabilityCatalog({
+      version: "ai-v1",
+      features: { resourceGet: true, richWorkflowContext: true },
+      resources: [{
+        type: "requirement",
+        actions: [],
+        workflow: {
+          nodes: [{
+            key: "clarify",
+            label: "需求澄清",
+            position: 0,
+            components: [{
+              key: "requirement-node-workbench",
+              label: "需求工作台",
+              fields: [],
+              actions: [],
+              saveContract: {
+                operation: "requirement.analysis.save",
+                mergeMode: "append",
+              },
+            }],
+          }],
+        },
+      }],
+      scopes: [],
+      workflowTypes: [],
+    });
+
+    expect(catalog.features).toMatchObject({ resourceGet: true, richWorkflowContext: true });
+    expect(catalog.resources[0]?.workflow?.nodes[0]?.components[0]?.saveContract).toMatchObject({
+      operation: "requirement.analysis.save",
+      mergeMode: "append",
+    });
+  });
 });
