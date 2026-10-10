@@ -10,6 +10,7 @@ import { search } from "../commands/core/search.js";
 import { workflowAction } from "../commands/core/workflow.js";
 import { dashboardSummary } from "../commands/shortcuts/dashboard.js";
 import { createProjectWithReadback } from "../commands/shortcuts/project.js";
+import { requirementAnalysisSave } from "../commands/shortcuts/requirement.js";
 
 const HELP = [
   "PMS CLI",
@@ -22,6 +23,7 @@ const HELP = [
   "  pms operation preview <operation> --arguments-json <json>",
   "  pms operation execute <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms project create --arguments-json <json> --idempotency-key <key>",
+  "  pms requirement analysis save <id> --node-id <id> --version <version> --arguments-json <patch-json> --idempotency-key <key>",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -56,7 +58,7 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
       deps.writeStdout(HELP);
       return;
     }
-    if (invocation.options.version !== undefined || invocation.options.v !== undefined) {
+    if (invocation.options.version === "true" || invocation.options.v !== undefined) {
       deps.writeStdout(VERSION + "\n");
       return;
     }
@@ -146,6 +148,27 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
     const runtime = await deps.createRuntime(requestId);
     return createProjectWithReadback(runtime.client, { ...options, idempotencyKey });
+  }
+  if (invocation.group === "requirement" && invocation.command === "analysis" && invocation.positionals[0] === "save") {
+    if (invocation.positionals.length !== 2) {
+      throw new CliArgumentError("requirement analysis save 需要一个需求 ID");
+    }
+    const requirementId = requireId(invocation.positionals[1]);
+    const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
+    const version = positiveInteger(requiredOption(invocation.options, "version"), "version");
+    if (invocation.options["arguments-json"] === undefined) {
+      throw new CliArgumentError("必须提供 --arguments-json");
+    }
+    const options = operationOptions(invocation.options, requestId);
+    const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const runtime = await deps.createRuntime(requestId);
+    return requirementAnalysisSave(runtime.client, requirementId, {
+      ...options,
+      nodeId,
+      version,
+      patch: options.arguments ?? {},
+      idempotencyKey,
+    });
   }
   if (invocation.group === "operation") {
     const operation = invocation.positionals[0];

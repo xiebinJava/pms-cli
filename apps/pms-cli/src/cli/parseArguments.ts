@@ -7,6 +7,8 @@ const VALUE_OPTIONS = new Set([
   "format",
   "arguments-json",
   "idempotency-key",
+  "node-id",
+  "version",
   "context-id",
   "context-version",
   "contract-id",
@@ -47,6 +49,17 @@ export function parseCliArguments(argv: string[]): CliInvocation {
 
     if (!name || (!VALUE_OPTIONS.has(name) && !BOOLEAN_OPTIONS.has(name) && !["h", "v"].includes(name))) {
       throw new CliArgumentError("未知参数: " + token);
+    }
+    // `--version` is a global boolean, but requirement analysis save also
+    // uses `--version <entity-version>`. Prefer the explicit value form when
+    // a value follows; a bare flag remains the global CLI version switch.
+    if (name === "version" && (inlineValue !== undefined || (argv[index + 1] !== undefined && !argv[index + 1].startsWith("-")))) {
+      const value = inlineValue ?? argv[index + 1];
+      if (value === undefined || value.length === 0) throw new CliArgumentError("参数 --version 缺少参数值");
+      if (inlineValue === undefined) index += 1;
+      if (options[name] !== undefined) throw new CliArgumentError("重复参数: --" + name);
+      options[name] = value;
+      continue;
     }
     if (BOOLEAN_OPTIONS.has(name) || name === "h" || name === "v") {
       if (inlineValue !== undefined) throw new CliArgumentError("参数 " + token + " 不接受值");

@@ -6,7 +6,7 @@ contract/E2E test is green.
 
 | Resource | query | create | update | delete | workflow-action | test status |
 | --- | --- | --- | --- | --- | --- | --- |
-| 需求 | planned | planned | planned | planned | dynamic | contract pending |
+| 需求 | planned | planned | planned | planned | dynamic | analysis-save contract green |
 | 项目 | planned | planned | planned | planned | dynamic | contract pending |
 | 项目节点 | context | n/a | planned | n/a | planned | dynamic |
 | 专题 | planned | planned | planned | planned | dynamic | contract pending |
@@ -27,3 +27,7 @@ contract/E2E test is green.
 `planned` is intentionally not a promise of an offline implementation: the
 backend capability catalog remains the authority for the actual available
 operation and field schema.
+
+需求分析保存是受限的专项入口，不代表需求的所有动态字段都可由 CLI
+写入。只有能力目录声明 `requirement.analysis.save` 且当前需求上下文提供
+明确节点、版本和可写组件时，才允许使用该命令；没有目标节点只生成草稿。

@@ -28,6 +28,19 @@ pms capabilities --format json
 
 `pms auth login` 会打开 PMS 浏览器登录页，CLI 使用 PKCE 回调交换短时 access token；长期 refresh token 只保存到操作系统凭据管理器。
 
+需求分析保存示例：
+
+```bash
+pms requirement analysis save 23 \
+  --node-id 301 \
+  --version 7 \
+  --arguments-json '{"background":"补充用户场景"}' \
+  --idempotency-key analysis-save-23-7 \
+  --format json
+```
+
+保存前应先使用 `pms capabilities --format json` 和 `pms context requirement 23 --format json` 确认能力、实际绑定流程和目标节点。没有明确目标节点时只生成分析草稿；CLI 不会替用户挑选第一个候选节点，也不会自动完成节点或修改所属系统。
+
 ## 工作台 Skill
 
 Codex：

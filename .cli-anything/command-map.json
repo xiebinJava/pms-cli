@@ -10,6 +10,7 @@
     { "name": "context", "mode": "read", "endpoint": "GET /integration/ai/v1/context/{resourceType}/{resourceId}" },
     { "name": "operation preview", "mode": "dry-run", "endpoint": "POST /integration/ai/v1/operations/preview" },
     { "name": "operation execute", "mode": "write", "endpoint": "POST /integration/ai/v1/operations/execute" },
+    { "name": "requirement analysis save", "mode": "write", "endpoint": "POST /integration/ai/v1/operations/execute", "operation": "requirement.analysis.save" },
     { "name": "workflow action", "mode": "write", "endpoint": "POST /integration/ai/v1/operations/execute" },
     { "name": "project", "mode": "shortcut", "delegatesTo": ["search", "get", "context", "operation"] },
     { "name": "requirement", "mode": "shortcut", "delegatesTo": ["search", "get", "context", "operation"] },
