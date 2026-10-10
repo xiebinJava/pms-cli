@@ -3,6 +3,7 @@ import { createServer } from "node:http";
 import { spawn } from "node:child_process";
 import type { AddressInfo } from "node:net";
 import { AuthStore, type Account } from "./AuthStore.js";
+import { withRefreshLock } from "./RefreshCoordinator.js";
 
 export interface PkcePair {
   verifier: string;
@@ -83,15 +84,19 @@ export class BrowserAuth {
   }
 
   async refresh(account: Account): Promise<CliSession> {
+    const identity = AuthStore.identity(account.baseUrl, account.accountId);
+    return withRefreshLock(identity, async () => {
+      const latest = await this.options.store.getAccount(account.baseUrl, account.accountId) ?? account;
     const response = await this.fetchImpl(new URL("integration/cli/v1/token", account.baseUrl.endsWith("/") ? account.baseUrl : `${account.baseUrl}/`).toString(), {
       method: "POST",
       headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ grantType: "refresh_token", refreshToken: account.refreshToken }),
+      body: JSON.stringify({ grantType: "refresh_token", refreshToken: latest.refreshToken }),
     });
     const data = await readPmsData(response);
-    const next = { ...account, refreshToken: String(data.refreshToken) };
+    const next = { ...latest, refreshToken: String(data.refreshToken) };
     await this.options.store.save(next);
     return { accessToken: String(data.accessToken), account: next };
+    });
   }
 
   async logout(account: Account): Promise<void> {
@@ -100,7 +105,7 @@ export class BrowserAuth {
       headers: { "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({ refreshToken: account.refreshToken }),
     });
-    await this.options.store.remove(account.accountId);
+    await this.options.store.remove(account.accountId, account.baseUrl);
   }
 
   private apiBase(): string {
