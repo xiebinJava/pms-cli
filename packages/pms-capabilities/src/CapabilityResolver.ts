@@ -45,7 +45,14 @@ export class DynamicCapabilityResolver {
     if (templateVersionId !== undefined) {
       return templates.find((candidate) => candidate.templateVersionId === templateVersionId);
     }
-    return templates.find((candidate) => candidate.defaultTemplate) ?? templates[0];
+    const defaults = templates.filter((candidate) => candidate.defaultTemplate === true);
+    return defaults.length === 1 ? defaults[0] : undefined;
+  }
+
+  templateCandidates(processType: string, name: string): WorkflowCapability[] {
+    const normalizedName = name.trim();
+    if (!normalizedName) return [];
+    return this.workflowType(processType).templates.filter((candidate) => candidate.name?.trim() === normalizedName);
   }
 
   node(locator: Omit<ComponentLocator, "componentKey">): WorkflowNode {

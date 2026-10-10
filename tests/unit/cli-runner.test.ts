@@ -38,6 +38,7 @@ describe("CLI runner", () => {
     for (const args of [
       ["search", "topic", "--filter", "status=ACTIVE", "--filter", "status=DONE"],
       ["operation", "execute", "project.create", "--arguments-json", "{}"],
+      ["project", "create", "--arguments-json", "{}"],
       ["get", "project", "9007199254740993"],
       ["operation", "preview", "project.create", "--arguments-json", "{bad"],
       ["operation", "preview", "project.create", "--context-id", "project:7"],

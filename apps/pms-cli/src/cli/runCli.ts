@@ -9,6 +9,7 @@ import { operationExecute, operationPreview, type OperationOptions } from "../co
 import { search } from "../commands/core/search.js";
 import { workflowAction } from "../commands/core/workflow.js";
 import { dashboardSummary } from "../commands/shortcuts/dashboard.js";
+import { createProjectWithReadback } from "../commands/shortcuts/project.js";
 
 const HELP = [
   "PMS CLI",
@@ -20,6 +21,7 @@ const HELP = [
   "  pms context <resourceType> <id>",
   "  pms operation preview <operation> --arguments-json <json>",
   "  pms operation execute <operation> --arguments-json <json> --idempotency-key <key>",
+  "  pms project create --arguments-json <json> --idempotency-key <key>",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -138,6 +140,12 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   if (invocation.group === "dashboard" && invocation.command === "summary") {
     const runtime = await deps.createRuntime(requestId);
     return dashboardSummary(runtime.client);
+  }
+  if (invocation.group === "project" && invocation.command === "create") {
+    const options = operationOptions(invocation.options, requestId);
+    const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const runtime = await deps.createRuntime(requestId);
+    return createProjectWithReadback(runtime.client, { ...options, idempotencyKey });
   }
   if (invocation.group === "operation") {
     const operation = invocation.positionals[0];

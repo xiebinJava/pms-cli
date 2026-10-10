@@ -75,4 +75,25 @@ describe("dynamic capability resolver", () => {
       componentKey: "development-control",
     })).toThrow(CapabilityResolutionError);
   });
+
+  it("does not select the first template when the default is ambiguous", () => {
+    const catalog = capabilityCatalogSchema.parse({
+      version: "ai-v1",
+      resources: [],
+      scopes: [],
+      workflowTypes: [{
+        processType: "project-management",
+        label: "项目管理",
+        templates: [
+          { templateVersionId: 1, versionNo: 1, name: "项目流程", defaultTemplate: true, nodes: [] },
+          { templateVersionId: 2, versionNo: 2, name: "项目流程", defaultTemplate: true, nodes: [] },
+        ],
+      }],
+    });
+    const resolver = new DynamicCapabilityResolver(catalog);
+
+    expect(resolver.template("project-management")).toBeUndefined();
+    expect(resolver.templateCandidates("project-management", "项目流程").map((item) => item.templateVersionId))
+      .toEqual([1, 2]);
+  });
 });
