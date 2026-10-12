@@ -18,4 +18,4 @@
 | CLI 参数 | `--name value` 与 `--name=value` | 两种形式等价；未知参数、重复 filter key、非法 JSON 在认证前拒绝 |
 | 写操作 | `POST .../operations/{preview,execute}` | execute 必须显式 `--idempotency-key`；客户端不自动重试 |
 | 需求分析保存 | `pms requirement analysis save` | 需要后端声明 `requirement.analysis.save`、明确节点/版本和分析字段补丁；缺能力时只出草稿 |
-| 真实写入验收 | `verify:real-pms:project-create`、`verify:real-pms:analysis-save` | 默认 skipped；必须使用隔离配置和浏览器授权，不连接用户数据库 |
+| 真实写入验收 | `verify:real-pms:project-create`、`verify:real-pms:analysis-save` | 默认 skipped；必须使用隔离配置、精确目标 allowlist 和浏览器授权，不连接用户数据库 |

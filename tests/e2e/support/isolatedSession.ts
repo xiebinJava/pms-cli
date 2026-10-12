@@ -2,6 +2,7 @@ export interface IsolatedE2EEnvironment {
   PMS_E2E_WRITE?: string;
   PMS_E2E_ISOLATED?: string;
   PMS_E2E_BASE_URL?: string;
+  PMS_E2E_ALLOWED_BASE_URL?: string;
   PMS_E2E_AUTH_ORIGIN?: string;
   PMS_E2E_ACCOUNT_ID?: string;
   PMS_E2E_RUN_ID?: string;
@@ -18,15 +19,20 @@ export interface IsolatedE2EConfig {
 
 const REQUIRED_KEYS = [
   "PMS_E2E_BASE_URL",
+  "PMS_E2E_ALLOWED_BASE_URL",
   "PMS_E2E_AUTH_ORIGIN",
   "PMS_E2E_ACCOUNT_ID",
   "PMS_E2E_RUN_ID",
 ] as const;
 
 export function isolatedE2EEnabled(env: IsolatedE2EEnvironment): boolean {
-  return env.PMS_E2E_WRITE === "true"
-    && env.PMS_E2E_ISOLATED === "true"
-    && REQUIRED_KEYS.every((key) => Boolean(env[key]?.trim()));
+  if (env.PMS_E2E_WRITE !== "true" || env.PMS_E2E_ISOLATED !== "true") return false;
+  if (!REQUIRED_KEYS.every((key) => Boolean(env[key]?.trim()))) return false;
+  try {
+    return normalizeWriteTarget(env.PMS_E2E_BASE_URL!) === normalizeWriteTarget(env.PMS_E2E_ALLOWED_BASE_URL!);
+  } catch {
+    return false;
+  }
 }
 
 export function assertIsolatedE2EConfig(env: IsolatedE2EEnvironment): IsolatedE2EConfig {
@@ -43,14 +49,33 @@ export function assertIsolatedE2EConfig(env: IsolatedE2EEnvironment): IsolatedE2
   }
   const accountId = env.PMS_E2E_ACCOUNT_ID!.trim();
   if (!/^[1-9]\d*$/.test(accountId)) throw new Error("隔离 E2E account ID 必须是正整数");
+  const baseUrl = normalizeWriteTarget(env.PMS_E2E_BASE_URL!);
+  const allowedBaseUrl = normalizeWriteTarget(env.PMS_E2E_ALLOWED_BASE_URL!);
+  if (baseUrl !== allowedBaseUrl) {
+    throw new Error("隔离 E2E 目标不在允许写入的目标清单中");
+  }
 
   return {
-    baseUrl: env.PMS_E2E_BASE_URL!.trim(),
+    baseUrl,
     authOrigin: env.PMS_E2E_AUTH_ORIGIN!.trim(),
     accountId,
     runId,
     keyringService: "pms-cli-e2e-" + runId,
   };
+}
+
+function normalizeWriteTarget(raw: string): string {
+  let url: URL;
+  try {
+    url = new URL(raw.trim());
+  } catch {
+    throw new Error("隔离 E2E 写入目标 URL 无效");
+  }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("隔离 E2E 写入目标 URL 不安全");
+  }
+  const pathname = url.pathname.replace(/\/+$/, "");
+  return `${url.protocol}//${url.host}${pathname}`;
 }
 
 export function expectedViewerId(viewer: { id?: unknown }, expectedAccountId: string): boolean {

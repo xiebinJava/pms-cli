@@ -99,4 +99,20 @@ describe("requirement analysis save CLI contract", () => {
     expect(deps.createRuntime).not.toHaveBeenCalled();
     expect(stderr[0]).toContain("--node-id");
   });
+
+  it("requires the concrete requirement context before authentication", async () => {
+    const client = {} as never;
+    const { deps, stderr } = makeDeps(client);
+
+    await runCli([
+      "requirement", "analysis", "save", "23",
+      "--node-id", "301",
+      "--version", "7",
+      "--arguments-json", '{"background":"补充用户场景"}',
+      "--idempotency-key", "idem-1",
+    ], deps);
+
+    expect(deps.createRuntime).not.toHaveBeenCalled();
+    expect(stderr[0]).toContain("--context-id");
+  });
 });

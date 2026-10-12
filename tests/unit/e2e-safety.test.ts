@@ -14,6 +14,7 @@ describe("isolated E2E safety gates", () => {
       PMS_E2E_WRITE: "true",
       PMS_E2E_ISOLATED: "true",
       PMS_E2E_BASE_URL: "http://localhost:5173/api",
+      PMS_E2E_ALLOWED_BASE_URL: "http://localhost:5173/api",
       PMS_E2E_AUTH_ORIGIN: "http://localhost:5173",
       PMS_E2E_ACCOUNT_ID: "7",
       PMS_E2E_RUN_ID: "run-20261010",
@@ -25,6 +26,7 @@ describe("isolated E2E safety gates", () => {
       PMS_E2E_WRITE: "true",
       PMS_E2E_ISOLATED: "true",
       PMS_E2E_BASE_URL: "http://localhost:5173/api",
+      PMS_E2E_ALLOWED_BASE_URL: "http://localhost:5173/api",
       PMS_E2E_AUTH_ORIGIN: "http://localhost:5173",
       PMS_E2E_ACCOUNT_ID: "7",
       PMS_E2E_RUN_ID: "../existing-project",
@@ -49,5 +51,26 @@ describe("isolated E2E safety gates", () => {
     expect(expectedViewerId({ id: 7 }, "7")).toBe(true);
     expect(expectedViewerId({ id: 8 }, "7")).toBe(false);
     expect(projectNameForRun("run-20261010")).toBe("AI-E2E-run-20261010");
+  });
+
+  it("requires an exact write-target allowlist and rejects a different production target", () => {
+    const base = {
+      PMS_E2E_WRITE: "true",
+      PMS_E2E_ISOLATED: "true",
+      PMS_E2E_BASE_URL: "https://pms.example.com/api",
+      PMS_E2E_AUTH_ORIGIN: "https://pms.example.com",
+      PMS_E2E_ACCOUNT_ID: "7",
+      PMS_E2E_RUN_ID: "run-20261010",
+    };
+
+    expect(isolatedE2EEnabled(base)).toBe(false);
+    expect(() => assertIsolatedE2EConfig({
+      ...base,
+      PMS_E2E_ALLOWED_BASE_URL: "https://isolated.example.com/api",
+    })).toThrow(/允许写入的目标/);
+    expect(() => assertIsolatedE2EConfig({
+      ...base,
+      PMS_E2E_ALLOWED_BASE_URL: "https://pms.example.com/api/",
+    })).not.toThrow();
   });
 });

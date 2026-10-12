@@ -40,7 +40,7 @@ Every failure writes an error envelope to stderr and exits non-zero:
 | `pms context <resource-type> <id> --format json` | `GET /integration/ai/v1/context/{type}/{id}` | read |
 | `pms operation preview <operation> --arguments-json <json>` | `POST /integration/ai/v1/operations/preview` | dry-run |
 | `pms operation execute <operation> --arguments-json <json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` | explicit write |
-| `pms requirement analysis save <id> --node-id <id> --version <version> --arguments-json <patch-json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` with `requirement.analysis.save` | explicit write |
+| `pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` with `requirement.analysis.save` | explicit write |
 
 Write requests carry `clientId=pms-cli`, `requestId`, `idempotencyKey`, and
 the capability-provided context/contract versions when required. The CLI

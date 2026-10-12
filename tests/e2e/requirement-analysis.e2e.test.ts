@@ -39,6 +39,11 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
       }
       if (beforeContext.version === null) throw new Error("需求上下文缺少可用于保存的版本");
       const before = await client.get({ type: "requirement", id: requirementId! });
+      const existingAnalysisText = collectAnalysisText({
+        details: before.details,
+        resourceDetails: beforeContext.resourceDetails,
+        workflow: beforeContext.workflow,
+      });
       const sourceText = `AI-E2E 来源标题 ${config.runId}；来源地址 https://example.invalid/${config.runId}；实际查阅日期 2026-10-10；支持结论 待业务确认`;
       const patch = {
         background: `AI-E2E 分析 ${config.runId}\n${sourceText}`,
@@ -67,6 +72,9 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
         workflow: afterContext.workflow,
       });
       expect(readback).toContain(sourceText);
+      for (const text of existingAnalysisText) {
+        expect(readback).toContain(text);
+      }
       for (const key of ["systemId", "targetType", "targetId", "ownerId", "status", "startDate", "endDate"]) {
         if (Object.prototype.hasOwnProperty.call(before.details, key)) {
           expect(after.details[key]).toEqual(before.details[key]);
@@ -84,6 +92,15 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
     }
   });
 });
+
+function collectAnalysisText(value: unknown, key = ""): string[] {
+  if (typeof value === "string") {
+    return ["background", "acceptanceCriteria"].includes(key) && value.trim() ? [value] : [];
+  }
+  if (Array.isArray(value)) return value.flatMap((item) => collectAnalysisText(item, key));
+  if (!value || typeof value !== "object") return [];
+  return Object.entries(value).flatMap(([entryKey, entryValue]) => collectAnalysisText(entryValue, entryKey));
+}
 
 function positiveEnvNumber(name: string): number | null {
   const raw = process.env[name]?.trim();

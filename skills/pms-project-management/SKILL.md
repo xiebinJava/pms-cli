@@ -13,7 +13,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
 2. 涉及具体事项时，再执行 `pms context <resourceType> <resourceId> --format json`，确认事项绑定的流程版本、当前节点、运行时组件、字段值和允许动作。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 只有能力目录和流程上下文允许的写操作，才使用 `pms operation preview` 后执行 `pms operation execute` 或 `pms workflow action`。
+4. 只有能力目录和流程上下文允许的写操作，才使用 `pms operation preview` 后执行 `pms operation execute` 或 `pms workflow action`。专用的 `pms requirement analysis save` 是用户已明确授权的窄写入口，不重复执行预览；它仍必须经过后端的能力、具体上下文、版本、字段白名单、权限和幂等校验。
 
 ## 需求分析和成果保存
 
@@ -24,7 +24,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 - 只有用户明确指定目标节点并且当前能力目录声明该保存操作时，才使用：
 
   ```bash
-  pms requirement analysis save <requirement-id> --node-id <node-id> --version <version> --arguments-json '<patch-json>' --idempotency-key <key> --format json
+  pms requirement analysis save <requirement-id> --node-id <node-id> --version <version> --context-id <context-id> --context-version <context-version> --arguments-json '<patch-json>' --idempotency-key <key> --format json
   ```
 
 - `--arguments-json` 只传需求澄清组件允许的分析字段补丁；不要发送未在能力目录声明的字段。不能默认选择第一个候选节点，不能批准、完成节点或修改所属系统。

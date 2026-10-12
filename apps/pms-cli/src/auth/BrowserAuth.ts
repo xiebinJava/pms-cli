@@ -57,30 +57,34 @@ export class BrowserAuth {
   async login(): Promise<CliSession> {
     const pkce = createPkcePair();
     const state = randomBytes(24).toString("base64url");
-    const { redirectUri, callback } = await this.listenForCallback();
-    await this.openBrowser(buildAuthorizeUrl(this.options.authOrigin, redirectUri, pkce, state));
-    const result = await callback;
-    if (result.state !== state) throw new Error("CLI 授权 state 校验失败");
-    const response = await this.fetchImpl(new URL("integration/cli/v1/token", this.apiBase()).toString(), {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({
-        grantType: "authorization_code",
-        code: result.code,
-        redirectUri,
-        clientId: "pms-cli",
-        codeVerifier: pkce.verifier,
-      }),
-    });
-    const data = await readPmsData(response);
-    const account: Account = {
-      accountId: String(data.user?.id ?? data.user?.username ?? "default"),
-      baseUrl: this.apiBase(),
-      displayName: String(data.user?.displayName ?? data.user?.nickname ?? "PMS 用户"),
-      refreshToken: String(data.refreshToken),
-    };
-    await this.options.store.save(account);
-    return { accessToken: String(data.accessToken), account };
+    const listener = await this.listenForCallback();
+    try {
+      await this.openBrowser(buildAuthorizeUrl(this.options.authOrigin, listener.redirectUri, pkce, state));
+      const result = await listener.callback;
+      if (result.state !== state) throw new Error("CLI 授权 state 校验失败");
+      const response = await this.fetchImpl(new URL("integration/cli/v1/token", this.apiBase()).toString(), {
+        method: "POST",
+        headers: { "content-type": "application/json", accept: "application/json" },
+        body: JSON.stringify({
+          grantType: "authorization_code",
+          code: result.code,
+          redirectUri: listener.redirectUri,
+          clientId: "pms-cli",
+          codeVerifier: pkce.verifier,
+        }),
+      });
+      const data = await readPmsData(response);
+      const account: Account = {
+        accountId: String(data.user?.id ?? data.user?.username ?? "default"),
+        baseUrl: this.apiBase(),
+        displayName: String(data.user?.displayName ?? data.user?.nickname ?? "PMS 用户"),
+        refreshToken: String(data.refreshToken),
+      };
+      await this.options.store.save(account);
+      return { accessToken: String(data.accessToken), account };
+    } finally {
+      listener.close();
+    }
   }
 
   async refresh(account: Account): Promise<CliSession> {
@@ -115,6 +119,7 @@ export class BrowserAuth {
   private async listenForCallback(): Promise<{
     redirectUri: string;
     callback: Promise<{ code: string; state: string }>;
+    close: () => void;
   }> {
     let resolveCallback!: (value: { code: string; state: string }) => void;
     let rejectCallback!: (error: Error) => void;
@@ -133,18 +138,25 @@ export class BrowserAuth {
         response.statusCode = 200;
         response.end("PMS CLI login complete. You can close this window.");
         resolveCallback({ code: url.searchParams.get("code")!, state: url.searchParams.get("state")! });
-        server.close();
+        close();
       } catch (error) {
         rejectCallback(error instanceof Error ? error : new Error("CLI 回调无效"));
-        server.close();
+        close();
       }
     });
+    let closed = false;
+    const close = () => {
+      if (!closed) {
+        closed = true;
+        server.close();
+      }
+    };
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(0, "127.0.0.1", () => resolve());
     });
     const address = server.address() as AddressInfo;
-    return { redirectUri: `http://127.0.0.1:${address.port}/callback`, callback };
+    return { redirectUri: `http://127.0.0.1:${address.port}/callback`, callback, close };
   }
 }
 

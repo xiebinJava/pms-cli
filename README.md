@@ -30,7 +30,7 @@ pms get project 7 --format json
 pms context project 7 --format json
 pms operation preview project.create --arguments-json '{"name":"订单中心"}' --format json
 pms operation execute project.create --arguments-json '{"name":"订单中心"}' --idempotency-key idem-1 --format json
-pms requirement analysis save 23 --node-id 301 --version 7 --arguments-json '{"background":"补充用户场景"}' --idempotency-key analysis-save-23-7 --format json
+pms requirement analysis save 23 --node-id 301 --version 7 --context-id requirement:23 --context-version 7 --arguments-json '{"background":"补充用户场景"}' --idempotency-key analysis-save-23-7 --format json
 pms workflow action topic 82 development-item.node.complete --arguments-json '{}' --format json
 pms dashboard summary --format json
 ```
@@ -60,7 +60,7 @@ pnpm build:cli
 pnpm verify:real-pms:readonly
 ```
 
-真实只读 E2E 默认跳过，需要设置 `PMS_E2E_READONLY=true`、`PMS_E2E_BASE_URL` 和短期 `PMS_E2E_TOKEN`。真实写入只允许在隔离环境手动执行，清理必须调用 PMS 业务命令，不能使用 SQL。
+真实只读 E2E 默认跳过，需要设置 `PMS_E2E_READONLY=true`、`PMS_E2E_BASE_URL` 和短期 `PMS_E2E_TOKEN`。真实写入只允许在隔离环境手动执行，并要求 `PMS_E2E_ALLOWED_BASE_URL` 与写入目标精确匹配；清理必须调用 PMS 业务命令，不能使用 SQL。
 
 需求分析保存只允许写入当前流程能力目录声明的需求澄清组件字段。先读取 `capabilities` 和需求 `context`，区分事实、推断和假设；没有明确节点目标时只能输出草稿，不能默认选择第一个候选节点。保存命令必须由调用方提供节点 ID、上下文版本和幂等键，连接器不会自动批准、完成节点或修改所属系统。
 

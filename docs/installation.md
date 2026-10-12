@@ -34,6 +34,8 @@ pms capabilities --format json
 pms requirement analysis save 23 \
   --node-id 301 \
   --version 7 \
+  --context-id requirement:23 \
+  --context-version 7 \
   --arguments-json '{"background":"补充用户场景"}' \
   --idempotency-key analysis-save-23-7 \
   --format json
@@ -59,6 +61,8 @@ Claude Code 和 WorkBuddy 也可将 `skills/pms-project-management/SKILL.md` 复
 
 ```bash
 export PMS_E2E_BASE_URL="http://localhost:5173/api"
+# 必须与 PMS_E2E_BASE_URL 完全匹配；用于防止误把写入验收指向生产环境
+export PMS_E2E_ALLOWED_BASE_URL="http://localhost:5173/api"
 export PMS_E2E_AUTH_ORIGIN="http://localhost:5173"
 export PMS_E2E_ACCOUNT_ID="7"
 export PMS_E2E_RUN_ID="run-20261010"
@@ -75,7 +79,7 @@ export PMS_E2E_NODE_ID="301"
 pnpm run verify:real-pms:analysis-save
 ```
 
-没有 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true` 或完整配置时，两个真实写入测试只跳过，不产生认证、写入或清理请求。分析保存不会自动完成节点、修改所属系统或清理用户需求的历史正文。
+没有 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true` 或完整配置时，两个真实写入测试只跳过，不产生认证、写入或清理请求。`PMS_E2E_ALLOWED_BASE_URL` 必须与写入目标精确匹配，否则测试会在浏览器授权前拒绝。分析保存不会自动完成节点、修改所属系统或清理用户需求的历史正文。
 
 ## 设计边界
 

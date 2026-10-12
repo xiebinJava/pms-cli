@@ -23,7 +23,7 @@ const HELP = [
   "  pms operation preview <operation> --arguments-json <json>",
   "  pms operation execute <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms project create --arguments-json <json> --idempotency-key <key>",
-  "  pms requirement analysis save <id> --node-id <id> --version <version> --arguments-json <patch-json> --idempotency-key <key>",
+  "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -156,6 +156,9 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const requirementId = requireId(invocation.positionals[1]);
     const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
     const version = positiveInteger(requiredOption(invocation.options, "version"), "version");
+    if (!invocation.options["context-id"] || !invocation.options["context-version"]) {
+      throw new CliArgumentError("需求分析保存必须提供 --context-id 与 --context-version");
+    }
     if (invocation.options["arguments-json"] === undefined) {
       throw new CliArgumentError("必须提供 --arguments-json");
     }

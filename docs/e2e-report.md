@@ -16,7 +16,7 @@ pnpm vitest run tests/e2e/pms-cli.e2e.test.ts
 
 ## 项目创建真实验收
 
-自动化闭环由 `tests/e2e/project-create.e2e.test.ts` 提供，默认 skipped。执行前必须同时设置 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_BASE_URL`、`PMS_E2E_AUTH_ORIGIN`、`PMS_E2E_ACCOUNT_ID` 和安全的 `PMS_E2E_RUN_ID`，再运行：
+自动化闭环由 `tests/e2e/project-create.e2e.test.ts` 提供，默认 skipped。执行前必须同时设置 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_BASE_URL`、与其精确匹配的 `PMS_E2E_ALLOWED_BASE_URL`、`PMS_E2E_AUTH_ORIGIN`、`PMS_E2E_ACCOUNT_ID` 和安全的 `PMS_E2E_RUN_ID`，再运行：
 
 ```bash
 pnpm run verify:real-pms:project-create
