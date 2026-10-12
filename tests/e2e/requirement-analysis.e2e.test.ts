@@ -61,7 +61,11 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
 
       const after = await client.get({ type: "requirement", id: requirementId! });
       const afterContext = await client.context({ type: "requirement", id: requirementId! });
-      const readback = JSON.stringify({ details: after.details, resourceDetails: afterContext.resourceDetails });
+      const readback = JSON.stringify({
+        details: after.details,
+        resourceDetails: afterContext.resourceDetails,
+        workflow: afterContext.workflow,
+      });
       expect(readback).toContain(sourceText);
       for (const key of ["systemId", "targetType", "targetId", "ownerId", "status", "startDate", "endDate"]) {
         if (Object.prototype.hasOwnProperty.call(before.details, key)) {
