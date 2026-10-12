@@ -41,7 +41,7 @@ describe("requirement analysis shortcut", () => {
     await requirementAnalysisSave(client, 23, {
       nodeId: 301,
       version: 7,
-      patch: { background: "用户需要导出报表" },
+      arguments: { background: "用户需要导出报表" },
       idempotencyKey: "analysis-save-23-7",
       context: { id: "requirement:23", version: "7" },
       contract: { id: "requirement-analysis", version: "1" },

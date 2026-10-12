@@ -166,7 +166,6 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       ...options,
       nodeId,
       version,
-      patch: options.arguments ?? {},
       idempotencyKey,
     });
   }

@@ -47,7 +47,7 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
       const options = {
         nodeId: nodeId!,
         version: beforeContext.version,
-        patch,
+        arguments: patch,
         idempotencyKey: "analysis-save-" + config.runId,
         context: { id: `requirement:${requirementId}`, version: String(beforeContext.version) },
       } as const;

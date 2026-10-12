@@ -10,7 +10,6 @@ export const requirementUpdate = (client: PmsClient, options: WriteOptions = {})
 export interface RequirementAnalysisSaveOptions extends OperationOptions {
   nodeId: number;
   version: number;
-  patch: Record<string, unknown>;
   idempotencyKey: string;
 }
 
@@ -26,7 +25,7 @@ export function requirementAnalysisSave(
       requirementId,
       nodeId: options.nodeId,
       version: options.version,
-      patch: options.patch,
+      patch: options.arguments ?? {},
     },
   });
 }
