@@ -26,8 +26,22 @@ pnpm run verify:real-pms:project-create
 
 ## 需求分析保存真实验收
 
-`tests/e2e/requirement-analysis.e2e.test.ts` 同样默认 skipped。除隔离认证配置外，还必须指定 `PMS_E2E_REQUIREMENT_ID` 和 `PMS_E2E_NODE_ID`；测试不会从列表任意挑选需求或节点，不会自动创建前置流程，也不会删除历史正文。它只验证明确节点、当前版本、追加正文、来源文本回读、受保护字段不变以及相同幂等键回放。
+`tests/e2e/requirement-analysis.e2e.test.ts` 同样默认 skipped。除隔离认证配置外，还必须指定 `PMS_E2E_REQUIREMENT_ID` 和 `PMS_E2E_NODE_ID`；测试不会从列表任意挑选需求或节点，不会自动创建前置流程，也不会删除历史分析字段。它只验证明确节点、当前版本、结构化分析字段回读、来源文本回读、受保护字段不变以及相同幂等键回放。
 
 来源内容只按系统回读结果记录，不据此宣称外部资料真实或已被 PMS 验证；静态 Skill 测试只能验证约束文字，不能替代后端授权、字段白名单、版本、幂等和审计。
 
 截至本地开发阶段，未在没有隔离配置的环境执行上述真实写入验收；“测试跳过”不计为真实场景通过。
+
+## 场景级闭环验收
+
+场景级 CLI 将两个自然语言工作台场景固定为可演示步骤：
+
+```bash
+pms scenario project-create plan --arguments-json '{"name":"AI Native PMS"}' --format json
+pms scenario project-create execute --arguments-json '{"name":"AI Native PMS"}' --idempotency-key project-demo-1 --format json
+
+pms scenario requirement-analysis plan 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --format json
+pms scenario requirement-analysis execute 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --idempotency-key analysis-demo-23-7 --format json
+```
+
+`plan` 阶段只读取能力/上下文并生成预览；`execute` 阶段才提交写入并返回结构化回读。写入结果的 `trace.operationId` 是 PMS 持久化 AI 操作记录的审计引用，重复请求必须使用同一幂等键。真实执行仍必须遵守本文前面的隔离环境和清理要求。

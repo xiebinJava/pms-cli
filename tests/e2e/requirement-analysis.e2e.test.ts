@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AuthStore } from "../../apps/pms-cli/src/auth/AuthStore.js";
 import { BrowserAuth, type CliSession } from "../../apps/pms-cli/src/auth/BrowserAuth.js";
-import { requirementAnalysisSave } from "../../apps/pms-cli/src/commands/shortcuts/requirement.js";
+import {
+  executeRequirementAnalysisScenario,
+  planRequirementAnalysisScenario,
+} from "../../apps/pms-cli/src/commands/scenarios/requirementAnalysis.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
 import {
   assertIsolatedE2EConfig,
@@ -44,10 +47,10 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
         resourceDetails: beforeContext.resourceDetails,
         workflow: beforeContext.workflow,
       });
-      const sourceText = `AI-E2E 来源标题 ${config.runId}；来源地址 https://example.invalid/${config.runId}；实际查阅日期 2026-10-10；支持结论 待业务确认`;
+      const sourceText = `AI-E2E 需求解释 ${config.runId}；来源地址 https://example.invalid/${config.runId}；实际查阅日期 2026-10-10；支持结论 待业务确认`;
       const patch = {
-        background: `AI-E2E 分析 ${config.runId}\n${sourceText}`,
-        acceptanceCriteria: `AI-E2E 验收标准 ${config.runId}`,
+        interpretation: `AI-E2E 分析 ${config.runId}\n${sourceText}`,
+        analysisConclusion: `AI-E2E 分析结论 ${config.runId}`,
       };
       const options = {
         nodeId: nodeId!,
@@ -57,12 +60,17 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
         context: { id: `requirement:${requirementId}`, version: String(beforeContext.version) },
       } as const;
 
-      const first = await requirementAnalysisSave(client, requirementId!, options);
-      expect(first.status).toBe("SUCCEEDED");
-      expect(first.data.nodeId).toBe(nodeId);
-      const replay = await requirementAnalysisSave(client, requirementId!, options);
-      expect(replay.operationId).toBe(first.operationId);
-      expect(replay.data.nodeId).toBe(nodeId);
+      const plan = await planRequirementAnalysisScenario(client, requirementId!, options);
+      expect(plan.preview.command).toBe("requirement.analysis.save");
+      expect(plan.facts.currentNode.id).toBe(nodeId);
+      const first = await executeRequirementAnalysisScenario(client, requirementId!, options);
+      expect(first.result.status).toBe("SUCCEEDED");
+      expect(first.result.data.nodeId).toBe(nodeId);
+      expect(first.trace.operationId).toBe(first.result.operationId);
+      const replay = await executeRequirementAnalysisScenario(client, requirementId!, options);
+      expect(replay.result.operationId).toBe(first.result.operationId);
+      expect(replay.result.data.nodeId).toBe(nodeId);
+      expect(replay.trace.operationId).toBe(first.trace.operationId);
 
       const after = await client.get({ type: "requirement", id: requirementId! });
       const afterContext = await client.context({ type: "requirement", id: requirementId! });
@@ -75,6 +83,7 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
       for (const text of existingAnalysisText) {
         expect(readback).toContain(text);
       }
+      expect(Object.values(first.protectedFieldsUnchanged).every(Boolean)).toBe(true);
       for (const key of ["systemId", "targetType", "targetId", "ownerId", "status", "startDate", "endDate"]) {
         if (Object.prototype.hasOwnProperty.call(before.details, key)) {
           expect(after.details[key]).toEqual(before.details[key]);
@@ -95,7 +104,8 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis save", () => {
 
 function collectAnalysisText(value: unknown, key = ""): string[] {
   if (typeof value === "string") {
-    return ["background", "acceptanceCriteria"].includes(key) && value.trim() ? [value] : [];
+    return ["interpretation", "filterNote", "analysisConclusion", "supplementNote", "decisionReason"]
+      .includes(key) && value.trim() ? [value] : [];
   }
   if (Array.isArray(value)) return value.flatMap((item) => collectAnalysisText(item, key));
   if (!value || typeof value !== "object") return [];

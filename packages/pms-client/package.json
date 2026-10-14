@@ -1,10 +1,10 @@
 {
-  "name": "@pms-ai-connector/pms-client",
+  "name": "@xiebinjava/pms-client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@pms-ai-connector/pms-contracts": "workspace:*",
+    "@xiebinjava/pms-contracts": "workspace:*",
     "zod": "4.2.0"
   }
 }

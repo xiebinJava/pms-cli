@@ -88,4 +88,20 @@ describe("capability catalog normalization", () => {
       mergeMode: "append",
     });
   });
+
+  it("preserves project type IDs needed to bind a project creation choice", () => {
+    const catalog = parseCapabilityCatalog({
+      version: "ai-v1",
+      resources: [],
+      scopes: [],
+      workflowTypes: [{
+        projectTypeId: 7,
+        processType: "project-management",
+        label: "项目管理",
+        templates: [],
+      }],
+    });
+
+    expect(catalog.workflowTypes[0]?.projectTypeId).toBe(7);
+  });
 });

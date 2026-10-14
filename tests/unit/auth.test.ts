@@ -30,6 +30,11 @@ describe("PMS CLI browser authentication", () => {
     expect((await store.getActiveAccount())?.refreshToken).toBe("refresh-only");
   });
 
+  it("rejects a Markdown link instead of treating it as a PMS base URL", () => {
+    expect(() => AuthStore.normalizeBaseUrl("[http://localhost:5173/api](http://localhost:5173/api)"))
+      .toThrow();
+  });
+
   it("creates an S256 PKCE challenge and preserves state in the authorization URL", () => {
     const pkce = createPkcePair(() => "verifier-for-test-1234567890");
     const url = buildAuthorizeUrl("http://localhost:5173", "http://127.0.0.1:43127/callback", pkce, "state-1");

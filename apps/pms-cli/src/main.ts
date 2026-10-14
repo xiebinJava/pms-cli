@@ -25,6 +25,7 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
     writeStdout: (value) => process.stdout.write(value),
     writeStderr: (value) => process.stderr.write(value),
     setExitCode: (value) => { process.exitCode = value; },
+    exitProcess,
     requestIdFactory: randomUUID,
     runDoctor: () => doctor(),
     runSetup: () => setup(),
@@ -34,10 +35,11 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
 
 async function runAuth(command: string | undefined, args: string[]) {
   const store = new AuthStore();
-  const baseUrl = process.env.PMS_BASE_URL?.trim() || "http://localhost:5173/api";
+  if (command === "status") return authStatus(store);
+  const rawBaseUrl = process.env.PMS_BASE_URL?.trim() || "http://localhost:5173/api";
+  const baseUrl = AuthStore.normalizeBaseUrl(rawBaseUrl);
   const authOrigin = process.env.PMS_AUTH_ORIGIN?.trim() || originFromBase(baseUrl);
   if (command === "login") return authLogin({ baseUrl, authOrigin, store });
-  if (command === "status") return authStatus(store);
   if (command === "logout") return authLogout({ baseUrl, authOrigin, store });
   throw new Error("未知认证命令: " + (command ?? args.join(" ")));
 }
@@ -82,4 +84,14 @@ main().catch((error: unknown) => {
     message: error instanceof Error ? error.message : String(error),
     requestId: randomUUID(),
   });
+  exitProcess(1);
 });
+
+function exitProcess(value: number): never {
+  process.exitCode = value;
+  // A native keyring request can keep the event loop inside keytar after its
+  // timeout has already been reported. A signal is the only reliable way to
+  // terminate that process instead of leaving the CLI hanging indefinitely.
+  process.kill(process.pid, "SIGTERM");
+  return undefined as never;
+}

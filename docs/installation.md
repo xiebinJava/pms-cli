@@ -5,7 +5,7 @@
 发布包安装后会把 `pms` 放入 PATH：
 
 ```bash
-npm install -g @xiebinjava/pms-cli
+npm install -g @brad.xie/pms-cli
 pms doctor --format json
 pms setup
 ```
@@ -28,6 +28,8 @@ pms capabilities --format json
 
 `pms auth login` 会打开 PMS 浏览器登录页，CLI 使用 PKCE 回调交换短时 access token；长期 refresh token 只保存到操作系统凭据管理器。
 
+`PMS_BASE_URL` 必须填写纯 URL，例如 `http://localhost:5173/api`，不要粘贴 `[地址](地址)` 形式的 Markdown 链接。登录成功只返回账号摘要，不会把 access token 或 refresh token 打印到终端。
+
 需求分析保存示例：
 
 ```bash
@@ -36,10 +38,42 @@ pms requirement analysis save 23 \
   --version 7 \
   --context-id requirement:23 \
   --context-version 7 \
-  --arguments-json '{"background":"补充用户场景"}' \
+  --arguments-json '{"interpretation":"补充用户场景"}' \
   --idempotency-key analysis-save-23-7 \
   --format json
 ```
+
+## 场景级自然语言演示
+
+项目创建建议先执行只读计划，再由调用方明确执行：
+
+```bash
+pms scenario project-create plan \
+  --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期","priority":1}' \
+  --format json
+
+pms scenario project-create execute \
+  --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期","priority":1}' \
+  --idempotency-key project-ai-native-pms-1 \
+  --format json
+```
+
+需求分析场景会在保存前再次读取上下文，防止使用过期版本：
+
+```bash
+pms scenario requirement-analysis plan 23 \
+  --node-id 301 --version 7 \
+  --arguments-json '{"interpretation":"补充用户场景"}' \
+  --format json
+
+pms scenario requirement-analysis execute 23 \
+  --node-id 301 --version 7 \
+  --arguments-json '{"interpretation":"补充用户场景"}' \
+  --idempotency-key requirement-analysis-23-7 \
+  --format json
+```
+
+两个场景都返回 `trace`、执行结果和精确回读。`trace.operationId` 是当前 PMS 持久化 AI 操作记录的审计引用，不代表连接器自行创建了审计数据。
 
 保存前应先使用 `pms capabilities --format json` 和 `pms context requirement 23 --format json` 确认能力、实际绑定流程和目标节点。没有明确目标节点时只生成分析草稿；CLI 不会替用户挑选第一个候选节点，也不会自动完成节点或修改所属系统。
 

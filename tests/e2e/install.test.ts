@@ -18,7 +18,7 @@ describe("pms CLI installation surface", () => {
     const help = execFileSync(process.execPath, ["dist/pms-cli.js", "--help"], { cwd: root, encoding: "utf8" });
     expect(help).toContain("pms capabilities");
     const version = execFileSync(process.execPath, ["dist/pms-cli.js", "--version"], { cwd: root, encoding: "utf8" }).trim();
-    expect(version).toMatch(/^0\.1\.0$/);
+    expect(version).toMatch(/^0\.1\.1$/);
   });
 
   it("returns machine-readable doctor output and ships an agent skill", () => {

@@ -1,6 +1,6 @@
 {
-  "name": "@xiebinjava/pms-cli",
-  "version": "0.1.0",
+  "name": "@brad.xie/pms-cli",
+  "version": "0.1.1",
   "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.18.2",
@@ -18,7 +18,13 @@
   "bin": {
     "pms": "dist/pms-cli.js"
   },
-  "files": ["dist", "skills", "scripts/install-skill.ps1", "scripts/install-skill.sh", "docs/installation.md"],
+  "files": [
+    "dist",
+    "skills",
+    "scripts/install-skill.ps1",
+    "scripts/install-skill.sh",
+    "docs/installation.md"
+  ],
   "dependencies": {
     "keytar": "7.9.0",
     "zod": "4.2.0"
@@ -28,5 +34,12 @@
     "esbuild": "0.23.1",
     "typescript": "5.7.2",
     "vitest": "2.1.9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "core-js",
+      "esbuild",
+      "keytar"
+    ]
   }
 }

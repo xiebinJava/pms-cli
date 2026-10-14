@@ -15,11 +15,14 @@ Every JSON success writes one object to stdout:
   "meta": {
     "requestId": "req-...",
     "clientId": "pms-cli",
-    "auditId": "audit-...",
-    "refreshScopes": ["project-list"]
+    "refreshScopes": ["project-list"],
+    "auditId": "audit-..."
   }
 }
 ```
+
+`refreshScopes` is populated for operation results and is empty for other
+successful commands. `auditId` is included only when PMS returns one.
 
 Every failure writes an error envelope to stderr and exits non-zero:
 
@@ -40,6 +43,8 @@ Every failure writes an error envelope to stderr and exits non-zero:
 | `pms context <resource-type> <id> --format json` | `GET /integration/ai/v1/context/{type}/{id}` | read |
 | `pms operation preview <operation> --arguments-json <json>` | `POST /integration/ai/v1/operations/preview` | dry-run |
 | `pms operation execute <operation> --arguments-json <json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` | explicit write |
+| `pms scenario project-create plan|execute ...` | capabilities + preview/execute + project get/context | plan is read-only; execute writes |
+| `pms scenario requirement-analysis plan|execute ...` | capabilities + requirement get/context + analysis save | plan is read-only; execute writes |
 | `pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` with `requirement.analysis.save` | explicit write |
 
 Write requests carry `clientId=pms-cli`, `requestId`, `idempotencyKey`, and
@@ -79,3 +84,7 @@ Older PMS servers may omit `features`, `resourceDetails`, `entityVersion`, or
 `features.resourceGet` or `features.richWorkflowContext` is treated as
 unsupported; it is never silently emulated with a list query or fabricated
 workflow metadata.
+
+## Scenario output and audit reference
+
+Scenario commands return a structured result containing the live capability/context facts, preview (when available), operation result, exact readback and `trace`. `trace.operationId` identifies the durable PMS AI operation record that stores the request, context, preview and result. The connector forwards `auditId` when a PMS server provides one; it does not invent a second audit store or synthesize an audit identifier.

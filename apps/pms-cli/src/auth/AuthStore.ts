@@ -15,37 +15,56 @@ export interface Keyring {
 
 export interface AuthStoreOptions {
   service?: string;
+  keyringTimeoutMs?: number;
 }
 
 const DEFAULT_SERVICE = "pms-cli";
+const DEFAULT_KEYRING_TIMEOUT_MS = 5_000;
 
 class KeytarKeyring implements Keyring {
   constructor(private readonly service: string) {}
 
   private async module() {
-    return import("keytar");
+    const imported = await import("keytar") as typeof import("keytar") & {
+      default?: typeof import("keytar");
+    };
+    return imported.default ?? imported;
   }
 
   async get(key: string): Promise<string | null> {
-    return (await this.module()).getPassword(this.service, key);
+    try {
+      return await (await this.module()).getPassword(this.service, key);
+    } catch (error) {
+      throw nativeKeyringError(error);
+    }
   }
 
   async set(key: string, value: string): Promise<void> {
-    await (await this.module()).setPassword(this.service, key, value);
+    try {
+      await (await this.module()).setPassword(this.service, key, value);
+    } catch (error) {
+      throw nativeKeyringError(error);
+    }
   }
 
   async delete(key: string): Promise<void> {
-    await (await this.module()).deletePassword(this.service, key);
+    try {
+      await (await this.module()).deletePassword(this.service, key);
+    } catch (error) {
+      throw nativeKeyringError(error);
+    }
   }
 }
 
 export class AuthStore {
   private readonly service: string;
   private readonly keyring: Keyring;
+  private readonly keyringTimeoutMs: number;
 
   constructor(keyring?: Keyring, options: AuthStoreOptions = {}) {
     this.service = options.service?.trim() || DEFAULT_SERVICE;
     this.keyring = keyring ?? new KeytarKeyring(this.service);
+    this.keyringTimeoutMs = Math.max(1, options.keyringTimeoutMs ?? DEFAULT_KEYRING_TIMEOUT_MS);
   }
 
   static normalizeBaseUrl(baseUrl: string): string {
@@ -62,7 +81,7 @@ export class AuthStore {
   }
 
   async getActiveAccount(): Promise<Account | null> {
-    const active = await this.keyring.get(this.activeKey());
+    const active = await this.keyringGet(this.activeKey());
     if (!active) return null;
     try {
       const reference = JSON.parse(active) as { accountId?: string; baseUrl?: string };
@@ -95,8 +114,8 @@ export class AuthStore {
       accountId: account.accountId.trim(),
       baseUrl: AuthStore.normalizeBaseUrl(account.baseUrl),
     } satisfies Account;
-    await this.keyring.set(this.accountKey(normalized.baseUrl, normalized.accountId), JSON.stringify(normalized));
-    await this.keyring.set(this.activeKey(), JSON.stringify({
+    await this.keyringSet(this.accountKey(normalized.baseUrl, normalized.accountId), JSON.stringify(normalized));
+    await this.keyringSet(this.activeKey(), JSON.stringify({
       accountId: normalized.accountId,
       baseUrl: normalized.baseUrl,
     }));
@@ -106,33 +125,51 @@ export class AuthStore {
     const normalizedBaseUrl = baseUrl ? AuthStore.normalizeBaseUrl(baseUrl) : undefined;
     const normalizedAccountId = accountId.trim();
     if (normalizedBaseUrl) {
-      await this.keyring.delete(this.accountKey(normalizedBaseUrl, normalizedAccountId));
+      await this.keyringDelete(this.accountKey(normalizedBaseUrl, normalizedAccountId));
     } else {
-      await this.keyring.delete(this.legacyAccountKey(normalizedAccountId));
+      await this.keyringDelete(this.legacyAccountKey(normalizedAccountId));
     }
-    const active = await this.keyring.get(this.activeKey());
+    const active = await this.keyringGet(this.activeKey());
     if (!active) return;
     try {
       const reference = JSON.parse(active) as { accountId?: string; baseUrl?: string };
       if (reference.accountId === normalizedAccountId
         && (!normalizedBaseUrl || AuthStore.normalizeBaseUrl(reference.baseUrl ?? "") === normalizedBaseUrl)) {
-        await this.keyring.delete(this.activeKey());
+        await this.keyringDelete(this.activeKey());
       }
     } catch {
-      if (!normalizedBaseUrl && active === normalizedAccountId) await this.keyring.delete(this.activeKey());
+      if (!normalizedBaseUrl && active === normalizedAccountId) await this.keyringDelete(this.activeKey());
     }
   }
 
   private async readStoredAccount(key: string): Promise<Account | null> {
-    const raw = await this.keyring.get(key);
+    const raw = await this.keyringGet(key);
     if (!raw) return null;
     try {
       const account = JSON.parse(raw) as Account;
       if (!account.accountId || !account.baseUrl || !account.refreshToken) return null;
-      return account;
+      return {
+        ...account,
+        accountId: account.accountId.trim(),
+        baseUrl: AuthStore.normalizeBaseUrl(account.baseUrl),
+        displayName: account.displayName?.trim() || "PMS 用户",
+        refreshToken: account.refreshToken.trim(),
+      };
     } catch {
       return null;
     }
+  }
+
+  private keyringGet(key: string): Promise<string | null> {
+    return withKeyringTimeout(this.keyring.get(key), this.keyringTimeoutMs);
+  }
+
+  private keyringSet(key: string, value: string): Promise<void> {
+    return withKeyringTimeout(this.keyring.set(key, value), this.keyringTimeoutMs);
+  }
+
+  private keyringDelete(key: string): Promise<void> {
+    return withKeyringTimeout(this.keyring.delete(key), this.keyringTimeoutMs);
   }
 
   private activeKey(): string {
@@ -148,4 +185,37 @@ export class AuthStore {
     const hash = createHash("sha256").update(identity).digest("hex");
     return this.service + ":account:" + hash;
   }
+}
+
+function withKeyringTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      settled = true;
+      reject(new Error("OS 凭据存储访问超时，请检查系统钥匙串权限或重新执行 pms auth login"));
+    }, timeoutMs);
+
+    operation.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function nativeKeyringError(error: unknown): Error {
+  const cause = error instanceof Error ? error : new Error(String(error));
+  return new Error(
+    "OS 凭据存储访问失败，请在普通终端重新执行 pms auth login，并允许终端访问登录钥匙串",
+    { cause },
+  );
 }

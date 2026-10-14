@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a bounded OS-keyring timeout and a fast failure path so CLI commands do not hang when the native keyring is unavailable.
+- Renamed the public repository and workspace package namespace to `pms-cli` while preserving the `pms` command and `pms-cli` authentication identity.
 - Added the gated `pms requirement analysis save` entry point with explicit node/version arguments, idempotency replay, capability checks and safe Skill guidance.
 - Added default-off isolated E2E scaffolding for project creation and requirement analysis save; real runs require browser authorization and explicit isolation configuration.
 

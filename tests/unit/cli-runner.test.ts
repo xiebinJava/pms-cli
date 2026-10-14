@@ -39,6 +39,7 @@ describe("CLI runner", () => {
       ["search", "topic", "--filter", "status=ACTIVE", "--filter", "status=DONE"],
       ["operation", "execute", "project.create", "--arguments-json", "{}"],
       ["project", "create", "--arguments-json", "{}"],
+      ["scenario", "project-create", "execute", "--arguments-json", "{\"name\":\"x\"}"],
       ["get", "project", "9007199254740993"],
       ["operation", "preview", "project.create", "--arguments-json", "{bad"],
       ["operation", "preview", "project.create", "--context-id", "project:7"],
@@ -65,6 +66,19 @@ describe("CLI runner", () => {
     expect(deps.setExitCode).toHaveBeenCalledWith(1);
   });
 
+  it("requests process exit after a runtime error", async () => {
+    const { deps } = makeDeps();
+    const exitProcess = vi.fn();
+    (deps as CliDependencies & { exitProcess?: (code: number) => void }).exitProcess = exitProcess;
+    deps.createRuntime = vi.fn(async () => {
+      throw new Error("OS 凭据存储访问超时");
+    });
+
+    await runCli(["get", "project", "7"], deps);
+
+    expect(exitProcess).toHaveBeenCalledWith(1);
+  });
+
   it("does not emulate exact get when the server omits the capability", async () => {
     const get = vi.fn();
     const client = {
@@ -88,6 +102,129 @@ describe("CLI runner", () => {
     const version = makeDeps();
     await runCli(["--version"], version.deps);
     expect(version.deps.createRuntime).not.toHaveBeenCalled();
-    expect(version.stdout[0]).toBe("0.1.0\n");
+    expect(version.stdout[0]).toBe("0.1.1\n");
+  });
+
+  it("routes project-create scenario plan without executing a write", async () => {
+    const execute = vi.fn();
+    const client = {
+      capabilities: async () => ({
+        version: "ai-v1",
+        resources: [{
+          type: "project",
+          actions: [{
+            name: "project.create",
+            label: "创建项目",
+            description: "创建项目",
+            mode: "automatic",
+            risk: "medium",
+            scopes: ["pms:project:write"],
+            inputSchema: { name: { type: "string", label: "项目名称", required: true } },
+            requiresContext: false,
+            refreshScopes: ["project-list"],
+          }],
+        }],
+        scopes: ["pms:project:write"],
+        workflowTypes: [],
+      }),
+      preview: async () => ({
+        operationId: "preview-1",
+        command: "project.create",
+        expiresAt: "2026-10-13T12:00:00Z",
+        contextVersion: "1",
+        warnings: [],
+        changes: [],
+        refreshScopes: [],
+      }),
+      execute,
+    } as never;
+    const { deps, stdout } = makeDeps(client);
+
+    await runCli(["scenario", "project-create", "plan", "--arguments-json", "{\"name\":\"AI Native PMS\"}"], deps);
+
+    const output = JSON.parse(stdout[0] ?? "{}");
+    expect(output.ok).toBe(true);
+    expect(output.data.scenario).toBe("project-create");
+    expect(output.data.phase).toBe("plan");
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("accepts entity version zero for requirement analysis planning", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        features: { resourceGet: true },
+        resources: [{
+          type: "requirement",
+          actions: [{
+            name: "requirement.analysis.save",
+            label: "保存需求分析",
+            description: "保存需求分析",
+            mode: "automatic",
+            risk: "high",
+            scopes: ["pms:requirement:write"],
+            inputSchema: {
+              requirementId: { type: "integer", label: "需求 ID", required: true },
+              nodeId: { type: "integer", label: "节点 ID", required: true },
+              version: { type: "integer", label: "版本", required: true },
+              patch: { type: "object", label: "分析成果", required: true },
+            },
+            requiresContext: true,
+            refreshScopes: ["requirement-detail"],
+          }],
+        }],
+        scopes: ["pms:requirement:write"],
+        workflowTypes: [],
+      })),
+      get: vi.fn(async () => ({
+        resourceType: "requirement",
+        resourceId: 27,
+        entityVersion: 0,
+        details: { id: 27, title: "项目管理自动化需求" },
+      })),
+      context: vi.fn(async () => ({
+        resource: { type: "requirement", id: 27 },
+        version: 0,
+        currentNode: { id: 375, key: "stage-1", label: "需求录入" },
+        workflow: { templateVersionId: 50, templateVersionNo: 1, nodes: [{ id: 375, key: "stage-1", label: "需求录入" }] },
+        allowedActions: ["requirement.analysis.save"],
+      })),
+      preview: vi.fn(async () => ({
+        operationId: "preview-analysis-0",
+        command: "requirement.analysis.save",
+        expiresAt: "2026-10-14T12:00:00Z",
+        contextVersion: "0",
+        warnings: [],
+        changes: [],
+        refreshScopes: ["requirement-detail"],
+      })),
+    } as never;
+    const { deps, stdout, stderr } = makeDeps(client);
+
+    await runCli([
+      "scenario", "requirement-analysis", "plan", "27",
+      "--node-id", "375", "--version", "0", "--arguments-json", "{}",
+    ], deps);
+
+    expect(stderr).toHaveLength(0);
+    expect(JSON.parse(stdout[0] ?? "{}").data.preview.operationId).toBe("preview-analysis-0");
+  });
+
+  it("uses an explicitly supplied request id for the runtime and success envelope", async () => {
+    const { deps, stdout } = makeDeps({
+      query: async () => ({
+        resourceType: "topic",
+        items: [],
+        total: 0,
+        page: 1,
+        pageSize: 20,
+        totalPage: 0,
+        queryScope: "readable",
+      }),
+    } as never);
+    await runCli(["search", "topic", "--request-id", "caller-req-7"], deps);
+
+    expect(deps.createRuntime).toHaveBeenCalledWith("caller-req-7");
+    expect(JSON.parse(stdout[0] ?? "{}").meta.requestId).toBe("caller-req-7");
   });
 });

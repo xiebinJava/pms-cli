@@ -30,13 +30,13 @@ importers:
 
   packages/pms-capabilities:
     dependencies:
-      '@pms-ai-connector/pms-contracts':
+      '@xiebinjava/pms-contracts':
         specifier: workspace:*
         version: link:../pms-contracts
 
   packages/pms-client:
     dependencies:
-      '@pms-ai-connector/pms-contracts':
+      '@xiebinjava/pms-contracts':
         specifier: workspace:*
         version: link:../pms-contracts
       zod:

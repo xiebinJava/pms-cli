@@ -27,8 +27,9 @@ describe("project creation readback", () => {
     const calls: string[] = [];
     const client = {
       capabilities: async () => catalog,
-      preview: async () => {
+      preview: async (request: { context?: { id: string; version: string } }) => {
         calls.push("preview");
+        expect(request.context).toEqual({ id: "global:pms", version: "v1" });
         return {
           operationId: "preview-1",
           command: "project.create",

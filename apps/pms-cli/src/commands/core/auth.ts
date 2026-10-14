@@ -1,5 +1,5 @@
 import { BrowserAuth } from "../../auth/BrowserAuth.js";
-import { AuthStore } from "../../auth/AuthStore.js";
+import { AuthStore, type Account } from "../../auth/AuthStore.js";
 
 export interface AuthCommandOptions {
   baseUrl: string;
@@ -9,7 +9,16 @@ export interface AuthCommandOptions {
 
 export async function authLogin(options: AuthCommandOptions) {
   const store = options.store ?? new AuthStore();
-  return new BrowserAuth({ ...options, store }).login();
+  const session = await new BrowserAuth({ ...options, store }).login();
+  return publicAccount(session.account);
+}
+
+export function publicAccount(account: Account): Pick<Account, "accountId" | "displayName" | "baseUrl"> {
+  return {
+    accountId: account.accountId.trim(),
+    displayName: account.displayName.trim() || "PMS 用户",
+    baseUrl: AuthStore.normalizeBaseUrl(account.baseUrl),
+  };
 }
 
 export async function authStatus(store = new AuthStore()) {

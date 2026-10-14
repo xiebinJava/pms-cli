@@ -11,6 +11,11 @@ import { workflowAction } from "../commands/core/workflow.js";
 import { dashboardSummary } from "../commands/shortcuts/dashboard.js";
 import { createProjectWithReadback } from "../commands/shortcuts/project.js";
 import { requirementAnalysisSave } from "../commands/shortcuts/requirement.js";
+import { executeProjectCreateScenario, planProjectCreateScenario } from "../commands/scenarios/projectCreate.js";
+import {
+  executeRequirementAnalysisScenario,
+  planRequirementAnalysisScenario,
+} from "../commands/scenarios/requirementAnalysis.js";
 
 const HELP = [
   "PMS CLI",
@@ -24,6 +29,8 @@ const HELP = [
   "  pms operation execute <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms project create --arguments-json <json> --idempotency-key <key>",
   "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>",
+  "  pms scenario project-create plan|execute --arguments-json <json> [--idempotency-key <key>]",
+  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -32,7 +39,7 @@ const HELP = [
   "Options accept both --name value and --name=value forms.",
   "",
 ].join("\n");
-const VERSION = "0.1.0";
+const VERSION = "0.1.1";
 
 export interface CliRuntime {
   client: PmsClient;
@@ -44,6 +51,7 @@ export interface CliDependencies {
   writeStdout(text: string): void;
   writeStderr(text: string): void;
   setExitCode(code: number): void;
+  exitProcess?(code: number): void;
   requestIdFactory(): string;
   runDoctor?(): unknown;
   runSetup?(): unknown;
@@ -51,9 +59,11 @@ export interface CliDependencies {
 }
 
 export async function runCli(argv: string[], deps: CliDependencies): Promise<void> {
-  const requestId = deps.requestIdFactory();
+  const generatedRequestId = deps.requestIdFactory();
+  let requestId = generatedRequestId;
   try {
     const invocation = parseCliArguments(argv);
+    requestId = invocation.options["request-id"]?.trim() || generatedRequestId;
     if (invocation.options.help !== undefined || invocation.options.h !== undefined) {
       deps.writeStdout(HELP);
       return;
@@ -68,7 +78,7 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
       deps.writeStdout(JSON.stringify({
         ok: true,
         data: result,
-        meta: { clientId: "pms-cli", refreshScopes: [], requestId },
+        meta: successMeta(result, requestId),
       }) + "\n");
     }
   } catch (error) {
@@ -91,12 +101,35 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
       meta: { clientId: "pms-cli", refreshScopes: [], requestId: effectiveRequestId },
     }) + "\n");
     deps.setExitCode(1);
+    deps.exitProcess?.(1);
   }
+}
+
+function successMeta(result: unknown, requestId: string): Record<string, unknown> {
+  if (isOperationResult(result)) {
+    return {
+      clientId: "pms-cli",
+      requestId,
+      refreshScopes: result.refreshScopes,
+      ...(result.auditId ? { auditId: result.auditId } : {}),
+    };
+  }
+  return { clientId: "pms-cli", refreshScopes: [], requestId };
+}
+
+function isOperationResult(value: unknown): value is {
+  refreshScopes: string[];
+  auditId?: string;
+} {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as { refreshScopes?: unknown };
+  return Array.isArray(candidate.refreshScopes)
+      && candidate.refreshScopes.every((scope) => typeof scope === "string");
 }
 
 async function dispatch(invocation: CliInvocation, deps: CliDependencies, requestId: string): Promise<unknown> {
   if (invocation.group === "doctor") {
-    const report = deps.runDoctor?.();
+    const report = await deps.runDoctor?.();
     if (invocation.options.format === "json") {
       deps.writeStdout(JSON.stringify(report ?? {}) + "\n");
       return undefined;
@@ -149,13 +182,55 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const runtime = await deps.createRuntime(requestId);
     return createProjectWithReadback(runtime.client, { ...options, idempotencyKey });
   }
+  if (invocation.group === "scenario" && invocation.command === "project-create") {
+    const phase = invocation.positionals[0];
+    if (phase !== "plan" && phase !== "execute") {
+      throw new CliArgumentError("scenario project-create 需要 plan 或 execute");
+    }
+    if (invocation.options["arguments-json"] === undefined) {
+      throw new CliArgumentError("项目创建场景必须提供 --arguments-json");
+    }
+    const options = operationOptions(invocation.options, requestId);
+    if (phase === "plan") {
+      const runtime = await deps.createRuntime(requestId);
+      return planProjectCreateScenario(runtime.client, options);
+    }
+    const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const runtime = await deps.createRuntime(requestId);
+    return executeProjectCreateScenario(runtime.client, { ...options, idempotencyKey });
+  }
+  if (invocation.group === "scenario" && invocation.command === "requirement-analysis") {
+    const phase = invocation.positionals[0];
+    if (phase !== "plan" && phase !== "execute") {
+      throw new CliArgumentError("scenario requirement-analysis 需要 plan 或 execute");
+    }
+    const requirementId = requireId(invocation.positionals[1]);
+    const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
+    const version = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
+    if (invocation.options["arguments-json"] === undefined) {
+      throw new CliArgumentError("需求分析场景必须提供 --arguments-json");
+    }
+    const options = operationOptions(invocation.options, requestId);
+    if (phase === "plan") {
+      const runtime = await deps.createRuntime(requestId);
+      return planRequirementAnalysisScenario(runtime.client, requirementId, { ...options, nodeId, version });
+    }
+    const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const runtime = await deps.createRuntime(requestId);
+    return executeRequirementAnalysisScenario(runtime.client, requirementId, {
+      ...options,
+      nodeId,
+      version,
+      idempotencyKey,
+    });
+  }
   if (invocation.group === "requirement" && invocation.command === "analysis" && invocation.positionals[0] === "save") {
     if (invocation.positionals.length !== 2) {
       throw new CliArgumentError("requirement analysis save 需要一个需求 ID");
     }
     const requirementId = requireId(invocation.positionals[1]);
     const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
-    const version = positiveInteger(requiredOption(invocation.options, "version"), "version");
+    const version = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
     if (!invocation.options["context-id"] || !invocation.options["context-version"]) {
       throw new CliArgumentError("需求分析保存必须提供 --context-id 与 --context-version");
     }
@@ -256,6 +331,13 @@ function positiveInteger(raw: string, name: string): number {
   if (!/^\d+$/.test(raw)) throw new CliArgumentError("--" + name + " 必须是正整数");
   const value = Number(raw);
   if (!Number.isSafeInteger(value) || value <= 0) throw new CliArgumentError("--" + name + " 必须是正整数");
+  return value;
+}
+
+function nonNegativeInteger(raw: string, name: string): number {
+  if (!/^\d+$/.test(raw)) throw new CliArgumentError("--" + name + " 必须是非负整数");
+  const value = Number(raw);
+  if (!Number.isSafeInteger(value)) throw new CliArgumentError("--" + name + " 必须是非负整数");
   return value;
 }
 

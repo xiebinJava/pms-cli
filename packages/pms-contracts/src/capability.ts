@@ -103,6 +103,7 @@ const wireWorkflowCapabilitySchema = z.object({
 });
 
 export const workflowTypeCapabilitySchema = z.object({
+  projectTypeId: z.number().int().positive().optional(),
   processType: z.string().min(1),
   label: z.string().min(1),
   templates: z.array(workflowCapabilitySchema),
@@ -121,6 +122,7 @@ const wireResourceCapabilitySchema = z.object({
 });
 
 const wireWorkflowTypeCapabilitySchema = z.object({
+  projectTypeId: z.number().int().positive().optional(),
   processType: z.string().min(1),
   label: z.string().min(1),
   templates: z.array(wireWorkflowCapabilitySchema),
