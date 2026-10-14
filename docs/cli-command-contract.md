@@ -41,6 +41,7 @@ Every failure writes an error envelope to stderr and exits non-zero:
 | `pms get <resource-type> <id>` | `GET /integration/ai/v1/resources/{type}/{id}` | read |
 | `pms capabilities --format json` | `GET /integration/ai/v1/capabilities` | read |
 | `pms context <resource-type> <id> --format json` | `GET /integration/ai/v1/context/{type}/{id}` | read |
+| `pms context <type> <id> --view focused --node-id <id> [--component <key>]` | 同上，头部带 `nodeId/view/componentKey` 查询参数 | read（focused 仅在 meta.formatVersion=2 且核验通过后返回） |
 | `pms operation preview <operation> --arguments-json <json>` | `POST /integration/ai/v1/operations/preview` | dry-run |
 | `pms operation execute <operation> --arguments-json <json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` | explicit write |
 | `pms scenario project-create plan|execute ...` | capabilities + preview/execute + project get/context | plan is read-only; execute writes |

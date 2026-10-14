@@ -1,6 +1,9 @@
 import { z } from "zod";
+
 import {
   automaticOperationRequestSchema,
+  workflowContextMetaSchema,
+  workflowContextV2ResponseSchema,
   parseCapabilityCatalog,
   operationResultSchema,
   operationPreviewSchema,
@@ -17,8 +20,12 @@ import {
   type QueryResult,
   type ResourceDetail,
   type ResourceRef,
+  type ContextReadOptions,
+  type ContextMeta,
   type WorkflowContext,
 } from "../../pms-contracts/src/index.js";
+
+const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 import { AuthProviderError } from "./AuthProvider.js";
 import type { AuthProvider } from "./AuthProvider.js";
 import { classifyPmsStatus, PmsClientError, safeErrorMessage } from "./Errors.js";
@@ -29,7 +36,7 @@ export interface PmsClient {
   capabilities(): Promise<CapabilityCatalog>;
   query(request: QueryRequest): Promise<QueryResult>;
   get(resource: ResourceRef): Promise<ResourceDetail>;
-  context(resource: ResourceRef): Promise<WorkflowContext>;
+  context(resource: ResourceRef, options?: ContextReadOptions): Promise<WorkflowContext>;
   preview(request: AutomaticOperationRequest): Promise<OperationPreview>;
   execute(request: AutomaticOperationRequest): Promise<OperationResult>;
 }
@@ -112,31 +119,58 @@ export class PmsHttpClient implements PmsClient {
     return resourceDetailSchema.parse(data);
   }
 
-  async context(resource: ResourceRef): Promise<WorkflowContext> {
+  async context(resource: ResourceRef, options?: ContextReadOptions): Promise<WorkflowContext> {
     const parsed = resourceRefSchema.extend({
       id: z.number().int().positive(),
     }).parse(resource);
+    const requested = parseContextReadOptions(options);
+    let query = "";
+    if (requested.nodeId !== undefined) query += `&nodeId=${requested.nodeId}`;
+    if (requested.view !== undefined) query += `&view=${requested.view}`;
+    if (requested.component !== undefined) query += `&componentKey=${encodeURIComponent(requested.component)}`;
     const data = await this.requestData(
-      `integration/ai/v1/context/${encodeURIComponent(parsed.type)}/${parsed.id}`,
+      `integration/ai/v1/context/${encodeURIComponent(parsed.type)}/${parsed.id}${query ? `?${query.slice(1)}` : ""}`,
       { method: "GET" },
       true,
     );
     const raw = workflowContextResponseSchema.parse(data);
+    verifyContextReceipt(parsed.type, parsed.id, raw.resourceType, raw.resourceId, requested,
+      readContextMeta(raw as unknown as Record<string, unknown>));
+    if (raw.meta === undefined) {
+      return {
+        resource: { type: raw.resourceType, id: raw.resourceId },
+        version: raw.version,
+        ...(raw.entityVersion !== undefined ? { entityVersion: raw.entityVersion } : {}),
+        ...(raw.resourceDetails !== undefined ? { resourceDetails: raw.resourceDetails } : {}),
+        currentNode: raw.currentNode ?? undefined,
+        workflow: raw.workflow
+          ? {
+            templateVersionId: raw.workflow.templateVersionId ?? undefined,
+            templateVersionNo: raw.workflow.templateVersionNo ?? undefined,
+            nodes: raw.workflow.nodes,
+          }
+          : undefined,
+        ...(raw.relations !== undefined ? { relations: raw.relations } : {}),
+        allowedActions: raw.allowedActions,
+      };
+    }
+    const v2 = workflowContextV2ResponseSchema.parse(data);
     return {
-      resource: { type: raw.resourceType, id: raw.resourceId },
-      version: raw.version,
-      ...(raw.entityVersion !== undefined ? { entityVersion: raw.entityVersion } : {}),
-      ...(raw.resourceDetails !== undefined ? { resourceDetails: raw.resourceDetails } : {}),
-      currentNode: raw.currentNode ?? undefined,
-      workflow: raw.workflow
+      resource: { type: v2.resourceType, id: v2.resourceId },
+      version: v2.version,
+      ...(v2.entityVersion !== undefined ? { entityVersion: v2.entityVersion } : {}),
+      ...(v2.resourceDetails !== undefined ? { resourceDetails: v2.resourceDetails } : {}),
+      currentNode: v2.currentNode ?? undefined,
+      workflow: v2.workflow
         ? {
-          templateVersionId: raw.workflow.templateVersionId ?? undefined,
-          templateVersionNo: raw.workflow.templateVersionNo ?? undefined,
-          nodes: raw.workflow.nodes,
+          templateVersionId: v2.workflow.templateVersionId ?? undefined,
+          templateVersionNo: v2.workflow.templateVersionNo ?? undefined,
+          nodes: v2.workflow.nodes,
         }
         : undefined,
-      ...(raw.relations !== undefined ? { relations: raw.relations } : {}),
-      allowedActions: raw.allowedActions,
+      ...(v2.relations !== undefined ? { relations: v2.relations } : {}),
+      allowedActions: v2.allowedActions,
+      meta: v2.meta,
     };
   }
 
@@ -322,5 +356,74 @@ function parseCapabilityCatalogForClient(input: unknown, requestId: string): Cap
       });
     }
     throw error;
+  }
+}
+
+function readContextMeta(data: Record<string, unknown>): ContextMeta | undefined {
+  if (data === null || typeof data !== "object" || data.meta === undefined || data.meta === null) {
+    return undefined;
+  }
+  try {
+    return workflowContextMetaSchema.parse(data.meta);
+  } catch (schemaFailure) {
+    throw new PmsClientError("validation", "服务端返回未知的 context 格式，无法按 formatVersion 解析");
+  }
+}
+
+function parseContextReadOptions(
+  options?: ContextReadOptions,
+): { nodeId?: number; view?: "legacy" | "focused"; component?: string } {
+  if (options === undefined) return {};
+  if (typeof options !== "object") throw new PmsClientError("validation", "context options 必须为对象");
+  if (options.nodeId !== undefined) {
+    if (!Number.isInteger(options.nodeId) || options.nodeId <= 0
+        || options.nodeId > MAX_SAFE_INTEGER) {
+      throw new PmsClientError("validation", "nodeId 必须为安全范围内的正整数");
+    }
+  }
+  if (options.view !== undefined && options.view !== "legacy" && options.view !== "focused") {
+    throw new PmsClientError("validation", "view 仅支持 legacy 或 focused");
+  }
+  if (options.component !== undefined) {
+    if (!options.component.trim()) {
+      throw new PmsClientError("validation", "component 不能为空白");
+    }
+    if (options.view !== "focused") {
+      throw new PmsClientError("validation", "component 仅允许在 focused 视图下使用");
+    }
+  }
+  return options;
+}
+
+function verifyContextReceipt(
+  requestedType: string,
+  requestedId: number,
+  responseResourceType: string,
+  responseResourceId: number,
+  requested: { nodeId?: number; view?: "legacy" | "focused"; component?: string },
+  meta?: ContextMeta,
+): void {
+  if (responseResourceType !== requestedType || responseResourceId !== requestedId) {
+    throw new PmsClientError("validation",
+      `context 响应定位不一致: 请求 ${requestedType}/${requestedId}，响应 ${responseResourceType}/${responseResourceId}`);
+  }
+  const requestedSelection = requested.nodeId !== undefined || requested.view !== undefined
+    || requested.component !== undefined;
+  if (requestedSelection && meta === undefined) {
+    throw new PmsClientError("validation",
+      "服务端没有返回 meta；无法证明显式定位参数被应用（旧服务端或路由错误）");
+  }
+  if (meta === undefined) return;
+  if (requested.nodeId !== undefined && meta.selectedNodeId !== requested.nodeId) {
+    throw new PmsClientError("validation",
+      `context 响应 selectedNodeId=${meta.selectedNodeId ?? null} 与请求 nodeId=${requested.nodeId} 不一致`);
+  }
+  if (requested.view !== undefined && meta.view !== requested.view) {
+    throw new PmsClientError("validation",
+      `context 响应 view=${meta.view} 与请求 view=${requested.view} 不一致`);
+  }
+  if (requested.component !== undefined && meta.selectedComponentKey !== requested.component) {
+    throw new PmsClientError("validation",
+      `context 响应 selectedComponentKey=${meta.selectedComponentKey ?? null} 与请求 component=${requested.component} 不一致`);
   }
 }

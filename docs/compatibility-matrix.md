@@ -18,4 +18,8 @@
 | CLI 参数 | `--name value` 与 `--name=value` | 两种形式等价；未知参数、重复 filter key、非法 JSON 在认证前拒绝 |
 | 写操作 | `POST .../operations/{preview,execute}` | execute 必须显式 `--idempotency-key`；客户端不自动重试 |
 | 需求分析保存 | `pms requirement analysis save` | 需要后端声明 `requirement.analysis.save`、明确节点/版本和分析字段补丁；缺能力时只出草稿 |
+| 流程上下文聚焦读取 | `--view focused --node-id <id> [--component <key>]` | 需要服务端 meta.formatVersion=2；显式参数被旧服务端忽略时客户端核验失败，不降级 |
+| 引用权限投影 | `meta.referencesScope=readable-only` | 引用列表是权限投影：不可读/已删除引用整项省略，空列表不代表业务未关联 |
+| 组件正文状态 | `contentState=LOADED/EMPTY/NOT_REQUESTED/UNSUPPORTED` | EMPTY≠未读；UNSUPPORTED 保留 config、不输出原始内容 |
+| focused 字节预算 | 524288 UTF-8 data JSON 字节 | 服务端整体拒绝（HTTP 422 CONTEXT_TOO_LARGE:），不截断；不影响 legacy 视图 |
 | 真实写入验收 | `verify:real-pms:project-create`、`verify:real-pms:analysis-save` | 默认 skipped；必须使用隔离配置、精确目标 allowlist 和浏览器授权，不连接用户数据库 |

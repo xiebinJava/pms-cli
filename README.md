@@ -30,6 +30,8 @@ pms capabilities --format json
 pms search project --keyword 订单 --format json
 pms get project 7 --format json
 pms context project 7 --format json
+pms context requirement 23 --view focused --node-id 299 --format json
+pms context project 7 --view focused --node-id 299 --component solution-design --format json
 pms operation preview project.create --arguments-json '{"name":"订单中心"}' --format json
 pms operation execute project.create --arguments-json '{"name":"订单中心"}' --idempotency-key idem-1 --format json
 pms scenario project-create plan --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --format json

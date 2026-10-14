@@ -8,6 +8,8 @@ const VALUE_OPTIONS = new Set([
   "arguments-json",
   "idempotency-key",
   "node-id",
+  "view",
+  "component",
   "version",
   "context-id",
   "context-version",

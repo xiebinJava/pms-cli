@@ -69,6 +69,7 @@ export interface WorkflowContext {
   version: number | null;
   entityVersion?: number | null;
   resourceDetails?: Record<string, unknown>;
+  meta?: ContextMeta;
   currentNode?: {
     id: number | null;
     key: string;
@@ -112,3 +113,96 @@ export const workflowContextResponseSchema = z.object({
   })).optional(),
   allowedActions: z.array(z.string()).default([]),
 }).passthrough();
+
+export interface ContextReadOptions {
+  /** JS-safe positive id of the actual node to select ( Shall reject > MAX_SAFE_INTEGER ). */
+  nodeId?: number;
+  /** Explicit view; defaults to legacy on both sides. */
+  view?: "legacy" | "focused";
+  /** Exact component key; only valid with the focused view. */
+  component?: string;
+}
+
+export const workflowContextFieldSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  type: z.string().nullable().optional(),
+  required: z.boolean(),
+  options: z.array(z.string()).optional(),
+  visible: z.boolean().nullable().optional(),
+  binding: z.string().nullable().optional(),
+  fullWidth: z.boolean().nullable().optional(),
+});
+
+export const workflowContextComponentSchema = z.object({
+  key: z.string().min(1),
+  label: z.string().min(1),
+  fields: z.array(workflowContextFieldSchema).default([]),
+  actions: z.array(z.string()).default([]),
+  config: z.unknown().nullable().optional(),
+  content: z.unknown().nullable().optional(),
+  contentState: z.enum(["LOADED", "EMPTY", "NOT_REQUESTED", "UNSUPPORTED"]).nullable().optional(),
+  versions: z.record(z.string(), z.number().int().nullable()).nullable().optional(),
+  saveContract: z.record(z.string(), z.unknown()).nullable().optional(),
+});
+
+export const workflowContextNodeSchema = z.object({
+  id: z.number().int().positive().nullable(),
+  key: z.string().min(1),
+  label: z.string().min(1),
+  position: z.number().int().nonnegative(),
+  status: z.number().int().nonnegative().nullable().optional(),
+  components: z.array(workflowContextComponentSchema).default([]),
+  fields: z.array(workflowContextFieldSchema).default([]),
+  fieldValues: z.record(z.string(), z.unknown()).default({}),
+  version: z.number().int().nonnegative().nullable().optional(),
+  description: z.string().nullable().optional(),
+  deliverable: z.string().nullable().optional(),
+  ownerId: z.number().int().positive().nullable().optional(),
+  ownerName: z.string().nullable().optional(),
+  startDate: z.string().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  fieldValueVersions: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
+  fieldValuesState: z.enum(["LOADED", "NOT_REQUESTED", "UNAVAILABLE"]).nullable().optional(),
+  permissions: z.unknown().nullable().optional(),
+  taskSummary: z.object({
+    total: z.number().int().nonnegative(),
+    done: z.number().int().nonnegative(),
+    incomplete: z.number().int().nonnegative(),
+  }).nullable().optional(),
+});
+
+export const workflowContextMetaSchema = z.object({
+  formatVersion: z.literal(2),
+  pureRead: z.literal(true),
+  loadedAt: z.string().min(1),
+  businessTimezone: z.string().min(1),
+  view: z.enum(["legacy", "focused"]),
+  fieldValuesScope: z.enum(["all-nodes", "selected-node"]),
+  componentContentScope: z.enum(["selected-node", "selected-component"]),
+  selectedNodeId: z.number().int().positive().nullable().optional(),
+  selectedComponentKey: z.string().min(1).nullable().optional(),
+  workflowConfigured: z.boolean(),
+  workflowStatus: z.string().min(1),
+  terminalStatus: z.string().nullable().optional(),
+  workflowInstanceVersion: z.number().int().nonnegative().nullable().optional(),
+  permissionsScope: z.string().min(1),
+  referencesScope: z.string().min(1),
+  warnings: z.array(z.object({
+    code: z.string().min(1),
+    message: z.string().min(1),
+  })).default([]),
+});
+
+export type ContextMeta = z.infer<typeof workflowContextMetaSchema>;
+export type ContextNode = z.infer<typeof workflowContextNodeSchema>;
+export type ContextComponent = z.infer<typeof workflowContextComponentSchema>;
+
+export const workflowContextV2ResponseSchema = workflowContextResponseSchema.extend({
+  meta: workflowContextMetaSchema,
+  workflow: z.object({
+    templateVersionId: z.number().int().positive().nullable().optional(),
+    templateVersionNo: z.number().int().positive().nullable().optional(),
+    nodes: z.array(workflowContextNodeSchema),
+  }).nullable().optional(),
+});

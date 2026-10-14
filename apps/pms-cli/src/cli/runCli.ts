@@ -1,6 +1,6 @@
 import type { PmsClient } from "../../../../packages/pms-client/src/index.js";
 import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-client/src/index.js";
-import type { QueryItem } from "../../../../packages/pms-contracts/src/index.js";
+import type { ContextReadOptions, QueryItem } from "../../../../packages/pms-contracts/src/index.js";
 import { CliArgumentError, parseCliArguments, type CliInvocation } from "./parseArguments.js";
 import { listCapabilities } from "../commands/core/capabilities.js";
 import { getContext } from "../commands/core/context.js";
@@ -170,7 +170,7 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const resourceType = requireContextResourceType(invocation.command);
     const resourceId = requireId(invocation.positionals[0]);
     const runtime = await deps.createRuntime(requestId);
-    return getContext(runtime.client, resourceType, resourceId);
+    return getContext(runtime.client, resourceType, resourceId, contextOptions(invocation.options));
   }
   if (invocation.group === "dashboard" && invocation.command === "summary") {
     const runtime = await deps.createRuntime(requestId);
@@ -358,4 +358,29 @@ function requireContextResourceType(raw: string | undefined): Extract<QueryItem[
     throw new CliArgumentError("context 不支持该资源类型: " + (raw ?? ""));
   }
   return raw as Extract<QueryItem["type"], "requirement" | "project" | "topic" | "story">;
+}
+
+function contextOptions(options: Record<string, string>): ContextReadOptions {
+  const contextReadOptions: ContextReadOptions = {};
+  const rawNodeId = options["node-id"];
+  if (rawNodeId !== undefined) {
+    if (!/^[1-9][0-9]*$/.test(rawNodeId) || BigInt(rawNodeId) > BigInt(Number.MAX_SAFE_INTEGER)) {
+      throw new CliArgumentError("node-id 必须为安全范围内的正整数");
+    }
+    contextReadOptions.nodeId = Number(rawNodeId);
+  }
+  const rawView = options.view;
+  if (rawView !== undefined) {
+    if (rawView !== "legacy" && rawView !== "focused") {
+      throw new CliArgumentError("view 仅支持 legacy 或 focused");
+    }
+    contextReadOptions.view = rawView;
+  }
+  const rawComponent = options.component;
+  if (rawComponent !== undefined) {
+    if (!rawComponent.trim()) throw new CliArgumentError("component 不能为空白");
+    if (rawView !== "focused") throw new CliArgumentError("component 仅允许在 focused 视图下使用");
+    contextReadOptions.component = rawComponent;
+  }
+  return contextReadOptions;
 }
