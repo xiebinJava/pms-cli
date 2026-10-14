@@ -133,7 +133,7 @@ export class PmsHttpClient implements PmsClient {
       { method: "GET" },
       true,
     );
-    const raw = workflowContextResponseSchema.parse(data);
+    const raw = parseWorkflowContextEnvelope(data);
     verifyContextReceipt(parsed.type, parsed.id, raw.resourceType, raw.resourceId, requested,
       readContextMeta(raw as unknown as Record<string, unknown>));
     if (raw.meta === undefined) {
@@ -154,6 +154,7 @@ export class PmsHttpClient implements PmsClient {
         allowedActions: raw.allowedActions,
       };
     }
+    ensureWorkflowContextV2Parsing(data);
     const v2 = workflowContextV2ResponseSchema.parse(data);
     return {
       resource: { type: v2.resourceType, id: v2.resourceId },
@@ -425,5 +426,27 @@ function verifyContextReceipt(
   if (requested.component !== undefined && meta.selectedComponentKey !== requested.component) {
     throw new PmsClientError("validation",
       `context 响应 selectedComponentKey=${meta.selectedComponentKey ?? null} 与请求 component=${requested.component} 不一致`);
+  }
+}
+
+function parseWorkflowContextEnvelope(data: unknown) {
+  try {
+    return workflowContextResponseSchema.parse(data);
+  } catch (legacyParseFailure) {
+    throw new PmsClientError("validation",
+      legacyParseFailure instanceof z.ZodError
+        ? `context 响应结构不合法: ${legacyParseFailure.issues[0]?.message ?? "未知 schema 失败"}`
+        : "context 响应结构不合法");
+  }
+}
+
+function ensureWorkflowContextV2Parsing(data: unknown): void {
+  try {
+    workflowContextV2ResponseSchema.parse(data);
+  } catch (strictParseFailure) {
+    throw new PmsClientError("validation",
+      strictParseFailure instanceof z.ZodError
+        ? `context v2 响应结构不合法: ${strictParseFailure.issues[0]?.message ?? "未知 schema 失败"}`
+        : "context v2 响应结构不合法");
   }
 }

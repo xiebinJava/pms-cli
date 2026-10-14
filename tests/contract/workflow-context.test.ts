@@ -227,4 +227,29 @@ describe("workflow context contract", () => {
       kind: "validation",
     });
   });
+
+  it("returns PmsClientError(kind=validation) when the legacy envelope is structurally broken", async () => {
+    const client = clientFor(Promise.resolve(response({
+      resourceType: "project",
+      resourceId: 7,
+      // Missing `allowedActions` breaks the legacy envelope schema.
+    })));
+
+    await expect(client.context({ type: "project", id: 7 })).rejects.toSatisfy((error: unknown) => {
+      const typed = error as { kind?: string };
+      return typed.kind === "validation";
+    });
+  });
+
+  it("returns PmsClientError(kind=validation) when strict v2 parsing fails", async () => {
+    const client = clientFor(Promise.resolve(response({
+      ...interactivePayload,
+      meta: { ...interactiveMeta, view: "sideways" },
+    })));
+
+    await expect(client.context({ type: "project", id: 7 })).rejects.toSatisfy((error: unknown) => {
+      const typed = error as { kind?: string };
+      return typed.kind === "validation";
+    });
+  });
 });
