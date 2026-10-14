@@ -45,3 +45,17 @@ pms scenario requirement-analysis execute 23 --node-id 301 --version 7 --argumen
 ```
 
 `plan` 阶段只读取能力/上下文并生成预览；`execute` 阶段才提交写入并返回结构化回读。写入结果的 `trace.operationId` 是 PMS 持久化 AI 操作记录的审计引用，重复请求必须使用同一幂等键。真实执行仍必须遵守本文前面的隔离环境和清理要求。
+
+## AI 只读流程上下文的真实验收状态（2026-10-14）
+
+- 单元/合同测试已经覆盖请求/回执核验、referencesScope、contentState、focused 字节预算（详见
+  tests/contract/workflow-context.test.ts）。
+- `tests/e2e/support/readonlyContextSession.ts` 只从环境读取四类型/节点的显式 ID；缺失→该项“未运行”，
+  匹配到首条搜索结果、自动创建或清理资源的行为被 helper 拒绝。安全 gate 单元测试位于
+  tests/unit/e2e-safety.test.ts（不借用写 E2E helper）。
+- 本次会话（开发阶段）未执行真实只读 API 验收（`pnpm run verify:real-pms:readonly` 需要
+  PMS_E2E_READONLY=true、PMS_E2E_TOKEN、四类显式 ID），也未做外部模型工作台的只读解释核验；
+  缺失环境→未运行≠通过。
+- 旧版后端（无 meta 回执）下 CLI 真实验证已证明 legacy 兼容与显式参数核验失败（见
+  2026-10-14-ai-readonly-workflow-context-implementation-review.md 的 Task 7 记录）。
+- 两个 feature（readonlyWorkflowContext/focusedWorkflowContext）保持 false，须待所有验收完成后再启用。

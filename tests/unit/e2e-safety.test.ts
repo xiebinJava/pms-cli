@@ -73,4 +73,36 @@ describe("isolated E2E safety gates", () => {
       PMS_E2E_ALLOWED_BASE_URL: "https://pms.example.com/api/",
     })).not.toThrow();
   });
+
+  it("readonly context helper never fabricates targets and never calls the network", async () => {
+    const { requireReadonlyContextCase } = await import(
+      "../../tests/e2e/support/readonlyContextSession.js",
+    );
+    // Missing id: scenario is NOT RUN — never the first search row.
+    const missing = requireReadonlyContextCase("project", {});
+    expect(missing.skipReason).toContain("未提供");
+    // Invalid id is rejected before any network or auth.
+    const invalid = requireReadonlyContextCase("project", { PROJECT_SR_ID: "0" });
+    expect(invalid.skipReason).toContain("非法");
+    const unsafeNodeId = requireReadonlyContextCase("project", {
+      PROJECT_SR_ID: "7",
+      PROJECT_SR_NODE_ID: String(Number.MAX_SAFE_INTEGER + 1),
+    });
+    expect(unsafeNodeId.skipReason).toContain("SR_NODE_ID 非法");
+    // Valid config resolves into an exact typed case with explicit options only.
+    const ok = requireReadonlyContextCase("requirement", {
+      REQUIREMENT_SR_ID: "23",
+      REQUIREMENT_SR_NODE_ID: "299",
+      REQUIREMENT_SR_VIEW: "focused",
+      REQUIREMENT_SR_COMPONENT: "requirement-node-workbench",
+    });
+    expect(ok.skipReason).toBeUndefined();
+    expect(ok.case).toEqual({
+      resourceType: "requirement",
+      resourceId: 23,
+      nodeId: 299,
+      view: "focused",
+      component: "requirement-node-workbench",
+    });
+  });
 });
