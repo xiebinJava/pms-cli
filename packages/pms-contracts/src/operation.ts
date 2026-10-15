@@ -60,6 +60,16 @@ export const operationResultSchema = z.object({
 
 export type OperationResult = z.infer<typeof operationResultSchema>;
 
+export const operationPreconditionSchema = z.object({
+  code: z.string().trim().min(1),
+  message: z.string().trim().min(1),
+  blocking: z.boolean(),
+  suggestedAction: z.string().trim().min(1),
+  details: z.record(z.string(), z.unknown()).default({}),
+});
+
+export type OperationPrecondition = z.infer<typeof operationPreconditionSchema>;
+
 export const operationPreviewSchema = z.object({
   operationId: z.string().trim().min(1),
   command: z.string().trim().min(1),
@@ -68,6 +78,7 @@ export const operationPreviewSchema = z.object({
   warnings: z.array(z.string()).default([]),
   changes: z.array(z.record(z.string(), z.unknown())).default([]),
   refreshScopes: z.array(z.string()).default([]),
+  preconditions: z.array(operationPreconditionSchema).default([]),
 });
 
 export type OperationPreview = z.infer<typeof operationPreviewSchema>;

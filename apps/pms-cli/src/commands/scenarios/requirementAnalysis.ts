@@ -1,15 +1,82 @@
-import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
+import type {
+  PmsClient,
+  OrchestratorConversation,
+  OrchestratorEvent,
+  OrchestratorPlan,
+} from "../../../../../packages/pms-client/src/index.js";
 import type {
   ActionCapability,
+  AnalysisDraft,
   OperationPreview,
   OperationResult,
+  RequirementAnalysisInput,
+  RequirementAnalysisResult,
   ResourceDetail,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
+import { requirementAnalysisInputSchema as parseRequirementAnalysisInput } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import { operationPreview, type OperationOptions } from "../core/operation.js";
 import { requirementAnalysisSave, type RequirementAnalysisSaveOptions } from "../shortcuts/requirement.js";
+import { AnalysisDraftValidator } from "./AnalysisDraftValidator.js";
+import { agentDraftContractVersion } from "./AgentDraftContract.js";
 import type { ScenarioTrace } from "./projectCreate.js";
+
+export type RequirementAnalysisScenarioClient = PmsClient;
+
+export async function createRequirementAnalysisConversation(
+  client: PmsClient,
+  requirementId: number,
+): Promise<OrchestratorConversation> {
+  return client.createConversation({ resourceType: "requirement", resourceId: requirementId });
+}
+
+export async function appendRequirementAnalysisTurn(
+  client: PmsClient,
+  input: {
+    conversationId: number;
+    message: string;
+    draft: AnalysisDraft;
+    nodeId?: number;
+    contextVersion?: number;
+    requestId?: string;
+  },
+): Promise<OrchestratorPlan> {
+  return client.appendTurn({
+    conversationId: input.conversationId,
+    message: input.message,
+    contractVersion: agentDraftContractVersion,
+    draft: { contractVersion: agentDraftContractVersion, draft: input.draft },
+    ...(input.nodeId === undefined ? {} : { nodeId: input.nodeId }),
+    ...(input.contextVersion === undefined ? {} : { contextVersion: input.contextVersion }),
+    ...(input.requestId === undefined ? {} : { requestId: input.requestId }),
+  });
+}
+
+export function previewRequirementAnalysisPlan(
+  client: PmsClient,
+  planId: number,
+  requestId?: string,
+): Promise<OrchestratorPlan> {
+  return client.previewPlan(planId, requestId);
+}
+
+export function confirmRequirementAnalysisPlan(
+  client: PmsClient,
+  planId: number,
+  idempotencyKey: string,
+  requestId?: string,
+): Promise<OrchestratorPlan> {
+  return client.confirmPlan({ planId, idempotencyKey, requestId });
+}
+
+export function readRequirementAnalysisEvents(
+  client: PmsClient,
+  conversationId: number,
+  afterSequence = 0,
+): Promise<OrchestratorEvent[]> {
+  return client.listConversationEvents(conversationId, afterSequence);
+}
 
 export interface RequirementAnalysisScenarioOptions extends OperationOptions {
   nodeId: number;
@@ -126,6 +193,60 @@ export async function executeRequirementAnalysisScenario(
       operationId: result.operationId,
       idempotencyKey: options.idempotencyKey,
       ...(result.auditId ? { auditId: result.auditId } : {}),
+    },
+  };
+}
+
+export async function runRequirementAnalysisScenario(
+  client: RequirementAnalysisScenarioClient,
+  input: RequirementAnalysisInput,
+  approve: () => Promise<boolean>,
+): Promise<RequirementAnalysisResult> {
+  const parsed = parseRequirementAnalysisInput.parse(input);
+  const context = await client.context({ type: "requirement", id: parsed.resourceId }, {
+    nodeId: parsed.nodeId,
+  });
+  assertTarget(context, {
+    nodeId: parsed.nodeId,
+    version: parsed.contextVersion,
+  });
+  AnalysisDraftValidator.validate(parsed.draft, context);
+
+  if (!parsed.save) {
+    return { status: "DRAFT", draft: parsed.draft };
+  }
+  if (!parsed.idempotencyKey) {
+    throw new Error("保存需求分析必须提供 idempotencyKey");
+  }
+
+  const options: RequirementAnalysisScenarioOptions = {
+    nodeId: parsed.nodeId,
+    version: parsed.contextVersion,
+    arguments: parsed.draft.patch,
+    idempotencyKey: parsed.idempotencyKey,
+    context: { id: `requirement:${parsed.resourceId}`, version: String(parsed.contextVersion) },
+  };
+  const plan = await planRequirementAnalysisScenario(client, parsed.resourceId, options);
+  if (!(await approve())) {
+    return { status: "REJECTED", operationId: plan.preview.operationId, draft: parsed.draft };
+  }
+
+  const execution = await executeRequirementAnalysisScenario(client, parsed.resourceId, {
+    ...options,
+    idempotencyKey: parsed.idempotencyKey,
+  });
+  const status: RequirementAnalysisResult["status"] = execution.result.status === "SUCCEEDED"
+    ? "SUCCEEDED"
+    : execution.result.status === "CONFLICT" ? "CONFLICT" : "REJECTED";
+  return {
+    status,
+    operationId: execution.result.operationId,
+    draft: parsed.draft,
+    verification: {
+      resourceReadback: execution.readback.resource !== null,
+      contextReadback: execution.readback.context !== null,
+      protectedFieldsUnchanged: Object.values(execution.protectedFieldsUnchanged)
+        .every(Boolean),
     },
   };
 }

@@ -16,6 +16,13 @@ const VALUE_OPTIONS = new Set([
   "contract-id",
   "contract-version",
   "request-id",
+  "message",
+  "after-sequence",
+  "cases-file",
+  "provider",
+  "draft-json",
+  "patch-json",
+  "variant",
 ]);
 
 const BOOLEAN_OPTIONS = new Set(["help", "version", "global"]);

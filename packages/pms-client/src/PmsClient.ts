@@ -12,6 +12,9 @@ import {
   resourceDetailSchema,
   resourceRefSchema,
   workflowContextResponseSchema,
+  orchestratorConversationSchema,
+  orchestratorEventSchema,
+  orchestratorPlanSchema,
   type AutomaticOperationRequest,
   type CapabilityCatalog,
   type OperationResult,
@@ -23,6 +26,9 @@ import {
   type ContextReadOptions,
   type ContextMeta,
   type WorkflowContext,
+  type OrchestratorConversation,
+  type OrchestratorEvent,
+  type OrchestratorPlan,
 } from "../../pms-contracts/src/index.js";
 
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
@@ -31,6 +37,11 @@ import type { AuthProvider } from "./AuthProvider.js";
 import { classifyPmsStatus, PmsClientError, safeErrorMessage } from "./Errors.js";
 import { createRequestContext } from "./RequestContext.js";
 import type { PmsClientId } from "./RequestContext.js";
+import type {
+  AppendTurnRequest,
+  ConfirmPlanRequest,
+  CreateConversationRequest,
+} from "./OrchestratorClientTypes.js";
 
 export interface PmsClient {
   capabilities(): Promise<CapabilityCatalog>;
@@ -39,6 +50,12 @@ export interface PmsClient {
   context(resource: ResourceRef, options?: ContextReadOptions): Promise<WorkflowContext>;
   preview(request: AutomaticOperationRequest): Promise<OperationPreview>;
   execute(request: AutomaticOperationRequest): Promise<OperationResult>;
+  createConversation(request: CreateConversationRequest): Promise<OrchestratorConversation>;
+  appendTurn(request: AppendTurnRequest): Promise<OrchestratorPlan>;
+  previewPlan(planId: number, requestId?: string): Promise<OrchestratorPlan>;
+  confirmPlan(request: ConfirmPlanRequest): Promise<OrchestratorPlan>;
+  getConversation(conversationId: number): Promise<OrchestratorConversation>;
+  listConversationEvents(conversationId: number, afterSequence?: number): Promise<OrchestratorEvent[]>;
 }
 
 export interface PmsHttpClientOptions {
@@ -206,6 +223,100 @@ export class PmsHttpClient implements PmsClient {
       refreshScopes: raw.refreshScopes ?? [],
       auditId: raw.auditId,
     });
+  }
+
+  async createConversation(request: CreateConversationRequest): Promise<OrchestratorConversation> {
+    const normalized = z.object({
+      resourceType: z.literal("requirement"),
+      resourceId: z.number().int().positive(),
+    }).strict().parse(request);
+    return this.requestData(
+      "integration/ai/v1/orchestrator/conversations",
+      { method: "POST", body: JSON.stringify(normalized) },
+      false,
+      undefined,
+      (data) => orchestratorConversationSchema.parse(data),
+    );
+  }
+
+  async appendTurn(request: AppendTurnRequest): Promise<OrchestratorPlan> {
+    const normalized = z.object({
+      conversationId: z.number().int().positive(),
+      message: z.string().trim().min(1),
+      contractVersion: z.literal("requirement-analysis/v1"),
+      draft: z.unknown(),
+      nodeId: z.number().int().positive().optional(),
+      contextVersion: z.number().int().nonnegative().optional(),
+      requestId: z.string().trim().min(1).max(160).optional(),
+    }).strict().parse(request);
+    const body = {
+      message: normalized.message,
+      contractVersion: normalized.contractVersion,
+      draft: normalized.draft,
+      ...(normalized.nodeId === undefined ? {} : { nodeId: normalized.nodeId }),
+      ...(normalized.contextVersion === undefined ? {} : { contextVersion: normalized.contextVersion }),
+      ...(normalized.requestId === undefined ? {} : { requestId: normalized.requestId }),
+    };
+    return this.requestData(
+      `integration/ai/v1/orchestrator/conversations/${normalized.conversationId}/turns`,
+      { method: "POST", body: JSON.stringify(body) },
+      false,
+      normalized.requestId,
+      (data) => orchestratorPlanSchema.parse(data),
+    );
+  }
+
+  async previewPlan(planId: number, requestId?: string): Promise<OrchestratorPlan> {
+    const normalizedId = z.number().int().positive().parse(planId);
+    return this.requestData(
+      `integration/ai/v1/orchestrator/plans/${normalizedId}/preview`,
+      { method: "POST" },
+      false,
+      requestId,
+      (data) => orchestratorPlanSchema.parse(data),
+    );
+  }
+
+  async confirmPlan(request: ConfirmPlanRequest): Promise<OrchestratorPlan> {
+    const normalized = z.object({
+      planId: z.number().int().positive(),
+      idempotencyKey: z.string().trim().min(1).max(160),
+      requestId: z.string().trim().min(1).max(160).optional(),
+    }).strict().parse(request);
+    return this.requestData(
+      `integration/ai/v1/orchestrator/plans/${normalized.planId}/confirm`,
+      {
+        method: "POST",
+        headers: { "idempotency-key": normalized.idempotencyKey },
+        body: JSON.stringify({ idempotencyKey: normalized.idempotencyKey }),
+      },
+      false,
+      normalized.requestId,
+      (data) => orchestratorPlanSchema.parse(data),
+    );
+  }
+
+  async getConversation(conversationId: number): Promise<OrchestratorConversation> {
+    const normalizedId = z.number().int().positive().parse(conversationId);
+    return this.requestData(
+      `integration/ai/v1/orchestrator/conversations/${normalizedId}`,
+      { method: "GET" },
+      true,
+      undefined,
+      (data) => orchestratorConversationSchema.parse(data),
+    );
+  }
+
+  async listConversationEvents(conversationId: number, afterSequence = 0): Promise<OrchestratorEvent[]> {
+    const normalizedId = z.number().int().positive().parse(conversationId);
+    const cursor = z.number().int().nonnegative().parse(afterSequence);
+    return this.requestData(
+      `integration/ai/v1/orchestrator/conversations/${normalizedId}/events?afterSequence=${cursor}`,
+      { method: "GET" },
+      true,
+      undefined,
+      (data) => z.array(orchestratorEventSchema).parse(data),
+    );
   }
 
   async preview(request: AutomaticOperationRequest): Promise<OperationPreview> {

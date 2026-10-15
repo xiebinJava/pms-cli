@@ -1,6 +1,6 @@
 import type { PmsClient } from "../../../../packages/pms-client/src/index.js";
 import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-client/src/index.js";
-import type { ContextReadOptions, QueryItem } from "../../../../packages/pms-contracts/src/index.js";
+import type { AnalysisDraft, ContextReadOptions, QueryItem } from "../../../../packages/pms-contracts/src/index.js";
 import { CliArgumentError, parseCliArguments, type CliInvocation } from "./parseArguments.js";
 import { listCapabilities } from "../commands/core/capabilities.js";
 import { getAgentContext, getContext } from "../commands/core/context.js";
@@ -13,8 +13,27 @@ import { createProjectWithReadback } from "../commands/shortcuts/project.js";
 import { requirementAnalysisSave } from "../commands/shortcuts/requirement.js";
 import { executeProjectCreateScenario, planProjectCreateScenario } from "../commands/scenarios/projectCreate.js";
 import {
+  fixedMockDraftForContext,
+  readAnalysisShadowCases,
+  runAnalysisShadowCases,
+} from "../commands/scenarios/analysisShadow.js";
+import {
+  agentDraftContractVersion,
+  parseAgentDraftJson,
+} from "../commands/scenarios/AgentDraftContract.js";
+import {
+  FixedAnalysisDraftProvider,
+  OpenAICompatibleAnalysisDraftProvider,
+} from "../commands/scenarios/AnalysisDraftProvider.js";
+import {
   executeRequirementAnalysisScenario,
   planRequirementAnalysisScenario,
+  runRequirementAnalysisScenario,
+  appendRequirementAnalysisTurn,
+  confirmRequirementAnalysisPlan,
+  createRequirementAnalysisConversation,
+  previewRequirementAnalysisPlan,
+  readRequirementAnalysisEvents,
 } from "../commands/scenarios/requirementAnalysis.js";
 import {
   executeStoryWorkbenchScenario,
@@ -40,6 +59,11 @@ const HELP = [
   "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>",
   "  pms scenario project-create plan|execute --arguments-json <json> [--idempotency-key <key>]",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>]",
+  "  pms scenario requirement-analysis draft <id> --node-id <id> --version <version> --draft-json <draft-json>",
+  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>]",
+  "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events <id> [options]",
+  "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
+  "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -216,18 +240,114 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   }
   if (invocation.group === "scenario" && invocation.command === "requirement-analysis") {
     const phase = invocation.positionals[0];
-    if (phase !== "plan" && phase !== "execute") {
-      throw new CliArgumentError("scenario requirement-analysis 需要 plan 或 execute");
+    if (phase === "orchestrate") {
+      const action = invocation.positionals[1];
+      if (action === "create") {
+        const requirementId = requireId(invocation.positionals[2]);
+        const runtime = await deps.createRuntime(requestId);
+        return createRequirementAnalysisConversation(runtime.client, requirementId);
+      }
+      if (action === "turn") {
+        const conversationId = requireId(invocation.positionals[2]);
+        const draft = parseAgentDraftJson(requiredOption(invocation.options, "draft-json"));
+        const message = requiredOption(invocation.options, "message");
+        const rawNodeId = invocation.options["node-id"];
+        const rawVersion = invocation.options.version;
+        const runtime = await deps.createRuntime(requestId);
+        return appendRequirementAnalysisTurn(runtime.client, {
+          conversationId,
+          message,
+          draft,
+          ...(rawNodeId === undefined ? {} : { nodeId: positiveInteger(rawNodeId, "node-id") }),
+          ...(rawVersion === undefined ? {} : { contextVersion: nonNegativeInteger(rawVersion, "version") }),
+          requestId,
+        });
+      }
+      if (action === "preview") {
+        const planId = requireId(invocation.positionals[2]);
+        const runtime = await deps.createRuntime(requestId);
+        return previewRequirementAnalysisPlan(runtime.client, planId, requestId);
+      }
+      if (action === "confirm") {
+        const planId = requireId(invocation.positionals[2]);
+        const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+        const runtime = await deps.createRuntime(requestId);
+        return confirmRequirementAnalysisPlan(runtime.client, planId, idempotencyKey, requestId);
+      }
+      if (action === "events") {
+        const afterSequence = invocation.options["after-sequence"] === undefined
+          ? 0
+          : nonNegativeInteger(invocation.options["after-sequence"], "after-sequence");
+        const conversationId = requireId(invocation.positionals[2]);
+        const runtime = await deps.createRuntime(requestId);
+        return readRequirementAnalysisEvents(runtime.client, conversationId, afterSequence);
+      }
+      throw new CliArgumentError("orchestrate 需要 create、turn、preview、confirm 或 events");
+    }
+    if (phase === "shadow") {
+      const requirementId = requireId(invocation.positionals[1]);
+      const casesPath = requiredOption(invocation.options, "cases-file");
+      const providerName = invocation.options.provider ?? "mock";
+      const runtime = await deps.createRuntime(requestId);
+      const context = await runtime.client.context({ type: "requirement", id: requirementId });
+      const cases = await readAnalysisShadowCases(casesPath);
+      const provider = providerName === "mock"
+        ? new FixedAnalysisDraftProvider(fixedMockDraftForContext(context))
+        : providerName === "openai"
+          ? new OpenAICompatibleAnalysisDraftProvider({
+            baseUrl: requiredEnvironment("PMS_SHADOW_MODEL_BASE_URL"),
+            apiKey: requiredEnvironment("PMS_SHADOW_MODEL_API_KEY"),
+            model: requiredEnvironment("PMS_SHADOW_MODEL_NAME"),
+          })
+          : (() => { throw new CliArgumentError("--provider 只支持 mock 或 openai"); })();
+      return runAnalysisShadowCases({ cases, context, provider });
+    }
+    if (phase !== "plan" && phase !== "execute" && phase !== "draft") {
+      throw new CliArgumentError("scenario requirement-analysis 需要 draft、plan 或 execute");
     }
     const requirementId = requireId(invocation.positionals[1]);
     const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
     const version = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
-    if (invocation.options["arguments-json"] === undefined) {
+    const draft = optionalAgentDraft(invocation.options);
+    if (phase === "draft") {
+      if (!draft) throw new CliArgumentError("draft 阶段必须提供 --draft-json");
+      const runtime = await deps.createRuntime(requestId);
+      const validation = await runRequirementAnalysisScenario(runtime.client, {
+        resourceType: "requirement",
+        resourceId: requirementId,
+        nodeId,
+        contextVersion: version,
+        draft,
+        save: false,
+      }, async () => false);
+      return { contractVersion: agentDraftContractVersion, ...validation };
+    }
+    if (!draft && invocation.options["arguments-json"] === undefined) {
       throw new CliArgumentError("需求分析场景必须提供 --arguments-json");
     }
     const options = operationOptions(invocation.options, requestId);
     if (phase === "plan") {
       const runtime = await deps.createRuntime(requestId);
+      if (draft) {
+        await validateAgentDraftForScenario(runtime.client, requirementId, nodeId, version, draft);
+        const plan = await planRequirementAnalysisScenario(runtime.client, requirementId, {
+          ...options,
+          arguments: draft.patch,
+          nodeId,
+          version,
+        });
+        if (invocation.options.format === "agent") {
+          const context = await runtime.client.context({ type: "requirement", id: requirementId }, { nodeId });
+          return toRequirementAnalysisWorkSession({
+            sessionId: requestId,
+            taskId: `${requestId}:requirement-analysis`,
+            context,
+            draft,
+            plan,
+          });
+        }
+        return { contractVersion: agentDraftContractVersion, draft, plan };
+      }
       const plan = await planRequirementAnalysisScenario(runtime.client, requirementId, { ...options, nodeId, version });
       if (invocation.options.format === "agent") {
         const context = await runtime.client.context({ type: "requirement", id: requirementId }, { nodeId });
@@ -243,8 +363,12 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     }
     const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
     const runtime = await deps.createRuntime(requestId);
+    if (draft) {
+      await validateAgentDraftForScenario(runtime.client, requirementId, nodeId, version, draft);
+    }
     const execution = await executeRequirementAnalysisScenario(runtime.client, requirementId, {
       ...options,
+      ...(draft ? { arguments: draft.patch } : {}),
       nodeId,
       version,
       idempotencyKey,
@@ -256,11 +380,13 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
         sessionId: requestId,
         taskId: `${requestId}:requirement-analysis`,
         context,
-        draft: null,
+        draft: draft ?? draftFromPatch(options.arguments ?? {}),
         result: execution,
       });
     }
-    return execution;
+    return draft
+      ? { contractVersion: agentDraftContractVersion, draft, execution }
+      : execution;
   }
   if (invocation.group === "scenario" && invocation.command === "story-workbench") {
     const phase = invocation.positionals[0];
@@ -435,6 +561,29 @@ function requiredOption(options: Record<string, string>, name: string): string {
   return value;
 }
 
+function optionalAgentDraft(options: Record<string, string>) {
+  const rawDraft = options["draft-json"];
+  if (rawDraft === undefined) return undefined;
+  if (options["arguments-json"] !== undefined) {
+    throw new CliArgumentError("--draft-json 与 --arguments-json 不能同时提供");
+  }
+  try {
+    return parseAgentDraftJson(rawDraft);
+  } catch (error) {
+    throw new CliArgumentError(error instanceof Error ? error.message : String(error));
+  }
+}
+
+function draftFromPatch(patch: Record<string, unknown>): AnalysisDraft {
+  return {
+    facts: [],
+    inferences: [],
+    assumptions: [],
+    unresolvedDecisions: [],
+    patch,
+  };
+}
+
 function parseJsonObject(raw: string, optionName: string): Record<string, unknown> {
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -443,6 +592,29 @@ function parseJsonObject(raw: string, optionName: string): Record<string, unknow
   } catch {
     throw new CliArgumentError(`--${optionName} 必须是 JSON 对象`);
   }
+}
+
+async function validateAgentDraftForScenario(
+  client: PmsClient,
+  requirementId: number,
+  nodeId: number,
+  version: number,
+  draft: NonNullable<ReturnType<typeof optionalAgentDraft>>,
+): Promise<void> {
+  await runRequirementAnalysisScenario(client, {
+    resourceType: "requirement",
+    resourceId: requirementId,
+    nodeId,
+    contextVersion: version,
+    draft,
+    save: false,
+  }, async () => false);
+}
+
+function requiredEnvironment(name: string): string {
+  const value = process.env[name]?.trim();
+  if (!value) throw new CliArgumentError(`外部模型需要环境变量 ${name}`);
+  return value;
 }
 
 function requireId(raw: string | undefined): number {
