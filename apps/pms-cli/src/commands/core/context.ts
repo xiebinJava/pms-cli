@@ -1,6 +1,11 @@
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import { PmsClientError } from "../../../../../packages/pms-client/src/index.js";
-import type { ContextReadOptions, QueryItem, AgentWorkSession } from "../../../../../packages/pms-contracts/src/index.js";
+import {
+  agentContractVersion,
+  type ContextReadOptions,
+  type QueryItem,
+  type AgentWorkSession,
+} from "../../../../../packages/pms-contracts/src/index.js";
 import { buildAgentContext } from "./agentContext.js";
 
 export function getContext(
@@ -19,6 +24,19 @@ export async function getAgentContext(
   options?: ContextReadOptions,
 ): Promise<AgentWorkSession> {
   const capabilities = await client.capabilities();
+  if (capabilities.agentContractVersion !== agentContractVersion) {
+    throw new PmsClientError(
+      "validation",
+      `AGENT_CONTRACT_VERSION_UNSUPPORTED: PMS 宣布的 Agent 合约 ${capabilities.agentContractVersion ?? "未声明"} 与客户端 ${agentContractVersion} 不兼容`,
+      {
+        details: {
+          code: "AGENT_CONTRACT_VERSION_UNSUPPORTED",
+          expected: agentContractVersion,
+          advertised: capabilities.agentContractVersion ?? null,
+        },
+      },
+    );
+  }
   const feature = options?.view === "focused" ? "focusedWorkflowContext" : "readonlyWorkflowContext";
   if (capabilities.features?.[feature] !== true) {
     throw new PmsClientError("validation", `AGENT_CONTEXT_UNAVAILABLE: PMS 未声明 ${feature} 能力`, {

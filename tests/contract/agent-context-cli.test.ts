@@ -103,7 +103,14 @@ describe("pms context --format agent", () => {
 
   it("fails with a structured capability error when agent context is unavailable", async () => {
     const agent = deps({
-      capabilities: vi.fn(async () => ({ version: "v1", resources: [], scopes: [], features: {}, workflowTypes: [] })),
+      capabilities: vi.fn(async () => ({
+        version: "v1",
+        resources: [],
+        scopes: [],
+        features: {},
+        workflowTypes: [],
+        agentContractVersion: "agent-contract/v1",
+      })),
       context: vi.fn(),
     } as never);
 
@@ -111,6 +118,27 @@ describe("pms context --format agent", () => {
 
     expect(agent.stderr[0]).toContain("AGENT_CONTEXT_UNAVAILABLE");
     expect((agent.value.createRuntime as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+  });
+
+  it("fails before context mapping when the server advertises an incompatible Agent contract", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "v1",
+        resources: [],
+        scopes: [],
+        features: { readonlyWorkflowContext: true },
+        workflowTypes: [],
+        agentContractVersion: "agent-contract/v2",
+      })),
+      context: vi.fn(),
+    };
+    const agent = deps(client as never);
+
+    await runCli(["context", "story", "34", "--format", "agent"], agent.value);
+
+    expect(agent.stderr[0]).toContain("AGENT_CONTRACT_VERSION_UNSUPPORTED");
+    expect((agent.value.createRuntime as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
+    expect(client.context).not.toHaveBeenCalled();
   });
 
   it("rejects an unknown format before authentication", async () => {
