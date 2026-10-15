@@ -8,13 +8,12 @@ import {
   expectedViewerId,
   isolatedE2EEnabled,
 } from "./support/isolatedSession.js";
-import { createRequirementFixture } from "./support/requirementFixture.js";
 
 const configuredRequirementId = positiveEnvNumber("PMS_E2E_REQUIREMENT_ID");
 const configuredNodeId = positiveEnvNumber("PMS_E2E_NODE_ID");
-const createFixture = process.env.PMS_E2E_CREATE_FIXTURE === "true";
 const enabled = isolatedE2EEnabled(process.env)
-  && (createFixture || (configuredRequirementId !== null && configuredNodeId !== null));
+  && configuredRequirementId !== null
+  && configuredNodeId !== null;
 
 describe.skipIf(!enabled)("PMS CLI real requirement analysis version conflict", () => {
   it("rejects a new stale-version operation without adding a second business change", async () => {
@@ -41,11 +40,8 @@ describe.skipIf(!enabled)("PMS CLI real requirement analysis version conflict", 
         throw new Error("浏览器批准身份与 PMS_E2E_ACCOUNT_ID 不一致，停止冲突验收");
       }
 
-      const fixture = createFixture
-        ? await createRequirementFixture(client, `${config.runId}-conflict`)
-        : null;
-      const requirementId = fixture?.requirementId ?? configuredRequirementId;
-      const nodeId = fixture?.nodeId ?? configuredNodeId;
+      const requirementId = configuredRequirementId;
+      const nodeId = configuredNodeId;
       if (requirementId === null || nodeId === null) {
         throw new Error("隔离 E2E 缺少需求 ID 或节点 ID");
       }

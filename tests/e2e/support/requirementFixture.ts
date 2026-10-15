@@ -17,6 +17,17 @@ export function fixtureTitle(runId: string): string {
   return `AI-E2E-需求-${normalized}`;
 }
 
+export function fixtureScheduleDates(now = new Date()): { startDate: string; endDate: string } {
+  const start = new Date(now);
+  if (Number.isNaN(start.getTime())) throw new Error("需求夹具基准日期无效");
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 1);
+  return {
+    startDate: start.toISOString().slice(0, 10),
+    endDate: end.toISOString().slice(0, 10),
+  };
+}
+
 export async function createRequirementFixture(
   client: PmsClient,
   runId: string,
@@ -82,13 +93,14 @@ export async function createRequirementFixture(
   if (context.version === null || context.currentNode?.id !== initialNodeId) {
     throw new Error("需求夹具分配负责人后上下文版本或当前节点异常");
   }
+  const scheduleDates = fixtureScheduleDates();
   await operationPreview(client, "development-item.node.schedule.update", {
     arguments: {
       itemType: "REQUIREMENT",
       itemId: requirementId,
       nodeId: initialNodeId,
-      startDate: "2026-10-15",
-      endDate: "2026-10-16",
+      startDate: scheduleDates.startDate,
+      endDate: scheduleDates.endDate,
       version: context.version,
     },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
@@ -99,8 +111,8 @@ export async function createRequirementFixture(
         itemType: "REQUIREMENT",
         itemId: requirementId,
         nodeId: initialNodeId,
-        startDate: "2026-10-15",
-        endDate: "2026-10-16",
+        startDate: scheduleDates.startDate,
+        endDate: scheduleDates.endDate,
         version: context.version,
       },
       context: { id: `requirement:${requirementId}`, version: String(context.version) },
