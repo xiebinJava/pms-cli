@@ -212,7 +212,7 @@ function storyOperation(result: StoryWorkbenchResult): OperationEnvelope | undef
   if (!result.operationId || result.status === "DRAFT" || result.status === "PREVIEWED") return undefined;
   return {
     operationId: result.operationId,
-    status: result.status === "WRITE_RESULT_UNKNOWN" ? "FAILED" : result.status,
+    status: result.status,
     message: result.warnings[0],
     data: {},
     warnings: result.warnings,

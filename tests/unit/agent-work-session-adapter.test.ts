@@ -248,4 +248,44 @@ describe("AgentWorkSession scenario adapters", () => {
     expect(session.draft?.scenarioDraft).toMatchObject({ contractVersion: scenarioContractVersion });
     expect(session.agentTask.permissionMode).toBe("draft");
   });
+
+  it("retains WRITE_RESULT_UNKNOWN in the common operation envelope", () => {
+    const input = {
+      contractVersion: storyWorkbenchContractVersion,
+      resourceType: "story" as const,
+      resourceId: 34,
+      nodeId: 701,
+      version: 3,
+      variant: "writing" as const,
+      patch: { summary: "故事摘要" },
+      save: true,
+      idempotencyKey: "story-34-unknown",
+    } satisfies StoryWorkbenchInput;
+    const session = toStoryWorkbenchWorkSession({
+      sessionId: "session-unknown",
+      taskId: "task-unknown",
+      context: context("story", 34),
+      input,
+      result: {
+        contractVersion: storyWorkbenchContractVersion,
+        status: "WRITE_RESULT_UNKNOWN",
+        resourceId: 34,
+        nodeId: 701,
+        version: 3,
+        variant: "writing",
+        patch: input.patch,
+        operationId: "operation-unknown",
+        verification: {
+          resourceReadback: false,
+          contextReadback: false,
+          patchApplied: false,
+          protectedFieldsUnchanged: false,
+        },
+        warnings: ["回读失败"],
+      },
+    });
+
+    expect(session.operation?.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(session.verification?.status).toBe("UNKNOWN");
+  });
 });
