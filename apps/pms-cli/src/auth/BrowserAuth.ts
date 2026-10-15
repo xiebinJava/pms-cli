@@ -38,6 +38,7 @@ export interface BrowserAuthOptions {
   store: AuthStore;
   fetchImpl?: typeof fetch;
   openBrowser?: (url: string) => Promise<void>;
+  callbackHost?: "127.0.0.1" | "localhost";
 }
 
 export interface CliSession {
@@ -57,7 +58,7 @@ export class BrowserAuth {
   async login(): Promise<CliSession> {
     const pkce = createPkcePair();
     const state = randomBytes(24).toString("base64url");
-    const listener = await this.listenForCallback();
+    const listener = await this.listenForCallback(this.options.callbackHost ?? "127.0.0.1");
     try {
       await this.openBrowser(buildAuthorizeUrl(this.options.authOrigin, listener.redirectUri, pkce, state));
       const result = await listener.callback;
@@ -116,7 +117,7 @@ export class BrowserAuth {
     return this.options.baseUrl.endsWith("/") ? this.options.baseUrl : `${this.options.baseUrl}/`;
   }
 
-  private async listenForCallback(): Promise<{
+  private async listenForCallback(callbackHost: "127.0.0.1" | "localhost"): Promise<{
     redirectUri: string;
     callback: Promise<{ code: string; state: string }>;
     close: () => void;
@@ -153,10 +154,10 @@ export class BrowserAuth {
     };
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
-      server.listen(0, "127.0.0.1", () => resolve());
+      server.listen(0, callbackHost, () => resolve());
     });
     const address = server.address() as AddressInfo;
-    return { redirectUri: `http://127.0.0.1:${address.port}/callback`, callback, close };
+    return { redirectUri: `http://${callbackHost}:${address.port}/callback`, callback, close };
   }
 }
 
