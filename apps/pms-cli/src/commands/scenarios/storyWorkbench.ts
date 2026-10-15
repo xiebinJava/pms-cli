@@ -227,6 +227,7 @@ async function executeAfterPreview(
     return {
       ...baseResult(prepared.input, operation.status === "CONFLICT" ? "CONFLICT" : "REJECTED"),
       operationId: operation.operationId,
+      operation,
       ...(preview ? { preview } : {}),
       warnings: operation.warnings,
     };
@@ -254,6 +255,7 @@ async function executeAfterPreview(
       ...baseResult(prepared.input, verification.patchApplied && verification.protectedFieldsUnchanged
         ? "SUCCEEDED" : "WRITE_RESULT_UNKNOWN"),
       operationId: operation.operationId,
+      operation,
       ...(preview ? { preview } : {}),
       verification,
       warnings,
@@ -263,6 +265,7 @@ async function executeAfterPreview(
     return {
       ...baseResult(prepared.input, "WRITE_RESULT_UNKNOWN"),
       operationId: operation.operationId,
+      operation,
       ...(preview ? { preview } : {}),
       verification: {
         resourceReadback: false,

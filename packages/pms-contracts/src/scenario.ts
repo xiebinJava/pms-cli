@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { operationResultSchema } from "./operation.js";
 
 export const scenarioContractVersion = "requirement-analysis/v1" as const;
 export const storyWorkbenchContractVersion = "story-workbench/v1" as const;
@@ -120,6 +121,7 @@ export const storyWorkbenchResultSchema = z.object({
   variant: storyWorkbenchVariantSchema,
   patch: z.record(z.string(), z.unknown()),
   operationId: z.string().trim().min(1).optional(),
+  operation: operationResultSchema.optional(),
   preview: z.record(z.string(), z.unknown()).optional(),
   verification: storyWorkbenchVerificationSchema.optional(),
   warnings: z.array(z.string()).default([]),

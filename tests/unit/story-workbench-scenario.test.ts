@@ -138,9 +138,10 @@ function fakeClient(readbackContent: Record<string, unknown> = { meetingNote: "�
       return {
         operationId: "operation-1",
         status: "SUCCEEDED",
-        data: {},
-        warnings: [],
+        data: { saved: true },
+        warnings: ["服务端已记录"],
         refreshScopes: ["story-detail"],
+        auditId: "audit-story-1",
       };
     }),
   } as unknown as PmsClient;
@@ -187,6 +188,12 @@ describe("story workbench write scenario", () => {
 
     expect(result.status).toBe("SUCCEEDED");
     expect(result.operationId).toBe("operation-1");
+    expect(result.operation).toMatchObject({
+      operationId: "operation-1",
+      data: { saved: true },
+      refreshScopes: ["story-detail"],
+      auditId: "audit-story-1",
+    });
     expect(result.verification).toEqual({
       resourceReadback: true,
       contextReadback: true,

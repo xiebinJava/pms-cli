@@ -213,15 +213,8 @@ function fieldDraft(input: StoryWorkbenchInput): AgentDraft {
 }
 
 function storyOperation(result: StoryWorkbenchResult): OperationEnvelope | undefined {
-  if (!result.operationId || result.status === "DRAFT" || result.status === "PREVIEWED") return undefined;
-  return {
-    operationId: result.operationId,
-    status: result.status,
-    message: result.warnings[0],
-    data: {},
-    warnings: result.warnings,
-    refreshScopes: [],
-  };
+  if (!result.operation) return undefined;
+  return result.operation;
 }
 
 function verificationStatus(status: string): "PENDING" | "SUCCEEDED" | "FAILED" | "UNKNOWN" {

@@ -56,5 +56,53 @@ describe("scenario AgentWorkSession contract", () => {
     expect(parsed.draft?.proposedFieldValues).toEqual({ summary: "草稿" });
     expect(parsed.operation).toBeNull();
     expect(parsed.confirmation.status).toBe("NOT_REQUIRED");
+
+    const writeSession = toStoryWorkbenchWorkSession({
+      sessionId: "session-2",
+      taskId: "task-2",
+      context,
+      input: {
+        contractVersion: "story-workbench/v1",
+        resourceType: "story",
+        resourceId: 34,
+        nodeId: 384,
+        version: 1,
+        variant: "writing",
+        patch: { summary: "已保存" },
+        save: true,
+        idempotencyKey: "story-write-1",
+        previewOperationId: "preview-1",
+      },
+      result: {
+        contractVersion: "story-workbench/v1",
+        status: "SUCCEEDED",
+        resourceId: 34,
+        nodeId: 384,
+        version: 1,
+        variant: "writing",
+        patch: { summary: "已保存" },
+        operationId: "operation-1",
+        operation: {
+          operationId: "operation-1",
+          status: "SUCCEEDED",
+          data: { saved: true },
+          warnings: ["已记录"],
+          refreshScopes: ["story-detail"],
+          auditId: "audit-1",
+        },
+        verification: {
+          resourceReadback: true,
+          contextReadback: true,
+          patchApplied: true,
+          protectedFieldsUnchanged: true,
+        },
+        warnings: [],
+      },
+    });
+    expect(writeSession.operation).toMatchObject({
+      data: { saved: true },
+      refreshScopes: ["story-detail"],
+      auditId: "audit-1",
+    });
   });
 });
