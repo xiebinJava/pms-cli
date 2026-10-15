@@ -59,10 +59,19 @@ export function buildAgentContext(
 
   const snapshotId = `${resource.type}:${resource.id}@${contextVersion}`;
   const selectedNodeId = options.nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id ?? undefined;
+  const selectedComponentKey = options.component ?? context.meta?.selectedComponentKey ?? undefined;
   const nodeContract = context.workflow && selectedNodeId !== undefined && selectedNodeId !== null
     ? buildNodeContract(context, selectedNodeId,
-      options.component ?? context.meta?.selectedComponentKey ?? undefined)
+      selectedComponentKey)
     : null;
+  const sourceRefs = [
+    `${resource.type}:${resource.id}`,
+    ...relations.map((relation) => `${relation.resource.type}:${relation.resource.id}`),
+    ...(selectedNodeId === undefined ? [] : [nodeSourceRef(resource.type, selectedNodeId)]),
+    ...(selectedNodeId === undefined || selectedComponentKey === undefined
+      ? []
+      : [componentSourceRef(resource.type, selectedNodeId, selectedComponentKey)]),
+  ];
 
   return agentWorkSessionSchema.parse({
     contractVersion: agentContractVersion,
@@ -77,10 +86,7 @@ export function buildAgentContext(
       workflowNodes: context.workflow?.nodes ?? [],
       relations,
       allowedActions: context.allowedActions ?? [],
-      sourceRefs: unique([
-        `${resource.type}:${resource.id}`,
-        ...relations.map((relation) => `${relation.resource.type}:${relation.resource.id}`),
-      ]),
+      sourceRefs: unique(sourceRefs),
       warnings,
     },
     nodeContract,
@@ -98,6 +104,14 @@ export function buildAgentContext(
     operation: null,
     verification: null,
   });
+}
+
+export function nodeSourceRef(resourceType: string, nodeId: number): string {
+  return `${resourceType}-node:${nodeId}`;
+}
+
+export function componentSourceRef(resourceType: string, nodeId: number, componentKey: string): string {
+  return `${nodeSourceRef(resourceType, nodeId)}#component:${componentKey}`;
 }
 
 /** Builds a node/field contract without inferring write scope from labels or UI text. */

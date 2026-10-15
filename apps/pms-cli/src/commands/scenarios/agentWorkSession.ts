@@ -14,7 +14,7 @@ import {
   type StoryWorkbenchInput,
   type StoryWorkbenchResult,
 } from "../../../../../packages/pms-contracts/src/index.js";
-import { buildAgentContext } from "../core/agentContext.js";
+import { buildAgentContext, nodeSourceRef } from "../core/agentContext.js";
 import type {
   RequirementAnalysisScenarioPlan,
   RequirementAnalysisScenarioResult,
@@ -199,7 +199,7 @@ function fieldDraft(input: StoryWorkbenchInput): AgentDraft {
     proposedFieldValues: input.patch,
     missingFields: [],
     questions: [],
-    evidenceRefs: [`story:${input.resourceId}`, `story-node:${input.nodeId}`],
+    evidenceRefs: [`story:${input.resourceId}`, nodeSourceRef("story", input.nodeId)],
     confidence: "medium",
     scenarioDraft: {
       contractVersion: storyWorkbenchContractVersion,

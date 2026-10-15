@@ -4,6 +4,7 @@ import {
   buildAgentContext,
   buildNodeContract,
 } from "../../apps/pms-cli/src/commands/core/agentContext.js";
+import { validateChildDraft } from "../../apps/pms-cli/src/commands/scenarios/AgentDraftContract.js";
 
 function context(overrides: Partial<WorkflowContext> = {}): WorkflowContext {
   return {
@@ -76,7 +77,12 @@ describe("Agent context mapping", () => {
       snapshotId: "story:34@story:34:entity:7",
       contextVersion: "story:34:entity:7",
       currentNode: { id: 383, key: "writing" },
-      sourceRefs: ["story:34", "topic:9"],
+      sourceRefs: [
+        "story:34",
+        "topic:9",
+        "story-node:383",
+        "story-node:383#component:story-node-workbench",
+      ],
     });
     expect(session.nodeContract).toMatchObject({
       nodeId: 383,
@@ -85,6 +91,22 @@ describe("Agent context mapping", () => {
       writeCapable: true,
     });
     expect(session.draft).toBeNull();
+  });
+
+  it("authorizes the current node as child-agent evidence", () => {
+    const session = buildAgentContext(context());
+
+    expect(() => validateChildDraft({
+      facts: [{ text: "当前节点事实", sourceRefs: ["story-node:383"] }],
+      inferences: [],
+      assumptions: [],
+      unresolvedDecisions: [],
+      proposedFieldValues: {},
+      missingFields: [],
+      questions: [],
+      evidenceRefs: ["story-node:383"],
+      confidence: "high",
+    }, session.contextSnapshot)).not.toThrow();
   });
 
   it("keeps a project node read-only when no component saveContract is published", () => {
