@@ -11,7 +11,7 @@ import {
   storyWorkbenchInputSchema,
   storyWorkbenchContractVersion,
 } from "../../../../../packages/pms-contracts/src/index.js";
-import { operationExecute, operationPreview } from "../core/operation.js";
+import { operationExecutePreview, operationPreview } from "../core/operation.js";
 
 export type StoryWorkbenchScenarioClient = PmsClient;
 
@@ -78,7 +78,7 @@ export async function executeStoryWorkbenchScenario(
 ): Promise<StoryWorkbenchResult> {
   const prepared = await prepare(client, input);
   const preview = await previewForWrite(client, prepared);
-  return executeAfterPreview(client, prepared, preview);
+  return executeAfterPreview(client, prepared, preview, input.previewOperationId);
 }
 
 export async function runStoryWorkbenchScenario(
@@ -93,7 +93,7 @@ export async function runStoryWorkbenchScenario(
   }
 
   const preview = await previewForWrite(client, prepared);
-  if (!preview) return executeAfterPreview(client, prepared, undefined);
+  if (!preview) return executeAfterPreview(client, prepared, undefined, parsed.previewOperationId);
   if (!(await approve())) {
     return {
       ...baseResult(parsed, "REJECTED"),
@@ -102,7 +102,7 @@ export async function runStoryWorkbenchScenario(
       warnings: preview.warnings,
     };
   }
-  return executeAfterPreview(client, prepared, preview);
+  return executeAfterPreview(client, prepared, preview, parsed.previewOperationId);
 }
 
 async function prepare(
@@ -208,19 +208,13 @@ async function executeAfterPreview(
   client: StoryWorkbenchScenarioClient,
   prepared: PreparedStoryWorkbenchWrite,
   preview: OperationPreview | undefined,
+  previewOperationId?: string,
 ): Promise<StoryWorkbenchResult> {
   let operation: OperationResult;
   try {
-    operation = await operationExecute(
-      client,
-      prepared.saveContract.command,
-      prepared.input.idempotencyKey!,
-      {
-        arguments: prepared.arguments,
-        context: prepared.operationContext,
-        requestId: prepared.input.requestId,
-      },
-    );
+    const operationId = preview?.operationId ?? previewOperationId;
+    if (!operationId) throw new Error("执行写入前必须先取得操作预览");
+    operation = await operationExecutePreview(client, operationId, prepared.input.idempotencyKey!);
   } catch (error) {
     if (!isConflict(error)) throw error;
     return {
@@ -295,7 +289,7 @@ async function previewForWrite(
     // A conflict during preview can mean that the caller is replaying an
     // already completed write with the same explicit idempotency key. Let the
     // execute endpoint resolve that key; all other conflicts remain errors.
-    if (prepared.input.idempotencyKey && isConflict(error)) return undefined;
+    if (prepared.input.previewOperationId && isConflict(error)) return undefined;
     throw error;
   }
 }

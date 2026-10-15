@@ -45,3 +45,11 @@ export async function operationExecute(
   const argumentsValue = resolver.validateArguments(operation, options.arguments ?? {});
   return client.execute(requestFor(operation, { ...options, arguments: argumentsValue }, idempotencyKey));
 }
+
+export async function operationExecutePreview(
+  client: PmsClient,
+  operationId: string,
+  idempotencyKey: string,
+): Promise<OperationResult> {
+  return client.executePreview(operationId, idempotencyKey);
+}

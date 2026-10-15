@@ -51,6 +51,7 @@ export interface PmsClient {
   context(resource: ResourceRef, options?: ContextReadOptions): Promise<WorkflowContext>;
   preview(request: AutomaticOperationRequest): Promise<OperationPreview>;
   execute(request: AutomaticOperationRequest): Promise<OperationResult>;
+  executePreview(operationId: string, idempotencyKey: string): Promise<OperationResult>;
   createConversation(request: CreateConversationRequest): Promise<OrchestratorConversation>;
   appendTurn(request: AppendTurnRequest): Promise<OrchestratorPlan>;
   previewPlan(planId: number, requestId?: string): Promise<OrchestratorPlan>;
@@ -214,6 +215,32 @@ export class PmsHttpClient implements PmsClient {
       headers: { "idempotency-key": normalized.idempotencyKey },
       body: JSON.stringify(body),
     }, false, normalized.requestId);
+    const raw = operationWireResultSchema.parse(data);
+    return operationResultSchema.parse({
+      operationId: raw.operationId,
+      status: raw.status,
+      message: raw.message,
+      data: raw.data ?? {},
+      warnings: raw.status === "SUCCEEDED" || !raw.message ? [] : [raw.message],
+      refreshScopes: raw.refreshScopes ?? [],
+      auditId: raw.auditId,
+    });
+  }
+
+  async executePreview(operationId: string, idempotencyKey: string): Promise<OperationResult> {
+    const normalized = z.object({
+      operationId: z.string().trim().min(1).max(160),
+      idempotencyKey: z.string().trim().min(1).max(160),
+    }).strict().parse({ operationId, idempotencyKey });
+    const data = await this.requestData(
+      `ai/operations/${encodeURIComponent(normalized.operationId)}/execute`,
+      {
+        method: "POST",
+        headers: { "idempotency-key": normalized.idempotencyKey },
+        body: JSON.stringify({ idempotencyKey: normalized.idempotencyKey }),
+      },
+      false,
+    );
     const raw = operationWireResultSchema.parse(data);
     return operationResultSchema.parse({
       operationId: raw.operationId,

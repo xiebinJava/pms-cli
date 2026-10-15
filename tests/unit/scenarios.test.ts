@@ -96,6 +96,17 @@ function fakeClient(options: { advanceRequirementVersionOnExecute?: boolean } = 
         auditId: "audit-1",
       };
     }),
+    executePreview: vi.fn(async (operationId: string) => {
+      calls.push("execute-preview:" + operationId);
+      return {
+        operationId: "operation-analysis-1",
+        status: "SUCCEEDED",
+        data: { requirementId: 23, nodeId: 301, version: 8 },
+        warnings: [],
+        refreshScopes: ["requirement-detail"],
+        auditId: "audit-1",
+      };
+    }),
     get: vi.fn(async (resource: { type: string; id: number }) => {
       calls.push("get:" + resource.type + ":" + resource.id);
       if (resource.type === "project") {
@@ -211,13 +222,14 @@ describe("AI lifecycle scenarios", () => {
       version: 7,
       arguments: { background: "补充用户场景", acceptanceCriteria: "支持导出" },
       idempotencyKey: "analysis-save-23-7",
+      previewOperationId: "preview-1",
       requestId: "req-analysis-execute",
     });
 
     expect(calls).toEqual([
       "get:requirement:23",
       "context:requirement:23",
-      "execute:requirement.analysis.save",
+      "execute-preview:preview-1",
       "get:requirement:23",
       "context:requirement:23",
     ]);
@@ -235,6 +247,7 @@ describe("AI lifecycle scenarios", () => {
       version: 7,
       arguments: { background: "同一请求重放" },
       idempotencyKey: "analysis-save-replay",
+      previewOperationId: "preview-1",
     } as const;
 
     const first = await executeRequirementAnalysisScenario(client, 23, options);
@@ -252,6 +265,7 @@ describe("AI lifecycle scenarios", () => {
       version: 7,
       arguments: { background: "不能保存" },
       idempotencyKey: "analysis-save-invalid",
+      previewOperationId: "preview-1",
     })).rejects.toThrow("当前节点");
     expect(execute).not.toHaveBeenCalled();
   });

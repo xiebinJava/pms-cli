@@ -85,6 +85,7 @@ export const storyWorkbenchInputSchema = z.object({
   patch: z.record(z.string().trim().min(1), z.unknown()),
   save: z.boolean(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
+  previewOperationId: z.string().trim().min(1).max(160).optional(),
   requestId: z.string().trim().min(1).max(160).optional(),
 }).strict().superRefine((value, ctx) => {
   if (Object.keys(value.patch).length === 0) {

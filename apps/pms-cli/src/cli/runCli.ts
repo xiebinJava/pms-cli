@@ -58,12 +58,12 @@ const HELP = [
   "  pms project create --arguments-json <json> --idempotency-key <key>",
   "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>",
   "  pms scenario project-create plan|execute --arguments-json <json> [--idempotency-key <key>]",
-  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>]",
+  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis draft <id> --node-id <id> --version <version> --draft-json <draft-json>",
-  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>]",
+  "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
-  "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>]",
+  "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -362,6 +362,7 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       return plan;
     }
     const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
     const runtime = await deps.createRuntime(requestId);
     if (draft) {
       await validateAgentDraftForScenario(runtime.client, requirementId, nodeId, version, draft);
@@ -372,6 +373,7 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       nodeId,
       version,
       idempotencyKey,
+      previewOperationId,
     });
     if (invocation.options.format === "agent") {
       const context = execution.readback.context
@@ -410,11 +412,13 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     };
     if (phase === "execute") {
       const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+      const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
       const runtime = await deps.createRuntime(requestId);
       const result = await executeStoryWorkbenchScenario(runtime.client, {
         ...common,
         save: true,
         idempotencyKey,
+        previewOperationId,
       });
       if (invocation.options.format === "agent") {
         const context = await runtime.client.context(
@@ -425,7 +429,7 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
           sessionId: requestId,
           taskId: `${requestId}:story-workbench`,
           context,
-          input: { ...common, save: true, idempotencyKey },
+          input: { ...common, save: true, idempotencyKey, previewOperationId },
           result,
         });
       }

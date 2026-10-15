@@ -99,6 +99,33 @@ describe("PMS HTTP client", () => {
     });
   });
 
+  it("executes an existing preview operation through the confirmed route", async () => {
+    let captured: { input: RequestInfo | URL; init?: RequestInit } | undefined;
+    const client = new PmsHttpClient({
+      baseUrl: "https://pms.example.test",
+      auth: new StaticTokenProvider("token"),
+      clientId: "pms-cli",
+      fetchImpl: async (input, init) => {
+        captured = { input, init };
+        return response({
+          operationId: "preview-1",
+          status: "SUCCEEDED",
+          data: { saved: true },
+          refreshScopes: ["story-detail"],
+        });
+      },
+    });
+
+    const result = await client.executePreview("preview-1", "idem-preview-1");
+
+    expect(String(captured?.input)).toBe(
+      "https://pms.example.test/ai/operations/preview-1/execute",
+    );
+    expect(new Headers(captured?.init?.headers).get("idempotency-key")).toBe("idem-preview-1");
+    expect(JSON.parse(String(captured?.init?.body))).toEqual({ idempotencyKey: "idem-preview-1" });
+    expect(result).toMatchObject({ operationId: "preview-1", status: "SUCCEEDED", data: { saved: true } });
+  });
+
   it("normalizes a project context whose current node has no numeric id", async () => {
     let requestedUrl = "";
     const client = new PmsHttpClient({

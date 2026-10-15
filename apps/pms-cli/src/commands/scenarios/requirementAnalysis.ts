@@ -16,8 +16,7 @@ import type {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { requirementAnalysisInputSchema as parseRequirementAnalysisInput } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
-import { operationPreview, type OperationOptions } from "../core/operation.js";
-import { requirementAnalysisSave, type RequirementAnalysisSaveOptions } from "../shortcuts/requirement.js";
+import { operationExecutePreview, operationPreview, type OperationOptions } from "../core/operation.js";
 import { AnalysisDraftValidator } from "./AnalysisDraftValidator.js";
 import { agentDraftContractVersion } from "./AgentDraftContract.js";
 import type { ScenarioTrace } from "./projectCreate.js";
@@ -82,6 +81,7 @@ export interface RequirementAnalysisScenarioOptions extends OperationOptions {
   nodeId: number;
   version: number;
   idempotencyKey?: string;
+  previewOperationId?: string;
 }
 
 interface RequirementAnalysisBase {
@@ -156,6 +156,9 @@ export async function executeRequirementAnalysisScenario(
   requirementId: number,
   options: RequirementAnalysisScenarioOptions & { idempotencyKey: string },
 ): Promise<RequirementAnalysisScenarioResult> {
+  if (!options.previewOperationId) {
+    throw new Error("执行需求分析写入前必须先取得操作预览");
+  }
   // Keep the caller's context/version on the execute request. A successful
   // first save increments the node version, but an idempotent replay must be
   // allowed to return the original operation result with that same context.
@@ -164,11 +167,11 @@ export async function executeRequirementAnalysisScenario(
   const before = await loadBase(client, requirementId, options, false);
   const contextId = `requirement:${requirementId}`;
   const contextVersion = options.context?.version ?? String(before.context.version);
-  const saveOptions: RequirementAnalysisSaveOptions = {
+  const saveOptions: RequirementAnalysisScenarioOptions & { idempotencyKey: string } = {
     ...options,
     context: { id: contextId, version: contextVersion },
   };
-  const result = await requirementAnalysisSave(client, requirementId, saveOptions);
+  const result = await operationExecutePreview(client, options.previewOperationId, saveOptions.idempotencyKey);
   const warnings = [...result.warnings];
   let resource: ResourceDetail | null = null;
   let context: WorkflowContext | null = null;
@@ -233,6 +236,7 @@ export async function runRequirementAnalysisScenario(
 
   const execution = await executeRequirementAnalysisScenario(client, parsed.resourceId, {
     ...options,
+    previewOperationId: plan.preview.operationId,
     idempotencyKey: parsed.idempotencyKey,
   });
   const status: RequirementAnalysisResult["status"] = execution.result.status === "SUCCEEDED"
