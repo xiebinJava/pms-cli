@@ -11,9 +11,17 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 ## 工作顺序
 
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
-2. 涉及具体事项时，再执行 `pms context <resourceType> <resourceId> --format json`，确认事项绑定的流程版本、当前节点、运行时组件、字段值和允许动作。
+2. 涉及具体事项时，优先执行 `pms context <resourceType> <resourceId> --format agent`，获取外部 Agent 可消费的 `ContextSnapshot`、`NodeContract`、权限投影和上下文版本；需要排查原始字段时，再执行 `pms context <resourceType> <resourceId> --format json`。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 只有能力目录和流程上下文允许的写操作，才使用 `pms operation preview` 后执行 `pms operation execute` 或 `pms workflow action`。专用的 `pms requirement analysis save` 是用户已明确授权的窄写入口，不重复执行预览；它仍必须经过后端的能力、具体上下文、版本、字段白名单、权限和幂等校验。
+4. 按 **读取 → 草稿 → 预览 → 执行 → 回读验证** 分阶段工作：读取和草稿不得写入 PMS；预览阶段使用 `pms operation preview` 或场景 plan 只生成变更；执行必须在当前对话获得用户明确确认。只有能力目录、节点契约和上下文版本都允许时，才执行 `pms operation execute`、`pms workflow action` 或场景 execute。
+
+## 外部 Agent 协作协议
+
+- 子 Agent 只接收父 Agent 提供的 `ContextSnapshot` 和任务目标；子 Agent 不接收 PMS 登录凭据、Token、auth store 路径或写入回调，也不直接调用 `pms-cli`。
+- 父 Agent 负责读取能力和上下文、创建只读子 Agent、合并事实与草稿、发起预览、在当前对话取得明确确认，并独自调用 PMS 写入命令。
+- 草稿必须区分事实、推断、假设、未决问题、建议字段和证据引用；子 Agent 的证据只能来自父快照中可读的 `sourceRefs`。
+- 预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。用户没有确认时只能返回草稿或预览。
+- 若使用兼容旧入口 `pms requirement analysis save`，也必须遵守同样的上下文版本、字段白名单、幂等键和当前对话明确确认规则；新流程优先使用 scenario 的 plan/execute 分离入口。
 
 ## 需求分析和成果保存
 
@@ -61,9 +69,10 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 
 ## 写操作要求
 
-- 连接器按产品约定自动执行写操作，不额外增加人工确认步骤；PMS 仍必须执行用户权限、业务校验、版本校验、幂等和审计。
+- 写操作必须先有可回读的 preview，并在当前对话取得用户明确确认；不能因为 `permissionMode=write`、能力目录或模型判断而跳过确认。PMS 后端仍是最终权限裁决方，负责用户权限、业务校验、版本校验、幂等和审计。
 - 每次写操作必须提供新的、可追踪的 `idempotencyKey`；重试同一业务请求时复用同一个幂等键，不要为同一次意图生成多个幂等键。
 - 不要自动重试写操作。遇到权限不足、业务冲突或版本冲突时，返回错误并先重新读取能力/上下文。
+- 如果执行返回 `WRITE_RESULT_UNKNOWN`，说明写入可能已经发生但回读无法确认；保留操作 ID、警告和当前上下文，不要盲目重试或覆盖数据，先让用户决定后续核验。
 - 输出给用户时保留操作状态、操作 ID、审计 ID、刷新范围和后端返回的结构化错误；不要输出 Token、密码、SQL 或堆栈。
 
 ## 流程上下文只读使用规则（formatVersion=2）
