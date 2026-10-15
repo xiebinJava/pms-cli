@@ -127,8 +127,11 @@ export function buildNodeContract(
   const protectedFields = stringArray(saveContract?.protectedFields).length > 0
     ? stringArray(saveContract?.protectedFields)
     : fields.map((field) => field.key).filter((key) => !writableFields.includes(key));
+  const effectiveAllowedActions = unique(context.allowedActions ?? []);
+  const saveCommand = typeof saveContract?.command === "string" ? saveContract.command : undefined;
+  const actionAuthorized = saveCommand !== undefined && effectiveAllowedActions.includes(saveCommand);
   const writeCapable = saveContract !== undefined
-    && typeof saveContract.command === "string"
+    && actionAuthorized
     && writableFields.length > 0
     && node.id !== null
     && node.version !== null
@@ -136,6 +139,8 @@ export function buildNodeContract(
   const missingInputRules = stringArray(saveContract?.missingInputRules);
   if (!saveContract) {
     missingInputRules.push("当前节点/组件未公开 saveContract，禁止生成写入预览");
+  } else if (!actionAuthorized) {
+    missingInputRules.push("当前用户未获准执行 saveContract 命令，禁止生成写入预览");
   } else if (!writeCapable) {
     missingInputRules.push("saveContract 未声明有效命令和可写字段，禁止生成写入预览");
   }
@@ -148,9 +153,12 @@ export function buildNodeContract(
     ...(field.options ? { options: field.options } : {}),
     ...(node.fieldValues[field.key] !== undefined ? { currentValue: node.fieldValues[field.key] } : {}),
   }));
-  const actions = writeCapable && component && component.actions.length > 0
-    ? component.actions
-    : writeCapable ? context.allowedActions ?? [] : [];
+  const componentActions = component
+    ? component.actions.filter((action) => effectiveAllowedActions.includes(action))
+    : [];
+  const actions = writeCapable && componentActions.length > 0
+    ? componentActions
+    : writeCapable ? effectiveAllowedActions : [];
   return {
     nodeId: node.id,
     key: node.key,

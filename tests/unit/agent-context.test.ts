@@ -114,6 +114,14 @@ describe("Agent context mapping", () => {
     expect(node.missingInputRules).toContain("当前节点/组件未公开 saveContract，禁止生成写入预览");
   });
 
+  it("keeps a save contract read-only when the effective actions omit its command", () => {
+    const node = buildNodeContract(context({ allowedActions: [] }), 383, "story-node-workbench");
+
+    expect(node.writeCapable).toBe(false);
+    expect(node.allowedActions).toEqual([]);
+    expect(node.missingInputRules).toContain("当前用户未获准执行 saveContract 命令，禁止生成写入预览");
+  });
+
   it("rejects an unsupported component instead of guessing a writable scope", () => {
     expect(() => buildNodeContract(context(), 383, "missing-component")).toThrow(/组件/);
   });
