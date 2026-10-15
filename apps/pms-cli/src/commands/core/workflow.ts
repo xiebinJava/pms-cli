@@ -1,6 +1,6 @@
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import type { QueryItem } from "../../../../../packages/pms-contracts/src/index.js";
-import { operationExecute, type OperationOptions } from "./operation.js";
+import { operationExecutePreview, type OperationOptions } from "./operation.js";
 
 export async function workflowAction(
   client: PmsClient,
@@ -9,8 +9,10 @@ export async function workflowAction(
   action: string,
   idempotencyKey: string,
   options: OperationOptions = {},
+  previewOperationId?: string,
 ) {
   if (!idempotencyKey.trim()) throw new Error("workflow action 必须提供 idempotencyKey");
+  if (!previewOperationId?.trim()) throw new Error("workflow action 必须提供 preview-operation-id");
   const context = options.context
     ? undefined
     : await client.context({ type: resourceType, id: resourceId });
@@ -19,8 +21,5 @@ export async function workflowAction(
   }
   const contextVersion = options.context?.version ?? String(context?.version ?? "");
   if (!contextVersion) throw new Error("当前对象缺少可用于恢复的 context version");
-  return operationExecute(client, action, idempotencyKey, {
-    ...options,
-    context: options.context ?? { id: `${resourceType}:${resourceId}`, version: contextVersion },
-  });
+  return operationExecutePreview(client, previewOperationId, idempotencyKey);
 }

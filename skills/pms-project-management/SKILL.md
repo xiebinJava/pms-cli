@@ -13,7 +13,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
 2. 涉及具体事项时，优先执行 `pms context <resourceType> <resourceId> --format agent`，获取外部 Agent 可消费的 `ContextSnapshot`、`NodeContract`、权限投影和上下文版本；需要排查原始字段时，再执行 `pms context <resourceType> <resourceId> --format json`。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 按 **读取 → 草稿 → 预览 → 执行 → 回读验证** 分阶段工作：读取和草稿不得写入 PMS；预览阶段使用 `pms operation preview` 或场景 plan 只生成变更；执行必须在当前对话获得用户明确确认。只有能力目录、节点契约和上下文版本都允许时，才执行 `pms operation execute`、`pms workflow action` 或场景 execute。
+4. 按 **读取 → 草稿 → 预览 → 执行 → 回读验证** 分阶段工作：读取和草稿不得写入 PMS；预览阶段使用 `pms operation preview` 或场景 plan 只生成变更；执行必须在当前对话获得用户明确确认，并携带对应的 `--preview-operation-id` 和 `--idempotency-key`。只有能力目录、节点契约和上下文版本都允许时，才执行 `pms operation execute`、`pms workflow action` 或场景 execute。
 
 ## 外部 Agent 协作协议
 
@@ -32,7 +32,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 - 只有用户明确指定目标节点并且当前能力目录声明该保存操作时，才使用：
 
   ```bash
-  pms requirement analysis save <requirement-id> --node-id <node-id> --version <version> --context-id <context-id> --context-version <context-version> --arguments-json '<patch-json>' --idempotency-key <key> --format json
+  pms requirement analysis save <requirement-id> --node-id <node-id> --version <version> --context-id <context-id> --context-version <context-version> --arguments-json '<patch-json>' --preview-operation-id <preview-id> --idempotency-key <key> --format json
   ```
 
 - `--arguments-json` 只传需求澄清组件允许的分析字段补丁；不要发送未在能力目录声明的字段。不能默认选择第一个候选节点，不能批准、完成节点或修改所属系统。

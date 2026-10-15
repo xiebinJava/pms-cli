@@ -1,7 +1,7 @@
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import type { QueryRequest, QueryResult, QueryItem } from "../../../../../packages/pms-contracts/src/index.js";
 import { getResource } from "../core/get.js";
-import { operationExecute, operationPreview, type OperationOptions } from "../core/operation.js";
+import { operationExecutePreview, operationPreview, type OperationOptions } from "../core/operation.js";
 import { search } from "../core/search.js";
 
 export interface ListOptions {
@@ -15,6 +15,7 @@ export interface ListOptions {
 export interface WriteOptions extends OperationOptions {
   dryRun?: boolean;
   idempotencyKey?: string;
+  previewOperationId?: string;
 }
 
 export function listResource(
@@ -44,5 +45,6 @@ export async function writeResource(
 ) {
   if (options.dryRun) return operationPreview(client, operation, options);
   if (!options.idempotencyKey?.trim()) throw new Error("写操作必须提供 idempotencyKey");
-  return operationExecute(client, operation, options.idempotencyKey, options);
+  if (!options.previewOperationId?.trim()) throw new Error("写操作必须提供 preview-operation-id");
+  return operationExecutePreview(client, options.previewOperationId, options.idempotencyKey);
 }

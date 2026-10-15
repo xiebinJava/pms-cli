@@ -33,13 +33,13 @@ pms context project 7 --format json
 pms context requirement 23 --view focused --node-id 299 --format json
 pms context project 7 --view focused --node-id 299 --component solution-design --format json
 pms operation preview project.create --arguments-json '{"name":"订单中心"}' --format json
-pms operation execute project.create --arguments-json '{"name":"订单中心"}' --idempotency-key idem-1 --format json
+pms operation execute --preview-operation-id <preview-operation-id> --idempotency-key idem-1 --format json
 pms scenario project-create plan --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --format json
-pms scenario project-create execute --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --idempotency-key project-ai-native-pms-1 --format json
+pms scenario project-create execute --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --preview-operation-id <preview-operation-id> --idempotency-key project-ai-native-pms-1 --format json
 pms scenario requirement-analysis plan 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --format json
-pms scenario requirement-analysis execute 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --idempotency-key requirement-analysis-23-7 --format json
-pms requirement analysis save 23 --node-id 301 --version 7 --context-id requirement:23 --context-version 7 --arguments-json '{"interpretation":"补充用户场景"}' --idempotency-key analysis-save-23-7 --format json
-pms workflow action topic 82 development-item.node.complete --arguments-json '{}' --format json
+pms scenario requirement-analysis execute 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --preview-operation-id <preview-operation-id> --idempotency-key requirement-analysis-23-7 --format json
+pms requirement analysis save 23 --node-id 301 --version 7 --context-id requirement:23 --context-version 7 --arguments-json '{"interpretation":"补充用户场景"}' --preview-operation-id <preview-operation-id> --idempotency-key analysis-save-23-7 --format json
+pms workflow action topic 82 development-item.node.complete --preview-operation-id <preview-operation-id> --idempotency-key workflow-action-82-1 --format json
 pms dashboard summary --format json
 ```
 

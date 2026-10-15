@@ -7,6 +7,7 @@ const VALUE_OPTIONS = new Set([
   "format",
   "arguments-json",
   "idempotency-key",
+  "preview-operation-id",
   "node-id",
   "view",
   "component",

@@ -39,6 +39,7 @@ pms requirement analysis save 23 \
   --context-id requirement:23 \
   --context-version 7 \
   --arguments-json '{"interpretation":"补充用户场景"}' \
+  --preview-operation-id <preview-operation-id> \
   --idempotency-key analysis-save-23-7 \
   --format json
 ```

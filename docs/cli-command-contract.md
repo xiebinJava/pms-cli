@@ -43,10 +43,11 @@ Every failure writes an error envelope to stderr and exits non-zero:
 | `pms context <resource-type> <id> --format json` | `GET /integration/ai/v1/context/{type}/{id}` | read |
 | `pms context <type> <id> --view focused --node-id <id> [--component <key>]` | 同上，头部带 `nodeId/view/componentKey` 查询参数 | read（focused 仅在 meta.formatVersion=2 且核验通过后返回） |
 | `pms operation preview <operation> --arguments-json <json>` | `POST /integration/ai/v1/operations/preview` | dry-run |
-| `pms operation execute <operation> --arguments-json <json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` | explicit write |
-| `pms scenario project-create plan|execute ...` | capabilities + preview/execute + project get/context | plan is read-only; execute writes |
+| `pms operation execute --preview-operation-id <id> --idempotency-key <key>` | `POST /ai/operations/{previewId}/execute` | explicit write bound to preview |
+| `pms scenario project-create plan ...` | capabilities + preview | read-only |
+| `pms scenario project-create execute ... --preview-operation-id <id> --idempotency-key <key>` | preview execute + project get/context | explicit write bound to preview |
 | `pms scenario requirement-analysis plan|execute ...` | capabilities + requirement get/context + analysis save | plan is read-only; execute writes |
-| `pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` with `requirement.analysis.save` | explicit write |
+| `pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --preview-operation-id <id> --idempotency-key <key>` | `POST /ai/operations/{previewId}/execute` | explicit write bound to preview |
 
 Write requests carry `clientId=pms-cli`, `requestId`, `idempotencyKey`, and
 the capability-provided context/contract versions when required. The CLI
@@ -61,8 +62,9 @@ JSON object is passed as the analysis patch. It does not discover a target
 node, select the first candidate, approve or complete a workflow node, or
 change the requirement's system.
 
-The caller must reuse the same `--idempotency-key` for a retry of the same
-business intent. The connector does not retry this write and does not mutate
+The caller must first obtain a preview operation ID and reuse the same
+`--idempotency-key` for a retry of the same business intent. The connector does
+not retry this write and does not mutate
 the context version or patch on replay, so PMS can return the original result
 for an idempotent retry.
 

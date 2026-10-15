@@ -25,11 +25,15 @@ describe("PMS resource shortcuts", () => {
         }] }],
       }),
       preview: async () => { calls.push("preview"); return { operationId: "preview" }; },
-      execute: async () => { calls.push("execute"); return { operationId: "execute" }; },
+      executePreview: async () => { calls.push("execute"); return { operationId: "execute" }; },
     } as never;
 
     await projectCreate(client, { arguments: { name: "订单中心" }, dryRun: true });
-    await projectCreate(client, { arguments: { name: "订单中心" }, idempotencyKey: "idem-1" });
+    await projectCreate(client, {
+      arguments: { name: "订单中心" },
+      idempotencyKey: "idem-1",
+      previewOperationId: "preview-1",
+    });
 
     expect(calls).toEqual(["preview", "execute"]);
   });

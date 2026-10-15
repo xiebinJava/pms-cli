@@ -62,7 +62,7 @@ const catalog = {
   }],
 };
 
-function fakeClient(options: { advanceRequirementVersionOnExecute?: boolean } = {}) {
+function fakeClient(options: { advanceRequirementVersionOnExecute?: boolean; projectPreview?: boolean } = {}) {
   const calls: string[] = [];
   let contextReads = 0;
   let requirementContextVersion = 7;
@@ -98,6 +98,16 @@ function fakeClient(options: { advanceRequirementVersionOnExecute?: boolean } = 
     }),
     executePreview: vi.fn(async (operationId: string) => {
       calls.push("execute-preview:" + operationId);
+      if (options.projectPreview) {
+        return {
+          operationId: "operation-project-1",
+          status: "SUCCEEDED",
+          data: { project: { id: 42, version: 9 }, workflow: { templateVersionId: 12, templateVersionNo: 2, nodeIds: [101] } },
+          warnings: [],
+          refreshScopes: ["project-list"],
+          auditId: "audit-1",
+        };
+      }
       return {
         operationId: "operation-analysis-1",
         status: "SUCCEEDED",
@@ -174,16 +184,16 @@ describe("AI lifecycle scenarios", () => {
   });
 
   it("executes project creation and returns exact detail/context readback", async () => {
-    const { client, calls } = fakeClient();
+    const { client, calls } = fakeClient({ projectPreview: true });
     const scenario = await executeProjectCreateScenario(client, {
       arguments: { name: "AI Native PMS", workflowTemplateVersionId: 12 },
       idempotencyKey: "project-create-1",
+      previewOperationId: "preview-1",
       requestId: "req-project-execute",
     });
 
     expect(calls).toEqual([
-      "preview:project.create",
-      "execute:project.create",
+      "execute-preview:preview-1",
       "get:project:42",
       "context:project:42",
     ]);

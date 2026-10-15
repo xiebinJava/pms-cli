@@ -43,11 +43,11 @@ const catalog = {
 
 describe("requirement analysis save CLI contract", () => {
   it("routes the exact three-word command and reuses the caller idempotency key", async () => {
-    const requests: unknown[] = [];
+    const previewExecutions: unknown[] = [];
     const client = {
       capabilities: async () => catalog,
-      execute: async (request: unknown) => {
-        requests.push(request);
+      executePreview: async (operationId: string, idempotencyKey: string) => {
+        previewExecutions.push({ operationId, idempotencyKey });
         return {
           operationId: "analysis-operation-1",
           status: "SUCCEEDED",
@@ -64,28 +64,19 @@ describe("requirement analysis save CLI contract", () => {
       "--version", "7",
       "--arguments-json", '{"background":"补充用户场景"}',
       "--idempotency-key", "analysis-save-23-7",
+      "--preview-operation-id", "preview-analysis-1",
       "--context-id", "requirement:23",
       "--context-version", "7",
-      "--contract-id", "requirement-analysis",
-      "--contract-version", "1",
     ];
 
     await runCli(args, first.deps);
     const second = makeDeps(client);
     await runCli(args, second.deps);
 
-    expect(requests).toHaveLength(2);
-    expect(requests[0]).toMatchObject({
-      operation: "requirement.analysis.save",
-      idempotencyKey: "analysis-save-23-7",
-      arguments: {
-        requirementId: 23,
-        nodeId: 301,
-        version: 7,
-        patch: { background: "补充用户场景" },
-      },
-    });
-    expect(requests[1]).toEqual(requests[0]);
+    expect(previewExecutions).toEqual([
+      { operationId: "preview-analysis-1", idempotencyKey: "analysis-save-23-7" },
+      { operationId: "preview-analysis-1", idempotencyKey: "analysis-save-23-7" },
+    ]);
     expect(JSON.parse(first.stdout[0] ?? "{}").data.operationId).toBe("analysis-operation-1");
     expect(first.stderr).toEqual([]);
   });

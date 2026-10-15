@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProjectWithReadback } from "../../apps/pms-cli/src/commands/shortcuts/project.js";
+import { createProjectWithAutomaticWrite } from "../../apps/pms-cli/src/commands/shortcuts/project.js";
 
 const catalog = {
   version: "ai-v1",
@@ -71,7 +71,7 @@ describe("project creation readback", () => {
       },
     } as never;
 
-    const readback = await createProjectWithReadback(client, {
+    const readback = await createProjectWithAutomaticWrite(client, {
       arguments: { name: "订单中心", workflowTemplateVersionId: 12 },
       idempotencyKey: "project-create-1",
     });
@@ -107,13 +107,13 @@ describe("project creation readback", () => {
       context: async () => { throw new Error("should not be called"); },
     } as never;
 
-    const readback = await createProjectWithReadback(client, {
+    const readback = await createProjectWithAutomaticWrite(client, {
       arguments: { name: "回读失败项目" },
       idempotencyKey: "project-create-2",
     });
 
     expect(readback.result.operationId).toBe("operation-2");
-    expect(readback.result.status).toBe("SUCCEEDED");
+    expect(readback.result.status).toBe("WRITE_RESULT_UNKNOWN");
     expect(readback.result.data.workflow).toEqual({ templateVersionId: null, templateVersionNo: null, nodeIds: [] });
     expect(readback.resource).toBeNull();
     expect(readback.context).toBeNull();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createProjectWithReadback } from "../../apps/pms-cli/src/commands/shortcuts/project.js";
+import { createProjectWithAutomaticWrite } from "../../apps/pms-cli/src/commands/shortcuts/project.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
 
 const envelope = (data: unknown) => new Response(JSON.stringify({ code: 200, data }), { status: 200 });
@@ -78,7 +78,7 @@ describe("project creation protocol readback", () => {
       },
     });
 
-    const readback = await createProjectWithReadback(client, {
+    const readback = await createProjectWithAutomaticWrite(client, {
       arguments: { name: "订单中心" },
       idempotencyKey: "project-create-1",
     });

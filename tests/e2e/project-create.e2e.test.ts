@@ -64,6 +64,7 @@ describe.skipIf(!enabled)("PMS CLI isolated project creation", () => {
       const first = await executeProjectCreateScenario(client, {
         arguments: argumentsValue,
         idempotencyKey,
+        previewOperationId: plan.preview.operationId,
       });
       expect(first.result.status).toBe("SUCCEEDED");
       expect(first.trace.operationId).toBe(first.result.operationId);
@@ -77,6 +78,7 @@ describe.skipIf(!enabled)("PMS CLI isolated project creation", () => {
       const replay = await executeProjectCreateScenario(client, {
         arguments: argumentsValue,
         idempotencyKey,
+        previewOperationId: plan.preview.operationId,
       });
       expect(replay.result.operationId).toBe(first.result.operationId);
       expect(readProjectId(replay.result.data.project)).toBe(projectId);

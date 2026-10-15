@@ -32,8 +32,8 @@ describe("requirement analysis shortcut", () => {
     const calls: unknown[] = [];
     const client = {
       capabilities: async () => catalog,
-      execute: async (request: unknown) => {
-        calls.push(request);
+      executePreview: async (operationId: string, idempotencyKey: string) => {
+        calls.push({ operationId, idempotencyKey });
         return { operationId: "analysis-save-1", status: "SUCCEEDED", data: {}, warnings: [], refreshScopes: [] };
       },
     } as never;
@@ -43,23 +43,11 @@ describe("requirement analysis shortcut", () => {
       version: 7,
       arguments: { background: "用户需要导出报表" },
       idempotencyKey: "analysis-save-23-7",
+      previewOperationId: "preview-analysis-1",
       context: { id: "requirement:23", version: "7" },
-      contract: { id: "requirement-analysis", version: "1" },
       requestId: "req-analysis-1",
     });
 
-    expect(calls[0]).toMatchObject({
-      operation: "requirement.analysis.save",
-      idempotencyKey: "analysis-save-23-7",
-      context: { id: "requirement:23", version: "7" },
-      contract: { id: "requirement-analysis", version: "1" },
-      requestId: "req-analysis-1",
-      arguments: {
-        requirementId: 23,
-        nodeId: 301,
-        version: 7,
-        patch: { background: "用户需要导出报表" },
-      },
-    });
+    expect(calls[0]).toEqual({ operationId: "preview-analysis-1", idempotencyKey: "analysis-save-23-7" });
   });
 });

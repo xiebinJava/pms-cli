@@ -13,6 +13,7 @@ import { createProjectWithReadback, type ProjectCreateReadback } from "../shortc
 
 export interface ProjectCreateScenarioOptions extends OperationOptions {
   idempotencyKey?: string;
+  previewOperationId?: string;
 }
 
 export interface ScenarioTrace {
@@ -38,7 +39,8 @@ export interface ProjectCreateScenarioResult {
   scenario: "project-create";
   phase: "execute";
   arguments: Record<string, unknown>;
-  preview: OperationPreview;
+  preview: OperationPreview | null;
+  previewOperationId: string;
   result: OperationResult;
   readback: {
     resource: ResourceDetail | null;
@@ -75,7 +77,7 @@ export async function planProjectCreateScenario(
 
 export async function executeProjectCreateScenario(
   client: PmsClient,
-  options: ProjectCreateScenarioOptions & { idempotencyKey: string },
+  options: ProjectCreateScenarioOptions & { idempotencyKey: string; previewOperationId: string },
 ): Promise<ProjectCreateScenarioResult> {
   const readback: ProjectCreateReadback = await createProjectWithReadback(client, options);
   return {
@@ -83,6 +85,7 @@ export async function executeProjectCreateScenario(
     phase: "execute",
     arguments: options.arguments ?? {},
     preview: readback.preview,
+    previewOperationId: readback.previewOperationId,
     result: readback.result,
     readback: { resource: readback.resource, context: readback.context },
     warnings: readback.warnings,
