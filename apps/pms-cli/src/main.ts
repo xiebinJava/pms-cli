@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomUUID } from "node:crypto";
-import { copyFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, copyFileSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,18 +34,30 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
 }
 
 async function runAuth(command: string | undefined, args: string[]) {
-  const store = new AuthStore();
+  const store = createAuthStore();
   if (command === "status") return authStatus(store);
   const rawBaseUrl = process.env.PMS_BASE_URL?.trim() || "http://localhost:5173/api";
   const baseUrl = AuthStore.normalizeBaseUrl(rawBaseUrl);
   const authOrigin = process.env.PMS_AUTH_ORIGIN?.trim() || originFromBase(baseUrl);
-  if (command === "login") return authLogin({ baseUrl, authOrigin, store });
+  if (command === "login") {
+    const authUrlFile = process.env.PMS_CLI_AUTH_URL_FILE?.trim();
+    return authLogin({
+      baseUrl,
+      authOrigin,
+      store,
+      ...(authUrlFile ? {
+        openBrowser: async (url: string) => {
+          appendFileSync(authUrlFile, url + "\n", { encoding: "utf8", mode: 0o600 });
+        },
+      } : {}),
+    });
+  }
   if (command === "logout") return authLogout({ baseUrl, authOrigin, store });
   throw new Error("未知认证命令: " + (command ?? args.join(" ")));
 }
 
 async function authenticatedRuntime(requestId: string): Promise<CliRuntime> {
-  const store = new AuthStore();
+  const store = createAuthStore();
   const account = await store.getActiveAccount();
   if (!account) throw new Error("尚未登录，请先执行 pms auth login");
   const auth = new BrowserAuth({ baseUrl: account.baseUrl, authOrigin: originFromBase(account.baseUrl), store });
@@ -59,6 +71,12 @@ async function authenticatedRuntime(requestId: string): Promise<CliRuntime> {
       requestIdFactory: () => requestId,
     }),
   };
+}
+
+function createAuthStore(): AuthStore {
+  return new AuthStore(undefined, {
+    service: process.env.PMS_CLI_KEYRING_SERVICE?.trim() || undefined,
+  });
 }
 
 function originFromBase(baseUrl: string): string {

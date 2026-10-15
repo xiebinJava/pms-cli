@@ -13,7 +13,8 @@
     "build:cli": "esbuild apps/pms-cli/src/main.ts --bundle --platform=node --target=node22 --format=esm --packages=external --outfile=dist/pms-cli.js",
     "verify:real-pms:readonly": "PMS_E2E_READONLY=true vitest run tests/e2e/pms-cli.e2e.test.ts",
     "verify:real-pms:project-create": "PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/project-create.e2e.test.ts",
-    "verify:real-pms:analysis-save": "PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/requirement-analysis.e2e.test.ts tests/e2e/requirement-analysis-conflict.e2e.test.ts --maxWorkers=1 --minWorkers=1"
+    "verify:real-pms:analysis-save": "PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/requirement-analysis.e2e.test.ts tests/e2e/requirement-analysis-conflict.e2e.test.ts --maxWorkers=1 --minWorkers=1",
+    "verify:real-pms:cli": "PMS_E2E_CLI=true PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/cli-agent-write.e2e.test.ts --maxWorkers=1 --minWorkers=1"
   },
   "bin": {
     "pms": "dist/pms-cli.js"
