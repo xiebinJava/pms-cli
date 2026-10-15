@@ -53,7 +53,7 @@ export const verificationResultSchema = z.object({
 }).strict();
 
 export const requirementAnalysisResultSchema = z.object({
-  status: z.enum(["DRAFT", "PREVIEWED", "SUCCEEDED", "REJECTED", "CONFLICT"]),
+  status: z.enum(["DRAFT", "PREVIEWED", "SUCCEEDED", "REJECTED", "CONFLICT", "WRITE_RESULT_UNKNOWN"]),
   operationId: z.string().trim().min(1).optional(),
   draft: analysisDraftSchema,
   verification: verificationResultSchema.optional(),

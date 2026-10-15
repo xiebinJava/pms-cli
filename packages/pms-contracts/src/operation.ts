@@ -46,7 +46,12 @@ export const automaticOperationRequestSchema = z.object({
 
 export type AutomaticOperationRequest = z.infer<typeof automaticOperationRequestSchema>;
 
-export const operationStatusSchema = z.enum(["SUCCEEDED", "REJECTED", "CONFLICT"]);
+export const operationStatusSchema = z.enum([
+  "SUCCEEDED",
+  "REJECTED",
+  "CONFLICT",
+  "WRITE_RESULT_UNKNOWN",
+]);
 
 export const operationResultSchema = z.object({
   operationId: z.string().trim().min(1),

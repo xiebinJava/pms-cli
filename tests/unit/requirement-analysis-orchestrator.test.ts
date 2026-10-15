@@ -5,6 +5,7 @@ import {
   runRequirementAnalysisScenario,
   type RequirementAnalysisScenarioClient,
 } from "../../apps/pms-cli/src/commands/scenarios/requirementAnalysis.js";
+import { toRequirementAnalysisWorkSession } from "../../apps/pms-cli/src/commands/scenarios/agentWorkSession.js";
 import type { AnalysisDraft } from "../../packages/pms-contracts/src/index.js";
 
 const draft: AnalysisDraft = {
@@ -183,5 +184,92 @@ describe("requirement analysis orchestration", () => {
     })).rejects.toThrow("操作预览");
     expect(client.execute).not.toHaveBeenCalled();
     expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("reports an unknown write result when requirement readback fails", async () => {
+    const { client } = fakeClient();
+    const getMock = client.get as unknown as ReturnType<typeof vi.fn>;
+    getMock
+      .mockImplementationOnce(async () => ({
+        resourceType: "requirement",
+        resourceId: 23,
+        entityVersion: 7,
+        details: { id: 23, title: "报表导出", systemId: 9 },
+      }))
+      .mockRejectedValueOnce(new Error("readback unavailable"));
+
+    const execution = await executeRequirementAnalysisScenario(client, 23, {
+      nodeId: 301,
+      version: 7,
+      arguments: draft.patch,
+      idempotencyKey: "analysis-readback-unknown",
+      previewOperationId: "preview-1",
+    });
+
+    expect(execution.result.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(execution.readback).toEqual({ resource: null, context: null });
+    const sessionContext = await client.context({ type: "requirement", id: 23 });
+    sessionContext.workflow = {
+      nodes: [{
+        id: 301,
+        key: "analysis",
+        label: "需求分析",
+        position: 0,
+        components: [],
+        fields: [],
+        fieldValues: {},
+      }],
+    };
+    const session = toRequirementAnalysisWorkSession({
+      sessionId: "session-unknown",
+      taskId: "task-unknown",
+      context: sessionContext,
+      draft,
+      result: execution,
+    });
+    expect(session.operation?.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(session.verification).toMatchObject({
+      status: "UNKNOWN",
+      resourceReadback: false,
+      contextReadback: false,
+      patchApplied: false,
+      protectedFieldsUnchanged: false,
+    });
+  });
+
+  it("keeps the high-level scenario status unknown when readback fails", async () => {
+    const { client } = fakeClient();
+    const getMock = client.get as unknown as ReturnType<typeof vi.fn>;
+    getMock
+      .mockImplementationOnce(async () => ({
+        resourceType: "requirement",
+        resourceId: 23,
+        entityVersion: 7,
+        details: { id: 23, title: "报表导出", systemId: 9 },
+      }))
+      .mockImplementationOnce(async () => ({
+        resourceType: "requirement",
+        resourceId: 23,
+        entityVersion: 7,
+        details: { id: 23, title: "报表导出", systemId: 9 },
+      }))
+      .mockRejectedValueOnce(new Error("readback unavailable"));
+
+    const result = await runRequirementAnalysisScenario(client as RequirementAnalysisScenarioClient, {
+      resourceType: "requirement",
+      resourceId: 23,
+      nodeId: 301,
+      contextVersion: 7,
+      draft,
+      save: true,
+      idempotencyKey: "analysis-readback-unknown-high-level",
+    }, async () => true);
+
+    expect(result.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(result.verification).toEqual({
+      resourceReadback: false,
+      contextReadback: false,
+      protectedFieldsUnchanged: false,
+    });
   });
 });

@@ -181,21 +181,24 @@ export async function executeRequirementAnalysisScenario(
   } catch (error) {
     warnings.push("需求分析已保存，但结果回读失败：" + (error instanceof Error ? error.message : String(error)));
   }
+  const effectiveResult = result.status === "SUCCEEDED" && (resource === null || context === null)
+    ? { ...result, status: "WRITE_RESULT_UNKNOWN" as const }
+    : result;
   return {
     scenario: "requirement-analysis",
     phase: "execute",
     requirementId,
     analysisPatch: options.arguments ?? {},
     facts: factsOf(before),
-    result,
+    result: effectiveResult,
     readback: { resource, context },
     protectedFieldsUnchanged: compareProtectedFields(before.resource, resource),
     warnings,
     trace: {
       requestId: options.requestId,
-      operationId: result.operationId,
+      operationId: effectiveResult.operationId,
       idempotencyKey: options.idempotencyKey,
-      ...(result.auditId ? { auditId: result.auditId } : {}),
+      ...(effectiveResult.auditId ? { auditId: effectiveResult.auditId } : {}),
     },
   };
 }
@@ -241,7 +244,11 @@ export async function runRequirementAnalysisScenario(
   });
   const status: RequirementAnalysisResult["status"] = execution.result.status === "SUCCEEDED"
     ? "SUCCEEDED"
-    : execution.result.status === "CONFLICT" ? "CONFLICT" : "REJECTED";
+    : execution.result.status === "CONFLICT"
+      ? "CONFLICT"
+      : execution.result.status === "WRITE_RESULT_UNKNOWN"
+        ? "WRITE_RESULT_UNKNOWN"
+        : "REJECTED";
   return {
     status,
     operationId: execution.result.operationId,
@@ -249,8 +256,9 @@ export async function runRequirementAnalysisScenario(
     verification: {
       resourceReadback: execution.readback.resource !== null,
       contextReadback: execution.readback.context !== null,
-      protectedFieldsUnchanged: Object.values(execution.protectedFieldsUnchanged)
-        .every(Boolean),
+      protectedFieldsUnchanged: execution.readback.resource !== null
+        && execution.readback.context !== null
+        && Object.values(execution.protectedFieldsUnchanged).every(Boolean),
     },
   };
 }

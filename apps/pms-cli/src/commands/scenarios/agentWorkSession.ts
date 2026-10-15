@@ -53,8 +53,12 @@ export function toRequirementAnalysisWorkSession(input: {
       ? {
         resourceReadback: input.result.readback.resource !== null,
         contextReadback: input.result.readback.context !== null,
-        patchApplied: input.result.result.status === "SUCCEEDED",
-        protectedFieldsUnchanged: Object.values(input.result.protectedFieldsUnchanged).every(Boolean),
+        patchApplied: input.result.result.status === "SUCCEEDED"
+          && input.result.readback.resource !== null
+          && input.result.readback.context !== null,
+        protectedFieldsUnchanged: input.result.readback.resource !== null
+          && input.result.readback.context !== null
+          && Object.values(input.result.protectedFieldsUnchanged).every(Boolean),
         status: input.result.result.status,
         message: input.result.warnings[0],
       }
