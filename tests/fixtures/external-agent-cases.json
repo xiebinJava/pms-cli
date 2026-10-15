@@ -1,0 +1,80 @@
+[
+  {
+    "id": "read-only-analysis",
+    "title": "读取需求当前节点",
+    "resourceType": "requirement",
+    "resourceId": 33,
+    "nodeId": 701,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "requirement:33:entity:4",
+    "operationId": null,
+    "permissionMode": "read-only",
+    "verification": null,
+    "expectedMutation": false
+  },
+  {
+    "id": "missing-input-clarification",
+    "title": "需求分析缺少确认项",
+    "resourceType": "requirement",
+    "resourceId": 33,
+    "nodeId": 701,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "requirement:33:entity:4",
+    "operationId": null,
+    "permissionMode": "draft",
+    "verification": null,
+    "expectedMutation": false
+  },
+  {
+    "id": "draft-only-story",
+    "title": "故事节点草稿",
+    "resourceType": "story",
+    "resourceId": 34,
+    "nodeId": 702,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "story:34:entity:5",
+    "operationId": null,
+    "permissionMode": "draft",
+    "verification": null,
+    "expectedMutation": false
+  },
+  {
+    "id": "confirmed-write",
+    "title": "用户确认后写入故事字段",
+    "resourceType": "story",
+    "resourceId": 34,
+    "nodeId": 702,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "story:34:entity:5",
+    "operationId": "operation-confirmed-1",
+    "permissionMode": "write",
+    "verification": "SUCCEEDED",
+    "expectedMutation": true
+  },
+  {
+    "id": "version-conflict",
+    "title": "故事上下文版本冲突",
+    "resourceType": "story",
+    "resourceId": 34,
+    "nodeId": 702,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "story:34:entity:5",
+    "operationId": "operation-conflict-1",
+    "permissionMode": "write",
+    "verification": "FAILED",
+    "expectedMutation": false
+  },
+  {
+    "id": "unknown-readback",
+    "title": "故事写入后回读未知",
+    "resourceType": "story",
+    "resourceId": 34,
+    "nodeId": 702,
+    "contractVersion": "agent-contract/v1",
+    "contextVersion": "story:34:entity:5",
+    "operationId": "operation-unknown-1",
+    "permissionMode": "write",
+    "verification": "UNKNOWN",
+    "expectedMutation": "unknown"
+  }
+]
