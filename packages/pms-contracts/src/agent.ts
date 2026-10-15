@@ -97,6 +97,39 @@ export const agentTaskSchema = z.object({
   permissionMode: z.enum(["read-only", "draft", "write"]),
 }).strict();
 
+/**
+ * The only payload shape a parent Agent may hand to a child Agent.
+ * It contains the immutable snapshot and task metadata, never a PMS client,
+ * token, auth-store path, or executable callback.
+ */
+export const childAgentTaskPayloadSchema = z.object({
+  contextSnapshot: contextSnapshotSchema,
+  task: agentTaskSchema,
+}).strict().superRefine((value, ctx) => {
+  if (value.task.contextSnapshotId !== value.contextSnapshot.snapshotId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["task", "contextSnapshotId"],
+      message: "子 Agent 任务必须引用所携带的上下文快照",
+    });
+  }
+  if (value.task.resource.type !== value.contextSnapshot.resource.type
+      || value.task.resource.id !== value.contextSnapshot.resource.id) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["task", "resource"],
+      message: "子 Agent 任务资源必须与上下文快照一致",
+    });
+  }
+  if (value.task.permissionMode !== "read-only") {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["task", "permissionMode"],
+      message: "子 Agent 任务只能使用 read-only 权限模式",
+    });
+  }
+});
+
 export const agentDraftSchema = z.object({
   facts: z.array(analysisItemSchema),
   inferences: z.array(analysisItemSchema),
@@ -208,6 +241,7 @@ export type AgentResourceRef = z.infer<typeof agentResourceRefSchema>;
 export type ContextSnapshot = z.infer<typeof contextSnapshotSchema>;
 export type NodeContract = z.infer<typeof nodeContractSchema>;
 export type AgentTask = z.infer<typeof agentTaskSchema>;
+export type ChildAgentTaskPayload = z.infer<typeof childAgentTaskPayloadSchema>;
 export type AgentDraft = z.infer<typeof agentDraftSchema>;
 export type PreviewEnvelope = z.infer<typeof previewEnvelopeSchema>;
 export type OperationEnvelope = z.infer<typeof operationEnvelopeSchema>;
