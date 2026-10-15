@@ -13,6 +13,11 @@ import { createProjectWithReadback } from "../commands/shortcuts/project.js";
 import { requirementAnalysisSave } from "../commands/shortcuts/requirement.js";
 import { executeProjectCreateScenario, planProjectCreateScenario } from "../commands/scenarios/projectCreate.js";
 import {
+  executeResourceWriteScenario,
+  planResourceWriteScenario,
+  type ResourceWriteResourceType,
+} from "../commands/scenarios/resourceWrite.js";
+import {
   fixedMockDraftForContext,
   readAnalysisShadowCases,
   runAnalysisShadowCases,
@@ -59,6 +64,10 @@ const HELP = [
   "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario project-create plan --arguments-json <json>",
   "  pms scenario project-create execute --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
+  "  pms scenario resource-write plan <project|topic|story> <operation> --arguments-json <json>",
+  "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
+  "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
+  "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis draft <id> --node-id <id> --version <version> --draft-json <draft-json>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -240,6 +249,39 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
     const runtime = await deps.createRuntime(requestId);
     return executeProjectCreateScenario(runtime.client, { ...options, idempotencyKey, previewOperationId });
+  }
+  if (invocation.group === "scenario" && isResourceWriteScenario(invocation.command)) {
+    const scenario = resolveResourceWriteScenario(invocation.command, invocation.positionals);
+    const phase = scenario.phase;
+    if (phase === "plan") {
+      if (invocation.options["arguments-json"] === undefined) {
+        throw new CliArgumentError("资源写入 plan 必须提供 --arguments-json");
+      }
+      const options = operationOptions(invocation.options, requestId);
+      const runtime = await deps.createRuntime(requestId);
+      return planResourceWriteScenario(runtime.client, {
+        ...options,
+        resourceType: scenario.resourceType,
+        operation: scenario.operation,
+      });
+    }
+    if (phase !== "execute") {
+      throw new CliArgumentError("资源写入场景需要 plan 或 execute");
+    }
+    if (invocation.options["arguments-json"] !== undefined) {
+      throw new CliArgumentError("资源写入 execute 已绑定预览，不接受 --arguments-json；请先重新执行 plan");
+    }
+    const options = operationOptions(invocation.options, requestId);
+    const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+    const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
+    const runtime = await deps.createRuntime(requestId);
+    return executeResourceWriteScenario(runtime.client, {
+      ...options,
+      resourceType: scenario.resourceType,
+      operation: scenario.operation,
+      idempotencyKey,
+      previewOperationId,
+    });
   }
   if (invocation.group === "scenario" && invocation.command === "requirement-analysis") {
     const phase = invocation.positionals[0];
@@ -670,6 +712,51 @@ function requireResourceType(raw: string | undefined): QueryItem["type"] {
   const types: QueryItem["type"][] = ["requirement", "project", "topic", "story", "task", "subtask", "iteration_plan"];
   if (!raw || !types.includes(raw as QueryItem["type"])) throw new CliArgumentError("不支持的资源类型: " + (raw ?? ""));
   return raw as QueryItem["type"];
+}
+
+type ResourceWritePhase = "plan" | "execute";
+
+const RESOURCE_WRITE_ALIASES: Record<string, {
+  resourceType: ResourceWriteResourceType;
+  operation: string;
+}> = {
+  "project-update": { resourceType: "project", operation: "project.update" },
+  "topic-create": { resourceType: "topic", operation: "topic.create" },
+  "topic-update": { resourceType: "topic", operation: "topic.update" },
+  "story-create": { resourceType: "story", operation: "story.create" },
+  "story-update": { resourceType: "story", operation: "story.update" },
+};
+
+function isResourceWriteScenario(command: string | undefined): boolean {
+  return command === "resource-write"
+    || command !== undefined && Object.hasOwn(RESOURCE_WRITE_ALIASES, command);
+}
+
+function resolveResourceWriteScenario(
+  command: string | undefined,
+  positionals: string[],
+): { phase: ResourceWritePhase | string; resourceType: ResourceWriteResourceType; operation: string } {
+  if (command && command !== "resource-write") {
+    const alias = RESOURCE_WRITE_ALIASES[command];
+    if (!alias) throw new CliArgumentError("未知资源写入场景: " + command);
+    return {
+      phase: positionals[0] ?? "",
+      ...alias,
+    };
+  }
+  const resourceType = positionals[1];
+  const operation = positionals[2];
+  if (!positionals[0] || !resourceType || !operation) {
+    throw new CliArgumentError("scenario resource-write 需要 phase、resourceType 和 operation");
+  }
+  if (resourceType !== "project" && resourceType !== "topic" && resourceType !== "story") {
+    throw new CliArgumentError("资源写入场景仅支持 project、topic、story");
+  }
+  return {
+    phase: positionals[0],
+    resourceType,
+    operation,
+  };
 }
 
 function requireContextResourceType(raw: string | undefined): Extract<QueryItem["type"], "requirement" | "project" | "topic" | "story"> {
