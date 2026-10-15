@@ -188,6 +188,7 @@ export const workflowContextMetaSchema = z.object({
   workflowInstanceVersion: z.number().int().nonnegative().nullable().optional(),
   permissionsScope: z.string().min(1),
   referencesScope: z.string().min(1),
+  contextVersion: z.string().min(1).optional(),
   warnings: z.array(z.object({
     code: z.string().min(1),
     message: z.string().min(1),

@@ -31,6 +31,7 @@ const interactiveMeta = workflowContextMetaSchema.parse({
   workflowInstanceVersion: 5,
   permissionsScope: "business-user",
   referencesScope: "readable-only",
+  contextVersion: "project:7:entity:9",
   warnings: [],
 });
 
@@ -131,6 +132,7 @@ describe("workflow context contract", () => {
     expect(context.meta?.selectedComponentKey).toBe("solution-design");
     expect(context.meta?.view).toBe("focused");
     expect(context.meta?.formatVersion).toBe(2);
+    expect(context.meta?.contextVersion).toBe("project:7:entity:9");
     const contractNode = context.workflow?.nodes[0] as {
       taskSummary?: unknown;
       fieldValuesState?: unknown;

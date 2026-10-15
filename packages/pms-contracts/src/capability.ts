@@ -130,6 +130,7 @@ const wireWorkflowTypeCapabilitySchema = z.object({
 
 export const capabilityCatalogWireSchema = z.object({
   version: z.string().min(1),
+  agentContractVersion: z.string().min(1).optional(),
   resources: z.array(wireResourceCapabilitySchema),
   scopes: z.array(z.string()),
   features: z.record(z.string(), z.boolean()).optional(),
@@ -145,6 +146,7 @@ export const capabilityCatalogWireSchema = z.object({
 
 export const capabilityCatalogSchema = z.object({
   version: z.string().min(1),
+  agentContractVersion: z.string().min(1).optional(),
   resources: z.array(resourceCapabilitySchema),
   scopes: z.array(z.string()),
   features: z.record(z.string(), z.boolean()).optional(),

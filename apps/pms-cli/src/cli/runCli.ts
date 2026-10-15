@@ -3,7 +3,7 @@ import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-clien
 import type { ContextReadOptions, QueryItem } from "../../../../packages/pms-contracts/src/index.js";
 import { CliArgumentError, parseCliArguments, type CliInvocation } from "./parseArguments.js";
 import { listCapabilities } from "../commands/core/capabilities.js";
-import { getContext } from "../commands/core/context.js";
+import { getAgentContext, getContext } from "../commands/core/context.js";
 import { getResource } from "../commands/core/get.js";
 import { operationExecute, operationPreview, type OperationOptions } from "../commands/core/operation.js";
 import { search } from "../commands/core/search.js";
@@ -24,7 +24,7 @@ const HELP = [
   "  pms capabilities [--scope <scope>]",
   "  pms search <resourceType> [--keyword <text>] [--filter key=value]",
   "  pms get <resourceType> <id>",
-  "  pms context <resourceType> <id>",
+  "  pms context <resourceType> <id> [--format json|agent] [--view legacy|focused] [--node-id <id>] [--component <key>]",
   "  pms operation preview <operation> --arguments-json <json>",
   "  pms operation execute <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms project create --arguments-json <json> --idempotency-key <key>",
@@ -169,8 +169,14 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   if (invocation.group === "context") {
     const resourceType = requireContextResourceType(invocation.command);
     const resourceId = requireId(invocation.positionals[0]);
+    const options = contextOptions(invocation.options);
+    const format = invocation.options.format ?? "json";
+    if (format !== "json" && format !== "agent") {
+      throw new CliArgumentError("context --format 仅支持 json 或 agent");
+    }
     const runtime = await deps.createRuntime(requestId);
-    return getContext(runtime.client, resourceType, resourceId, contextOptions(invocation.options));
+    if (format === "agent") return getAgentContext(runtime.client, resourceType, resourceId, options);
+    return getContext(runtime.client, resourceType, resourceId, options);
   }
   if (invocation.group === "dashboard" && invocation.command === "summary") {
     const runtime = await deps.createRuntime(requestId);

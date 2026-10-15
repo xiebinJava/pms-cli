@@ -56,6 +56,7 @@ describe("capability catalog normalization", () => {
   it("preserves workflow save contracts and catalog feature flags", () => {
     const catalog = parseCapabilityCatalog({
       version: "ai-v1",
+      agentContractVersion: "agent-contract/v1",
       features: { resourceGet: true, richWorkflowContext: true },
       resources: [{
         type: "requirement",
@@ -83,6 +84,7 @@ describe("capability catalog normalization", () => {
     });
 
     expect(catalog.features).toMatchObject({ resourceGet: true, richWorkflowContext: true });
+    expect(catalog.agentContractVersion).toBe("agent-contract/v1");
     expect(catalog.resources[0]?.workflow?.nodes[0]?.components[0]?.saveContract).toMatchObject({
       operation: "requirement.analysis.save",
       mergeMode: "append",
