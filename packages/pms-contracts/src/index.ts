@@ -4,3 +4,6 @@ export * from "./capability-normalizer.js";
 export * from "./query.js";
 export * from "./error.js";
 export * from "./envelope.js";
+export * from "./scenario.js";
+export * from "./orchestrator.js";
+export * from "./agent.js";
