@@ -160,6 +160,7 @@ const operationStatusSchema = z.enum([
 
 export const operationEnvelopeSchema = z.object({
   operationId: z.string().trim().min(1),
+  previewOperationId: z.string().trim().min(1).optional(),
   status: operationStatusSchema,
   message: z.string().optional(),
   data: z.record(z.string(), z.unknown()).default({}),
@@ -172,7 +173,22 @@ export const confirmationEnvelopeSchema = z.object({
   status: z.enum(["NOT_REQUIRED", "PENDING", "CONFIRMED", "REJECTED"]),
   confirmedAt: z.string().trim().min(1).optional(),
   confirmedBy: z.string().trim().min(1).optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.status === "CONFIRMED" && !value.confirmedAt) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["confirmedAt"],
+      message: "确认写入必须记录 confirmedAt",
+    });
+  }
+  if (value.status === "CONFIRMED" && !value.confirmedBy) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["confirmedBy"],
+      message: "确认写入必须记录 confirmedBy",
+    });
+  }
+});
 
 export const verificationEnvelopeSchema = z.object({
   status: z.enum(["PENDING", "SUCCEEDED", "FAILED", "UNKNOWN"]),
@@ -219,20 +235,42 @@ export const agentWorkSessionSchema = z.object({
       message: "Agent 任务必须引用当前上下文快照",
     });
   }
-  if (value.operation?.status === "SUCCEEDED" && value.verification === null) {
+  if ((value.operation?.status === "SUCCEEDED" || value.operation?.status === "WRITE_RESULT_UNKNOWN")
+      && value.verification === null) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["verification"],
       message: "成功写入必须包含 verification",
     });
   }
-  if (value.operation?.status === "SUCCEEDED"
+  if ((value.operation?.status === "SUCCEEDED" || value.operation?.status === "WRITE_RESULT_UNKNOWN")
+      && value.preview === null
+      && !value.operation.previewOperationId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["preview"],
+      message: "写入会话必须绑定操作预览",
+    });
+  }
+  if ((value.operation?.status === "SUCCEEDED" || value.operation?.status === "WRITE_RESULT_UNKNOWN")
       && value.agentTask.permissionMode === "write"
       && value.confirmation.status !== "CONFIRMED") {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["confirmation"],
       message: "写入会话必须记录用户确认",
+    });
+  }
+  if (value.operation?.status === "SUCCEEDED" && value.verification !== null
+      && (value.verification.status !== "SUCCEEDED"
+        || !value.verification.resourceReadback
+        || !value.verification.contextReadback
+        || !value.verification.patchApplied
+        || !value.verification.protectedFieldsUnchanged)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["verification"],
+      message: "SUCCEEDED 写入必须通过完整回读验证",
     });
   }
 });

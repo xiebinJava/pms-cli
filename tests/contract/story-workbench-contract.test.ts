@@ -57,6 +57,7 @@ describe("story workbench write contract", () => {
       operationId: "operation-1",
       operation: {
         operationId: "operation-1",
+        previewOperationId: "preview-1",
         status: "SUCCEEDED",
         data: { saved: true },
         warnings: ["已写入"],

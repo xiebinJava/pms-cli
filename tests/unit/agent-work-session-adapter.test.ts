@@ -114,6 +114,7 @@ describe("AgentWorkSession scenario adapters", () => {
       scenario: "requirement-analysis" as const,
       phase: "execute" as const,
       requirementId: 42,
+      previewOperationId: "preview-1",
       analysisPatch: draft.patch,
       facts: plan.facts,
       result: {
@@ -157,6 +158,7 @@ describe("AgentWorkSession scenario adapters", () => {
       patch: { summary: "故事摘要" },
       save: true,
       idempotencyKey: "story-34-3",
+      previewOperationId: "preview-1",
     } satisfies StoryWorkbenchInput;
     const plan = {
       scenario: "story-workbench" as const,
@@ -189,6 +191,15 @@ describe("AgentWorkSession scenario adapters", () => {
       variant: "writing" as const,
       patch: input.patch,
       operationId: "operation-story-1",
+      operation: {
+        operationId: "operation-story-1",
+        previewOperationId: "preview-1",
+        status: "SUCCEEDED",
+        data: { saved: true },
+        warnings: [],
+        refreshScopes: ["story-detail"],
+        auditId: "audit-story-1",
+      },
       verification: {
         resourceReadback: true,
         contextReadback: true,
@@ -260,6 +271,7 @@ describe("AgentWorkSession scenario adapters", () => {
       patch: { summary: "故事摘要" },
       save: true,
       idempotencyKey: "story-34-unknown",
+      previewOperationId: "preview-unknown",
     } satisfies StoryWorkbenchInput;
     const session = toStoryWorkbenchWorkSession({
       sessionId: "session-unknown",
@@ -275,6 +287,14 @@ describe("AgentWorkSession scenario adapters", () => {
         variant: "writing",
         patch: input.patch,
         operationId: "operation-unknown",
+        operation: {
+          operationId: "operation-unknown",
+          previewOperationId: "preview-unknown",
+          status: "WRITE_RESULT_UNKNOWN",
+          data: {},
+          warnings: ["回读失败"],
+          refreshScopes: [],
+        },
         verification: {
           resourceReadback: false,
           contextReadback: false,

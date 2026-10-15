@@ -121,7 +121,9 @@ export const storyWorkbenchResultSchema = z.object({
   variant: storyWorkbenchVariantSchema,
   patch: z.record(z.string(), z.unknown()),
   operationId: z.string().trim().min(1).optional(),
-  operation: operationResultSchema.optional(),
+  operation: operationResultSchema.extend({
+    previewOperationId: z.string().trim().min(1).optional(),
+  }).optional(),
   preview: z.record(z.string(), z.unknown()).optional(),
   verification: storyWorkbenchVerificationSchema.optional(),
   warnings: z.array(z.string()).default([]),

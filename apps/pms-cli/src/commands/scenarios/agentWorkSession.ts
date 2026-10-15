@@ -48,7 +48,9 @@ export function toRequirementAnalysisWorkSession(input: {
     objective: "分析需求当前节点并生成需求分析成果",
     draft,
     preview: input.plan?.preview,
-    operation: input.result?.result,
+    operation: input.result
+      ? { ...input.result.result, previewOperationId: input.result.previewOperationId }
+      : undefined,
     verification: input.result
       ? {
         resourceReadback: input.result.readback.resource !== null,
@@ -119,6 +121,7 @@ function finalizeSession(
 ): AgentWorkSession {
   const operation = input.operation ? operationEnvelopeSchema.parse({
     operationId: input.operation.operationId,
+    previewOperationId: input.operation.previewOperationId,
     status: input.operation.status,
     message: input.operation.message,
     data: input.operation.data,
@@ -132,7 +135,11 @@ function finalizeSession(
   const preview = input.preview ? previewEnvelopeSchema.parse({ ...input.preview, phase: "PREVIEWED" }) : null;
   const permissionMode = operation ? "write" : input.draft ? "draft" : "read-only";
   const confirmation = operation
-    ? { status: "CONFIRMED" as const }
+    ? {
+      status: "CONFIRMED" as const,
+      confirmedAt: new Date().toISOString(),
+      confirmedBy: "pms-cli",
+    }
     : preview ? { status: "PENDING" as const } : { status: "NOT_REQUIRED" as const };
 
   return agentWorkSessionSchema.parse({
@@ -214,7 +221,12 @@ function fieldDraft(input: StoryWorkbenchInput): AgentDraft {
 
 function storyOperation(result: StoryWorkbenchResult): OperationEnvelope | undefined {
   if (!result.operation) return undefined;
-  return result.operation;
+  return {
+    ...result.operation,
+    ...(result.operation.previewOperationId
+      ? { previewOperationId: result.operation.previewOperationId }
+      : {}),
+  };
 }
 
 function verificationStatus(status: string): "PENDING" | "SUCCEEDED" | "FAILED" | "UNKNOWN" {

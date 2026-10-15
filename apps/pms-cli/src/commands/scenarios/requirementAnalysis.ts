@@ -117,6 +117,7 @@ export interface RequirementAnalysisScenarioResult {
   analysisPatch: Record<string, unknown>;
   facts: RequirementAnalysisScenarioPlan["facts"];
   result: OperationResult;
+  previewOperationId: string;
   readback: {
     resource: ResourceDetail | null;
     context: WorkflowContext | null;
@@ -191,6 +192,7 @@ export async function executeRequirementAnalysisScenario(
     analysisPatch: options.arguments ?? {},
     facts: factsOf(before),
     result: effectiveResult,
+    previewOperationId: options.previewOperationId,
     readback: { resource, context },
     protectedFieldsUnchanged: compareProtectedFields(before.resource, resource),
     warnings,

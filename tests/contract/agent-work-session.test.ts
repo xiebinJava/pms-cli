@@ -90,6 +90,58 @@ describe("AgentWorkSession", () => {
     })).toThrow(/verification/);
   });
 
+  it("requires provenance for a confirmed write", () => {
+    expect(() => agentWorkSessionSchema.parse({
+      ...session("story"),
+      agentTask: { ...session("story").agentTask, permissionMode: "write" },
+      confirmation: { status: "CONFIRMED" },
+    })).toThrow(/confirmedAt|confirmedBy/);
+  });
+
+  it("requires a preview binding and successful verification for a successful write", () => {
+    const base = session("story");
+    expect(() => agentWorkSessionSchema.parse({
+      ...base,
+      agentTask: { ...base.agentTask, permissionMode: "write" },
+      confirmation: {
+        status: "CONFIRMED",
+        confirmedAt: "2026-10-15T12:01:00.000Z",
+        confirmedBy: "pms-cli",
+      },
+      operation: { operationId: "op-1", status: "SUCCEEDED", warnings: [] },
+      verification: {
+        status: "SUCCEEDED",
+        resourceReadback: true,
+        contextReadback: true,
+        patchApplied: true,
+        protectedFieldsUnchanged: true,
+      },
+    })).toThrow(/preview/);
+
+    expect(() => agentWorkSessionSchema.parse({
+      ...base,
+      agentTask: { ...base.agentTask, permissionMode: "write" },
+      confirmation: {
+        status: "CONFIRMED",
+        confirmedAt: "2026-10-15T12:01:00.000Z",
+        confirmedBy: "pms-cli",
+      },
+      operation: {
+        operationId: "op-1",
+        previewOperationId: "preview-1",
+        status: "SUCCEEDED",
+        warnings: [],
+      },
+      verification: {
+        status: "UNKNOWN",
+        resourceReadback: false,
+        contextReadback: false,
+        patchApplied: false,
+        protectedFieldsUnchanged: false,
+      },
+    })).toThrow(/verification/);
+  });
+
   it("rejects a context without a version", () => {
     const invalid = session("requirement");
     invalid.contextSnapshot.contextVersion = "";

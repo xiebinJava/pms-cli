@@ -169,6 +169,17 @@ function storyResult(caseId: string): StoryWorkbenchResult {
     operationId: caseId === "confirmed-write"
       ? "operation-confirmed-1"
       : caseId === "version-conflict" ? "operation-conflict-1" : "operation-unknown-1",
+    operation: {
+      operationId: caseId === "confirmed-write"
+        ? "operation-confirmed-1"
+        : caseId === "version-conflict" ? "operation-conflict-1" : "operation-unknown-1",
+      previewOperationId: "preview-external-agent",
+      status: status === "SUCCEEDED" ? "SUCCEEDED" : status,
+      data: {},
+      warnings: successful ? [] : [caseId === "version-conflict" ? "上下文版本冲突" : "回读结果未知"],
+      refreshScopes: ["story-detail"],
+      ...(successful ? { auditId: "audit-external-agent" } : {}),
+    },
     verification: {
       resourceReadback: successful,
       contextReadback: successful,

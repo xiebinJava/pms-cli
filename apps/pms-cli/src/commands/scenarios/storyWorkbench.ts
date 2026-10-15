@@ -227,7 +227,10 @@ async function executeAfterPreview(
     return {
       ...baseResult(prepared.input, operation.status === "CONFLICT" ? "CONFLICT" : "REJECTED"),
       operationId: operation.operationId,
-      operation,
+      operation: {
+        ...operation,
+        previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
+      },
       ...(preview ? { preview } : {}),
       warnings: operation.warnings,
     };
@@ -251,11 +254,19 @@ async function executeAfterPreview(
     if (!verification.patchApplied || !verification.protectedFieldsUnchanged) {
       warnings.push("故事节点回读结果未完全匹配预期，写入结果需要人工核验");
     }
+    const resultStatus = verification.patchApplied && verification.protectedFieldsUnchanged
+      ? "SUCCEEDED" as const
+      : "WRITE_RESULT_UNKNOWN" as const;
+    const resultOperation = resultStatus === "SUCCEEDED"
+      ? operation
+      : { ...operation, status: "WRITE_RESULT_UNKNOWN" as const };
     return {
-      ...baseResult(prepared.input, verification.patchApplied && verification.protectedFieldsUnchanged
-        ? "SUCCEEDED" : "WRITE_RESULT_UNKNOWN"),
+      ...baseResult(prepared.input, resultStatus),
       operationId: operation.operationId,
-      operation,
+      operation: {
+        ...resultOperation,
+        previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
+      },
       ...(preview ? { preview } : {}),
       verification,
       warnings,
@@ -265,7 +276,11 @@ async function executeAfterPreview(
     return {
       ...baseResult(prepared.input, "WRITE_RESULT_UNKNOWN"),
       operationId: operation.operationId,
-      operation,
+      operation: {
+        ...operation,
+        status: "WRITE_RESULT_UNKNOWN" as const,
+        previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
+      },
       ...(preview ? { preview } : {}),
       verification: {
         resourceReadback: false,
