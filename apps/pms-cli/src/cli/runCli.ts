@@ -16,6 +16,15 @@ import {
   executeRequirementAnalysisScenario,
   planRequirementAnalysisScenario,
 } from "../commands/scenarios/requirementAnalysis.js";
+import {
+  executeStoryWorkbenchScenario,
+  planStoryWorkbenchScenario,
+  runStoryWorkbenchScenario,
+} from "../commands/scenarios/storyWorkbench.js";
+import {
+  toRequirementAnalysisWorkSession,
+  toStoryWorkbenchWorkSession,
+} from "../commands/scenarios/agentWorkSession.js";
 
 const HELP = [
   "PMS CLI",
@@ -219,16 +228,116 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const options = operationOptions(invocation.options, requestId);
     if (phase === "plan") {
       const runtime = await deps.createRuntime(requestId);
-      return planRequirementAnalysisScenario(runtime.client, requirementId, { ...options, nodeId, version });
+      const plan = await planRequirementAnalysisScenario(runtime.client, requirementId, { ...options, nodeId, version });
+      if (invocation.options.format === "agent") {
+        const context = await runtime.client.context({ type: "requirement", id: requirementId }, { nodeId });
+        return toRequirementAnalysisWorkSession({
+          sessionId: requestId,
+          taskId: `${requestId}:requirement-analysis`,
+          context,
+          draft: null,
+          plan,
+        });
+      }
+      return plan;
     }
     const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
     const runtime = await deps.createRuntime(requestId);
-    return executeRequirementAnalysisScenario(runtime.client, requirementId, {
+    const execution = await executeRequirementAnalysisScenario(runtime.client, requirementId, {
       ...options,
       nodeId,
       version,
       idempotencyKey,
     });
+    if (invocation.options.format === "agent") {
+      const context = execution.readback.context
+        ?? await runtime.client.context({ type: "requirement", id: requirementId }, { nodeId });
+      return toRequirementAnalysisWorkSession({
+        sessionId: requestId,
+        taskId: `${requestId}:requirement-analysis`,
+        context,
+        draft: null,
+        result: execution,
+      });
+    }
+    return execution;
+  }
+  if (invocation.group === "scenario" && invocation.command === "story-workbench") {
+    const phase = invocation.positionals[0];
+    if (phase !== "draft" && phase !== "plan" && phase !== "execute") {
+      throw new CliArgumentError("scenario story-workbench 需要 draft、plan 或 execute");
+    }
+    const storyId = requireId(invocation.positionals[1]);
+    const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
+    const version = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
+    const variant = requiredOption(invocation.options, "variant") as "writing" | "iteration" | "development" | "acceptance" | "release" | "launch";
+    const patch = parseJsonObject(requiredOption(invocation.options, "patch-json"), "patch-json");
+    const common = {
+      contractVersion: "story-workbench/v1" as const,
+      resourceType: "story" as const,
+      resourceId: storyId,
+      nodeId,
+      version,
+      variant,
+      patch,
+      requestId,
+    };
+    if (phase === "execute") {
+      const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+      const runtime = await deps.createRuntime(requestId);
+      const result = await executeStoryWorkbenchScenario(runtime.client, {
+        ...common,
+        save: true,
+        idempotencyKey,
+      });
+      if (invocation.options.format === "agent") {
+        const context = await runtime.client.context(
+          { type: "story", id: storyId },
+          { nodeId, view: "focused", component: "story-node-workbench" },
+        );
+        return toStoryWorkbenchWorkSession({
+          sessionId: requestId,
+          taskId: `${requestId}:story-workbench`,
+          context,
+          input: { ...common, save: true, idempotencyKey },
+          result,
+        });
+      }
+      return result;
+    }
+    const runtime = await deps.createRuntime(requestId);
+    if (phase === "draft") {
+      const result = await runStoryWorkbenchScenario(runtime.client, { ...common, save: false }, async () => false);
+      if (invocation.options.format === "agent") {
+        const context = await runtime.client.context(
+          { type: "story", id: storyId },
+          { nodeId, view: "focused", component: "story-node-workbench" },
+        );
+        return toStoryWorkbenchWorkSession({
+          sessionId: requestId,
+          taskId: `${requestId}:story-workbench`,
+          context,
+          input: { ...common, save: false },
+          result,
+        });
+      }
+      return result;
+    }
+    const plan = await planStoryWorkbenchScenario(runtime.client, { ...common, save: false });
+    if (invocation.options.format === "agent") {
+      const context = await runtime.client.context(
+        { type: "story", id: storyId },
+        { nodeId, view: "focused", component: "story-node-workbench" },
+      );
+      return toStoryWorkbenchWorkSession({
+        sessionId: requestId,
+        taskId: `${requestId}:story-workbench`,
+        context,
+        input: { ...common, save: false },
+        plan,
+      });
+    }
+    return plan;
   }
   if (invocation.group === "requirement" && invocation.command === "analysis" && invocation.positionals[0] === "save") {
     if (invocation.positionals.length !== 2) {
@@ -324,6 +433,16 @@ function requiredOption(options: Record<string, string>, name: string): string {
   const value = options[name]?.trim();
   if (!value) throw new CliArgumentError("必须提供 --" + name);
   return value;
+}
+
+function parseJsonObject(raw: string, optionName: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("must be an object");
+    return parsed as Record<string, unknown>;
+  } catch {
+    throw new CliArgumentError(`--${optionName} 必须是 JSON 对象`);
+  }
 }
 
 function requireId(raw: string | undefined): number {
