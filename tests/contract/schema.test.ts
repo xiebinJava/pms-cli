@@ -4,6 +4,7 @@ import {
   capabilityCatalogWireSchema,
   fieldSchema,
   operationResultSchema,
+  operationPreviewSchema,
   resourceDetailSchema,
   queryResultSchema,
   resourceTypeSchema,
@@ -65,6 +66,36 @@ describe("PMS connector shared schemas", () => {
       pageSize: 20,
       queryScope: "current-user-readable",
     })).toThrow();
+  });
+
+  it("accepts structured operation preconditions while remaining backward compatible", () => {
+    const preview = operationPreviewSchema.parse({
+      operationId: "preview-1",
+      command: "development-item.node.complete",
+      expiresAt: "2026-10-15T10:00:00Z",
+      contextVersion: "1",
+      warnings: [],
+      changes: [],
+      refreshScopes: [],
+      preconditions: [{
+        code: "NODE_OWNER_REQUIRED",
+        message: "请先分配节点负责人",
+        blocking: true,
+        suggestedAction: "development-item.node.owner.update",
+        details: { itemId: 34, nodeId: 384 },
+      }],
+    });
+
+    expect(preview.preconditions[0]?.code).toBe("NODE_OWNER_REQUIRED");
+    expect(operationPreviewSchema.parse({
+      operationId: "preview-2",
+      command: "story.create",
+      expiresAt: "2026-10-15T10:00:00Z",
+      contextVersion: "1",
+      warnings: [],
+      changes: [],
+      refreshScopes: [],
+    }).preconditions).toEqual([]);
   });
 
   it("accepts exact resource details and preserves workflow metadata", () => {

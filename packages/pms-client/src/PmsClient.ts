@@ -15,6 +15,7 @@ import {
   orchestratorConversationSchema,
   orchestratorEventSchema,
   orchestratorPlanSchema,
+  orchestratorSessionSchema,
   orchestratorDraftSchema,
   type AutomaticOperationRequest,
   type CapabilityCatalog,
@@ -30,6 +31,7 @@ import {
   type OrchestratorConversation,
   type OrchestratorEvent,
   type OrchestratorPlan,
+  type OrchestratorSession,
 } from "../../pms-contracts/src/index.js";
 
 const MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
@@ -58,6 +60,7 @@ export interface PmsClient {
   confirmPlan(request: ConfirmPlanRequest): Promise<OrchestratorPlan>;
   getConversation(conversationId: number): Promise<OrchestratorConversation>;
   listConversationEvents(conversationId: number, afterSequence?: number): Promise<OrchestratorEvent[]>;
+  getOrchestratorSession(conversationId: number, afterSequence?: number): Promise<OrchestratorSession>;
 }
 
 export interface PmsHttpClientOptions {
@@ -344,6 +347,18 @@ export class PmsHttpClient implements PmsClient {
       true,
       undefined,
       (data) => z.array(orchestratorEventSchema).parse(data),
+    );
+  }
+
+  async getOrchestratorSession(conversationId: number, afterSequence = 0): Promise<OrchestratorSession> {
+    const normalizedId = z.number().int().positive().parse(conversationId);
+    const cursor = z.number().int().nonnegative().parse(afterSequence);
+    return this.requestData(
+      `integration/ai/v1/orchestrator/conversations/${normalizedId}/session?afterSequence=${cursor}`,
+      { method: "GET" },
+      true,
+      undefined,
+      (data) => orchestratorSessionSchema.parse(data),
     );
   }
 

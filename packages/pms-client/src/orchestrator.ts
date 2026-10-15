@@ -7,6 +7,7 @@ import {
   type OrchestratorConversation,
   type OrchestratorEvent,
   type OrchestratorPlan,
+  type OrchestratorSession,
 } from "../../pms-contracts/src/index.js";
 import type { PmsHttpClient } from "./PmsClient.js";
 import type {
@@ -16,7 +17,7 @@ import type {
 } from "./OrchestratorClientTypes.js";
 
 export type OrchestratorClient = Pick<PmsHttpClient,
-  "createConversation" | "appendTurn" | "previewPlan" | "confirmPlan" | "getConversation" | "listConversationEvents">;
+  "createConversation" | "appendTurn" | "previewPlan" | "confirmPlan" | "getConversation" | "listConversationEvents" | "getOrchestratorSession">;
 
 export function parseOrchestratorConversation(data: unknown): OrchestratorConversation {
   return orchestratorConversationSchema.parse(data);

@@ -105,6 +105,76 @@ describe("CLI runner", () => {
     expect(version.stdout[0]).toBe("0.1.1\n");
   });
 
+  it("runs the requirement-analysis shadow command with the fixed provider", async () => {
+    const client = {
+      context: vi.fn(async () => ({
+        resource: { type: "requirement", id: 33 },
+        version: 4,
+        currentNode: { id: 701, key: "receiving", label: "需求接收" },
+        workflow: { templateVersionId: 88, templateVersionNo: 1, nodes: [] },
+        relations: [],
+        allowedActions: ["requirement.analysis.save"],
+      })),
+      preview: vi.fn(),
+      execute: vi.fn(),
+    };
+    const { deps, stdout } = makeDeps(client as never);
+
+    await runCli([
+      "scenario", "requirement-analysis", "shadow", "33",
+      "--cases-file", "tests/fixtures/requirement-analysis-shadow-cases.json",
+      "--provider", "mock",
+    ], deps);
+
+    const output = JSON.parse(stdout[0] ?? "{}");
+    expect(output.data.mode).toBe("read-only");
+    expect(output.data.summary).toEqual({ total: 12, generated: 12, failed: 0, validationFailed: 0 });
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.execute).not.toHaveBeenCalled();
+  });
+
+  it("keeps external model settings scoped to the shadow command", async () => {
+    const client = {
+      context: vi.fn(async () => ({
+        resource: { type: "requirement", id: 33 },
+        version: 4,
+        currentNode: { id: 701, key: "receiving", label: "需求接收" },
+        relations: [],
+        allowedActions: ["requirement.analysis.save"],
+      })),
+    };
+    const { deps, stderr } = makeDeps(client as never);
+    const previous = {
+      baseUrl: process.env.PMS_SHADOW_MODEL_BASE_URL,
+      apiKey: process.env.PMS_SHADOW_MODEL_API_KEY,
+      model: process.env.PMS_SHADOW_MODEL_NAME,
+      legacyBaseUrl: process.env.PMS_MODEL_BASE_URL,
+    };
+    try {
+      delete process.env.PMS_SHADOW_MODEL_BASE_URL;
+      delete process.env.PMS_SHADOW_MODEL_API_KEY;
+      delete process.env.PMS_SHADOW_MODEL_NAME;
+      process.env.PMS_MODEL_BASE_URL = "https://legacy.example/v1";
+
+      await runCli([
+        "scenario", "requirement-analysis", "shadow", "33",
+        "--cases-file", "tests/fixtures/requirement-analysis-shadow-cases.json",
+        "--provider", "openai",
+      ], deps);
+
+      expect(stderr[0]).toContain("PMS_SHADOW_MODEL_BASE_URL");
+    } finally {
+      if (previous.baseUrl === undefined) delete process.env.PMS_SHADOW_MODEL_BASE_URL;
+      else process.env.PMS_SHADOW_MODEL_BASE_URL = previous.baseUrl;
+      if (previous.apiKey === undefined) delete process.env.PMS_SHADOW_MODEL_API_KEY;
+      else process.env.PMS_SHADOW_MODEL_API_KEY = previous.apiKey;
+      if (previous.model === undefined) delete process.env.PMS_SHADOW_MODEL_NAME;
+      else process.env.PMS_SHADOW_MODEL_NAME = previous.model;
+      if (previous.legacyBaseUrl === undefined) delete process.env.PMS_MODEL_BASE_URL;
+      else process.env.PMS_MODEL_BASE_URL = previous.legacyBaseUrl;
+    }
+  });
+
   it("routes project-create scenario plan without executing a write", async () => {
     const execute = vi.fn();
     const client = {
@@ -208,6 +278,76 @@ describe("CLI runner", () => {
 
     expect(stderr).toHaveLength(0);
     expect(JSON.parse(stdout[0] ?? "{}").data.preview.operationId).toBe("preview-analysis-0");
+  });
+
+  it("validates an Agent Draft before returning a PMS preview", async () => {
+    const draft = {
+      facts: [{ text: "需求目标是减少人工录入", sourceRefs: ["requirement:33"] }],
+      inferences: [],
+      assumptions: [],
+      unresolvedDecisions: [],
+      patch: { analysis: "需求目标是减少人工录入" },
+    };
+    const action = {
+      name: "requirement.analysis.save",
+      label: "保存需求分析",
+      description: "保存需求分析",
+      mode: "automatic",
+      risk: "medium",
+      scopes: ["pms:requirement:write"],
+      inputSchema: {
+        requirementId: { type: "integer", label: "需求 ID", required: true },
+        nodeId: { type: "integer", label: "节点 ID", required: true },
+        version: { type: "integer", label: "版本", required: true },
+        patch: { type: "object", label: "分析成果", required: true },
+      },
+      requiresContext: true,
+      refreshScopes: ["requirement-detail"],
+    };
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        resources: [{ type: "requirement", actions: [action] }],
+        scopes: ["pms:requirement:write"],
+        workflowTypes: [],
+      })),
+      get: vi.fn(async () => ({
+        resourceType: "requirement",
+        resourceId: 33,
+        entityVersion: 4,
+        details: { id: 33, title: "批量导入" },
+      })),
+      context: vi.fn(async () => ({
+        resource: { type: "requirement", id: 33 },
+        version: 4,
+        currentNode: { id: 701, key: "receiving", label: "需求接收" },
+        workflow: { templateVersionId: 88, templateVersionNo: 1, nodes: [] },
+        relations: [],
+        allowedActions: ["requirement.analysis.save"],
+      })),
+      preview: vi.fn(async () => ({
+        operationId: "preview-agent-draft-1",
+        command: "requirement.analysis.save",
+        expiresAt: "2026-10-15T12:00:00Z",
+        contextVersion: "4",
+        warnings: [],
+        changes: [{ action: "update", entity: "requirement" }],
+        refreshScopes: ["requirement-detail"],
+      })),
+    };
+    const { deps, stdout } = makeDeps(client as never);
+
+    await runCli([
+      "scenario", "requirement-analysis", "plan", "33",
+      "--node-id", "701", "--version", "4",
+      "--draft-json", JSON.stringify(draft),
+    ], deps);
+
+    const output = JSON.parse(stdout[0] ?? "{}");
+    expect(output.data.contractVersion).toBe("requirement-analysis/v1");
+    expect(output.data.draft).toEqual(draft);
+    expect(output.data.plan.preview.operationId).toBe("preview-agent-draft-1");
+    expect(client.preview).toHaveBeenCalledTimes(1);
   });
 
   it("uses an explicitly supplied request id for the runtime and success envelope", async () => {

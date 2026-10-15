@@ -1,0 +1,12 @@
+[
+  {"id":"complete-context","mode":"save","input":"分析需求并保存","expected":"SUCCEEDED"},
+  {"id":"read-only-draft","mode":"draft","input":"只分析，不保存","expected":"DRAFT"},
+  {"id":"missing-background","mode":"save","input":"分析这条需求，但背景信息不足","expected":"CLARIFICATION"},
+  {"id":"ambiguous-node","mode":"save","input":"当前有多个候选节点","expected":"CLARIFICATION"},
+  {"id":"existing-analysis","mode":"save","input":"基于已有分析补充验收条件","expected":"SUCCEEDED"},
+  {"id":"unauthorized-reference","mode":"save","input":"引用当前用户无权访问的项目","expected":"REJECTED"},
+  {"id":"stale-version","mode":"save","input":"读取后版本发生变化","expected":"CONFLICT"},
+  {"id":"duplicate-request","mode":"save","input":"用同一个幂等键重复请求","expected":"SAME_OPERATION"},
+  {"id":"protected-field","mode":"save","input":"试图修改系统归属和状态","expected":"REJECTED"},
+  {"id":"readback-failure","mode":"save","input":"写入成功但回读失败","expected":"WRITEBACK_WARNING"}
+]

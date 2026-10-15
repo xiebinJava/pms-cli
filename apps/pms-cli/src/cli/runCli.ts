@@ -39,6 +39,7 @@ import {
   createRequirementAnalysisConversation,
   previewRequirementAnalysisPlan,
   readRequirementAnalysisEvents,
+  readRequirementAnalysisSession,
 } from "../commands/scenarios/requirementAnalysis.js";
 import {
   executeStoryWorkbenchScenario,
@@ -71,7 +72,7 @@ const HELP = [
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis draft <id> --node-id <id> --version <version> --draft-json <draft-json>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
-  "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events <id> [options]",
+  "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
   "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
@@ -327,7 +328,15 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
         const runtime = await deps.createRuntime(requestId);
         return readRequirementAnalysisEvents(runtime.client, conversationId, afterSequence);
       }
-      throw new CliArgumentError("orchestrate 需要 create、turn、preview、confirm 或 events");
+      if (action === "session") {
+        const conversationId = requireId(invocation.positionals[2]);
+        const afterSequence = invocation.options["after-sequence"] === undefined
+          ? 0
+          : nonNegativeInteger(invocation.options["after-sequence"], "after-sequence");
+        const runtime = await deps.createRuntime(requestId);
+        return readRequirementAnalysisSession(runtime.client, conversationId, afterSequence);
+      }
+      throw new CliArgumentError("orchestrate 需要 create、turn、preview、confirm、events 或 session");
     }
     if (phase === "shadow") {
       const requirementId = requireId(invocation.positionals[1]);

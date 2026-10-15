@@ -4,6 +4,8 @@ export interface IsolatedE2EEnvironment {
   PMS_E2E_BASE_URL?: string;
   PMS_E2E_ALLOWED_BASE_URL?: string;
   PMS_E2E_AUTH_ORIGIN?: string;
+  PMS_E2E_DATABASE_NAME?: string;
+  PMS_E2E_ALLOWED_DATABASE_NAME?: string;
   PMS_E2E_ACCOUNT_ID?: string;
   PMS_E2E_RUN_ID?: string;
   [key: string]: string | undefined;
@@ -12,6 +14,7 @@ export interface IsolatedE2EEnvironment {
 export interface IsolatedE2EConfig {
   baseUrl: string;
   authOrigin: string;
+  databaseName: string;
   accountId: string;
   runId: string;
   keyringService: string;
@@ -21,6 +24,8 @@ const REQUIRED_KEYS = [
   "PMS_E2E_BASE_URL",
   "PMS_E2E_ALLOWED_BASE_URL",
   "PMS_E2E_AUTH_ORIGIN",
+  "PMS_E2E_DATABASE_NAME",
+  "PMS_E2E_ALLOWED_DATABASE_NAME",
   "PMS_E2E_ACCOUNT_ID",
   "PMS_E2E_RUN_ID",
 ] as const;
@@ -29,7 +34,13 @@ export function isolatedE2EEnabled(env: IsolatedE2EEnvironment): boolean {
   if (env.PMS_E2E_WRITE !== "true" || env.PMS_E2E_ISOLATED !== "true") return false;
   if (!REQUIRED_KEYS.every((key) => Boolean(env[key]?.trim()))) return false;
   try {
-    return normalizeWriteTarget(env.PMS_E2E_BASE_URL!) === normalizeWriteTarget(env.PMS_E2E_ALLOWED_BASE_URL!);
+    const baseUrl = normalizeWriteTarget(env.PMS_E2E_BASE_URL!);
+    const allowedBaseUrl = normalizeWriteTarget(env.PMS_E2E_ALLOWED_BASE_URL!);
+    const databaseName = normalizeDatabaseName(env.PMS_E2E_DATABASE_NAME!);
+    const allowedDatabaseName = normalizeDatabaseName(env.PMS_E2E_ALLOWED_DATABASE_NAME!);
+    return baseUrl === allowedBaseUrl
+      && databaseName === allowedDatabaseName
+      && isDisposableDatabaseName(databaseName);
   } catch {
     return false;
   }
@@ -54,14 +65,35 @@ export function assertIsolatedE2EConfig(env: IsolatedE2EEnvironment): IsolatedE2
   if (baseUrl !== allowedBaseUrl) {
     throw new Error("隔离 E2E 目标不在允许写入的目标清单中");
   }
+  const databaseName = normalizeDatabaseName(env.PMS_E2E_DATABASE_NAME!);
+  const allowedDatabaseName = normalizeDatabaseName(env.PMS_E2E_ALLOWED_DATABASE_NAME!);
+  if (databaseName !== allowedDatabaseName) {
+    throw new Error("隔离 E2E 数据库与允许写入的数据库不匹配");
+  }
+  if (!isDisposableDatabaseName(databaseName)) {
+    throw new Error("隔离 E2E 不能写入共享数据库，数据库名必须使用 pms_ai_e2e_ 前缀");
+  }
 
   return {
     baseUrl,
     authOrigin: env.PMS_E2E_AUTH_ORIGIN!.trim(),
+    databaseName,
     accountId,
     runId,
     keyringService: "pms-cli-e2e-" + runId,
   };
+}
+
+function normalizeDatabaseName(raw: string): string {
+  const value = raw.trim();
+  if (!/^[A-Za-z0-9_]{3,64}$/.test(value)) {
+    throw new Error("隔离 E2E 数据库名格式无效");
+  }
+  return value;
+}
+
+function isDisposableDatabaseName(value: string): boolean {
+  return /^pms_ai_e2e_[A-Za-z0-9_]{1,55}$/.test(value);
 }
 
 function normalizeWriteTarget(raw: string): string {

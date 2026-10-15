@@ -71,10 +71,50 @@ export const orchestratorEventSchema = z.object({
   createdAt: z.string().nullable().optional(),
 }).strict();
 
+/** Stable projection of the context identity captured by an orchestrator plan. */
+export const orchestratorContextSnapshotSchema = z.object({
+  resourceType: z.string().trim().min(1),
+  resourceId: z.number().int().positive(),
+  nodeId: z.number().int().positive().nullable().optional(),
+  version: z.number().int().nonnegative().nullable().optional(),
+  snapshot: z.unknown().nullable().optional(),
+}).passthrough();
+
+/** A turn is persisted by PMS even though the stateless CLI only submits it. */
+export const orchestratorTurnSchema = z.object({
+  turnId: z.number().int().positive(),
+  conversationId: z.number().int().positive(),
+  message: z.string().trim().min(1),
+  status: z.string().trim().min(1),
+  planId: z.number().int().positive().nullable().optional(),
+  createdAt: z.string().nullable().optional(),
+}).passthrough();
+
+export const orchestratorConfirmationSchema = z.object({
+  status: z.enum(["PENDING", "CONFIRMED", "REJECTED", "EXPIRED"]),
+  idempotencyKey: z.string().trim().min(1).optional(),
+  confirmedAt: z.string().nullable().optional(),
+  confirmedBy: z.string().nullable().optional(),
+}).strict();
+
+/** A stateless CLI can reconstruct this snapshot in a later process. */
+export const orchestratorSessionSchema = z.object({
+  sessionId: z.number().int().positive(),
+  conversation: orchestratorConversationSchema,
+  latestPlan: orchestratorPlanSchema.nullable(),
+  events: z.array(orchestratorEventSchema),
+  afterSequence: z.number().int().nonnegative(),
+  nextSequence: z.number().int().nonnegative(),
+}).strict();
+
 export type OrchestratorDraft = z.infer<typeof orchestratorDraftSchema>;
 export type OrchestratorConversation = z.infer<typeof orchestratorConversationSchema>;
+export type OrchestratorContextSnapshot = z.infer<typeof orchestratorContextSnapshotSchema>;
+export type OrchestratorTurn = z.infer<typeof orchestratorTurnSchema>;
+export type OrchestratorConfirmation = z.infer<typeof orchestratorConfirmationSchema>;
 export type OrchestratorPreview = z.infer<typeof orchestratorPreviewSchema>;
 export type OrchestratorOperation = z.infer<typeof orchestratorOperationSchema>;
 export type OrchestratorVerification = z.infer<typeof orchestratorVerificationSchema>;
 export type OrchestratorPlan = z.infer<typeof orchestratorPlanSchema>;
 export type OrchestratorEvent = z.infer<typeof orchestratorEventSchema>;
+export type OrchestratorSession = z.infer<typeof orchestratorSessionSchema>;

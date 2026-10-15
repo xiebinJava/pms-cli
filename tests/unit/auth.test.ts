@@ -74,4 +74,24 @@ describe("PMS CLI browser authentication", () => {
       // The fixed implementation is already closed.
     }
   });
+
+  it("allows an explicit localhost callback host for browser-isolated E2E", async () => {
+    const store = new AuthStore(memoryKeyring());
+    let redirectUri = "";
+    const openBrowser = vi.fn(async (url: string) => {
+      redirectUri = new URL(url).searchParams.get("redirect_uri") ?? "";
+      throw new Error("stop after URL capture");
+    });
+    const auth = new BrowserAuth({
+      baseUrl: "http://localhost:8080/api",
+      authOrigin: "http://localhost:8080",
+      callbackHost: "localhost",
+      store,
+      openBrowser,
+      fetchImpl: vi.fn(),
+    });
+
+    await expect(auth.login()).rejects.toThrow("stop after URL capture");
+    expect(redirectUri).toMatch(/^http:\/\/localhost:\d+\/callback$/);
+  });
 });

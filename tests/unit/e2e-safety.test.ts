@@ -8,29 +8,25 @@ import {
 } from "../e2e/support/isolatedSession.js";
 
 describe("isolated E2E safety gates", () => {
+  const isolatedEnv = {
+    PMS_E2E_WRITE: "true",
+    PMS_E2E_ISOLATED: "true",
+    PMS_E2E_BASE_URL: "http://127.0.0.1:5174/api",
+    PMS_E2E_ALLOWED_BASE_URL: "http://127.0.0.1:5174/api",
+    PMS_E2E_AUTH_ORIGIN: "http://127.0.0.1:5174",
+    PMS_E2E_DATABASE_NAME: "pms_ai_e2e_run_20261015",
+    PMS_E2E_ALLOWED_DATABASE_NAME: "pms_ai_e2e_run_20261015",
+    PMS_E2E_ACCOUNT_ID: "7",
+    PMS_E2E_RUN_ID: "run-20261010",
+  };
+
   it("requires explicit write, isolation, identity and namespace configuration", () => {
     expect(isolatedE2EEnabled({})).toBe(false);
-    expect(() => assertIsolatedE2EConfig({
-      PMS_E2E_WRITE: "true",
-      PMS_E2E_ISOLATED: "true",
-      PMS_E2E_BASE_URL: "http://localhost:5173/api",
-      PMS_E2E_ALLOWED_BASE_URL: "http://localhost:5173/api",
-      PMS_E2E_AUTH_ORIGIN: "http://localhost:5173",
-      PMS_E2E_ACCOUNT_ID: "7",
-      PMS_E2E_RUN_ID: "run-20261010",
-    })).not.toThrow();
+    expect(() => assertIsolatedE2EConfig(isolatedEnv)).not.toThrow();
   });
 
   it("rejects unsafe run IDs before opening authentication", () => {
-    expect(() => assertIsolatedE2EConfig({
-      PMS_E2E_WRITE: "true",
-      PMS_E2E_ISOLATED: "true",
-      PMS_E2E_BASE_URL: "http://localhost:5173/api",
-      PMS_E2E_ALLOWED_BASE_URL: "http://localhost:5173/api",
-      PMS_E2E_AUTH_ORIGIN: "http://localhost:5173",
-      PMS_E2E_ACCOUNT_ID: "7",
-      PMS_E2E_RUN_ID: "../existing-project",
-    })).toThrow(/run ID/);
+    expect(() => assertIsolatedE2EConfig({ ...isolatedEnv, PMS_E2E_RUN_ID: "../existing-project" })).toThrow(/run ID/);
   });
 
   it("only cleans project IDs recorded by this run", async () => {
@@ -59,6 +55,8 @@ describe("isolated E2E safety gates", () => {
       PMS_E2E_ISOLATED: "true",
       PMS_E2E_BASE_URL: "https://pms.example.com/api",
       PMS_E2E_AUTH_ORIGIN: "https://pms.example.com",
+      PMS_E2E_DATABASE_NAME: "pms_shared",
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms_shared",
       PMS_E2E_ACCOUNT_ID: "7",
       PMS_E2E_RUN_ID: "run-20261010",
     };
@@ -67,11 +65,43 @@ describe("isolated E2E safety gates", () => {
     expect(() => assertIsolatedE2EConfig({
       ...base,
       PMS_E2E_ALLOWED_BASE_URL: "https://isolated.example.com/api",
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms_shared",
     })).toThrow(/允许写入的目标/);
     expect(() => assertIsolatedE2EConfig({
       ...base,
       PMS_E2E_ALLOWED_BASE_URL: "https://pms.example.com/api/",
-    })).not.toThrow();
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms_shared",
+    })).toThrow(/共享/);
+  });
+
+  it("rejects a shared development target even when the URL allowlist matches", () => {
+    expect(isolatedE2EEnabled({
+      ...isolatedEnv,
+      PMS_E2E_BASE_URL: "http://127.0.0.1:5173/api",
+      PMS_E2E_ALLOWED_BASE_URL: "http://127.0.0.1:5173/api",
+      PMS_E2E_AUTH_ORIGIN: "http://127.0.0.1:5173",
+      PMS_E2E_DATABASE_NAME: "pms",
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms",
+    })).toBe(false);
+    expect(() => assertIsolatedE2EConfig({
+      ...isolatedEnv,
+      PMS_E2E_BASE_URL: "http://127.0.0.1:5173/api",
+      PMS_E2E_ALLOWED_BASE_URL: "http://127.0.0.1:5173/api",
+      PMS_E2E_AUTH_ORIGIN: "http://127.0.0.1:5173",
+      PMS_E2E_DATABASE_NAME: "pms",
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms",
+    })).toThrow(/共享/);
+  });
+
+  it("rejects a database/API target mismatch before authentication", () => {
+    expect(isolatedE2EEnabled({
+      ...isolatedEnv,
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms_ai_e2e_other",
+    })).toBe(false);
+    expect(() => assertIsolatedE2EConfig({
+      ...isolatedEnv,
+      PMS_E2E_ALLOWED_DATABASE_NAME: "pms_ai_e2e_other",
+    })).toThrow(/数据库/);
   });
 
   it("readonly context helper never fabricates targets and never calls the network", async () => {

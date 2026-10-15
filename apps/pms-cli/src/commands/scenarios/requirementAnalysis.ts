@@ -3,6 +3,7 @@ import type {
   OrchestratorConversation,
   OrchestratorEvent,
   OrchestratorPlan,
+  OrchestratorSession,
 } from "../../../../../packages/pms-client/src/index.js";
 import type {
   ActionCapability,
@@ -75,6 +76,14 @@ export function readRequirementAnalysisEvents(
   afterSequence = 0,
 ): Promise<OrchestratorEvent[]> {
   return client.listConversationEvents(conversationId, afterSequence);
+}
+
+export function readRequirementAnalysisSession(
+  client: PmsClient,
+  conversationId: number,
+  afterSequence = 0,
+): Promise<OrchestratorSession> {
+  return client.getOrchestratorSession(conversationId, afterSequence);
 }
 
 export interface RequirementAnalysisScenarioOptions extends OperationOptions {

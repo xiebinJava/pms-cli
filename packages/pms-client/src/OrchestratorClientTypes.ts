@@ -4,9 +4,10 @@ import type {
   OrchestratorDraft,
   OrchestratorEvent,
   OrchestratorPlan,
+  OrchestratorSession,
 } from "../../pms-contracts/src/index.js";
 
-export type { OrchestratorConversation, OrchestratorDraft, OrchestratorEvent, OrchestratorPlan };
+export type { OrchestratorConversation, OrchestratorDraft, OrchestratorEvent, OrchestratorPlan, OrchestratorSession };
 
 export interface CreateConversationRequest {
   resourceType: "requirement";
