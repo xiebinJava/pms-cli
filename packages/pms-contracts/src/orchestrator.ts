@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { operationPreconditionSchema } from "./operation.js";
 import { analysisDraftSchema, scenarioContractVersion } from "./scenario.js";
 
 export const orchestratorDraftSchema = z.object({
@@ -23,6 +24,7 @@ export const orchestratorPreviewSchema = z.object({
   warnings: z.array(z.string()).default([]),
   changes: z.array(z.record(z.string(), z.unknown())).default([]),
   refreshScopes: z.array(z.string()).default([]),
+  preconditions: z.array(operationPreconditionSchema).default([]),
 }).strict();
 
 export const orchestratorOperationSchema = z.object({

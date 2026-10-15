@@ -15,6 +15,7 @@ import {
   orchestratorConversationSchema,
   orchestratorEventSchema,
   orchestratorPlanSchema,
+  orchestratorDraftSchema,
   type AutomaticOperationRequest,
   type CapabilityCatalog,
   type OperationResult,
@@ -244,7 +245,7 @@ export class PmsHttpClient implements PmsClient {
       conversationId: z.number().int().positive(),
       message: z.string().trim().min(1),
       contractVersion: z.literal("requirement-analysis/v1"),
-      draft: z.unknown(),
+      draft: orchestratorDraftSchema,
       nodeId: z.number().int().positive().optional(),
       contextVersion: z.number().int().nonnegative().optional(),
       requestId: z.string().trim().min(1).max(160).optional(),
@@ -442,6 +443,18 @@ export class PmsHttpClient implements PmsClient {
 
   private toClientError(error: unknown, requestId: string): PmsClientError {
     if (error instanceof PmsClientError) return error;
+    if (error instanceof z.ZodError) {
+      return new PmsClientError("validation", "PMS 响应格式不兼容", {
+        requestId,
+        details: {
+          issueCount: error.issues.length,
+          fields: error.issues.slice(0, 20).map((issue) => ({
+            path: issue.path.map(String).join("."),
+            message: safeErrorMessage(issue.message, "字段校验失败"),
+          })),
+        },
+      });
+    }
     return new PmsClientError("network", "PMS 请求失败", { requestId, retryable: true });
   }
 
