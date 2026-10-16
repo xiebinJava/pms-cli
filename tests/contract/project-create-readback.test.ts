@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createProjectWithAutomaticWrite } from "../../apps/pms-cli/src/commands/shortcuts/project.js";
+import { toResourceScenarioResult } from "../../apps/pms-cli/src/commands/scenarios/projectCreate.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
 
 const envelope = (data: unknown) => new Response(JSON.stringify({ code: 200, data }), { status: 200 });
@@ -90,5 +91,40 @@ describe("project creation protocol readback", () => {
       nodeIds: [101, 102],
     });
     expect(readback.context?.workflow).toMatchObject({ templateVersionId: 42, templateVersionNo: 2 });
+  });
+
+  it("maps the legacy create result to the shared resource scenario envelope", () => {
+    const result = toResourceScenarioResult({
+      scenario: "project-create",
+      phase: "execute",
+      arguments: { name: "订单中心" },
+      preview: null,
+      previewOperationId: "preview-1",
+      result: {
+        operationId: "operation-1",
+        status: "SUCCEEDED",
+        data: { project: { id: 42, version: 9 } },
+        warnings: [],
+        refreshScopes: ["project-list"],
+      },
+      readback: {
+        resource: { resourceType: "project", resourceId: 42, entityVersion: 9, details: {} },
+        context: { resource: { type: "project", id: 42 }, version: 9, allowedActions: [] },
+      },
+      warnings: [],
+      trace: {},
+    });
+
+    expect(result).toMatchObject({
+      scenario: "resource-scenario",
+      resourceType: "project",
+      resourceId: 42,
+      status: "SUCCEEDED",
+      verification: {
+        resourceReadback: true,
+        contextReadback: true,
+        patchApplied: true,
+      },
+    });
   });
 });

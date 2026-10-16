@@ -5,7 +5,12 @@ import type {
   OperationPreview,
   OperationResult,
   ResourceDetail,
+  ResourceScenarioResult,
   WorkflowContext,
+} from "../../../../../packages/pms-contracts/src/index.js";
+import {
+  resourceScenarioContractVersion,
+  resourceScenarioResultSchema,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import { operationPreview, type OperationOptions } from "../core/operation.js";
@@ -96,4 +101,49 @@ export async function executeProjectCreateScenario(
       ...(readback.result.auditId ? { auditId: readback.result.auditId } : {}),
     },
   };
+}
+
+/**
+ * Maps the legacy project-create scenario result to the resource-scenario
+ * envelope. The old route remains compatible, while callers can migrate to
+ * one result shape without re-running the write.
+ */
+export function toResourceScenarioResult(result: ProjectCreateScenarioResult): ResourceScenarioResult {
+  const resourceId = result.readback.resource?.resourceId ?? readProjectId(result.result);
+  const resourceReadback = result.readback.resource?.resourceId === resourceId;
+  const contextReadback = result.readback.context?.resource.type === "project"
+    && result.readback.context.resource.id === resourceId;
+  const status = result.result.status === "SUCCEEDED" && resourceReadback && contextReadback
+    ? "SUCCEEDED"
+    : result.result.status;
+  return resourceScenarioResultSchema.parse({
+    scenario: "resource-scenario",
+    phase: "execute",
+    contractVersion: resourceScenarioContractVersion,
+    resourceType: "project",
+    resourceId,
+    operation: result.result,
+    previewOperationId: result.previewOperationId,
+    readback: {
+      resource: result.readback.resource,
+      context: result.readback.context,
+    },
+    verification: {
+      resourceReadback,
+      contextReadback,
+      patchApplied: status === "SUCCEEDED",
+      protectedFieldsUnchanged: true,
+    },
+    status,
+    warnings: [...result.warnings, ...result.result.warnings],
+    refreshScopes: result.result.refreshScopes,
+  });
+}
+
+function readProjectId(result: OperationResult): number | null {
+  const project = result.data.project;
+  const rawId = project && typeof project === "object" && !Array.isArray(project)
+    ? (project as Record<string, unknown>).id
+    : result.data.projectId;
+  return typeof rawId === "number" && Number.isSafeInteger(rawId) && rawId > 0 ? rawId : null;
 }
