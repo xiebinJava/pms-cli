@@ -4,6 +4,7 @@ import {
   agentProgressionInputSchema,
   agentProgressionPlanSchema,
   agentProgressionResultSchema,
+  agentProgressionShadowDraftSchema,
 } from "../../packages/pms-contracts/src/index.js";
 
 const draft = {
@@ -67,5 +68,17 @@ describe("agent progression contract", () => {
       warnings: ["需要确认"],
     });
     expect(result.status).toBe("WAITING_CONFIRMATION");
+  });
+
+  it("keeps shadow output separate from executable progression input", () => {
+    const shadow = agentProgressionShadowDraftSchema.parse({
+      facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+      candidateResources: [{ resourceType: "story", resourceId: 12 }],
+      candidateNodes: [{ nodeId: 384, key: "acceptance", label: "验收中" }],
+      requiredFields: ["acceptanceConclusion"],
+      proposedFieldValues: {},
+      references: ["story:12"],
+    });
+    expect(shadow.proposedFieldValues).toEqual({});
   });
 });

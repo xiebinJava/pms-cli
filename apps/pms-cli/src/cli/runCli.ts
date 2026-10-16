@@ -73,6 +73,12 @@ import {
   executeAgentProgression,
   planAgentProgression,
 } from "../commands/scenarios/agentProgression.js";
+import { FixedProgressionDraftProvider } from "../commands/scenarios/FixedProgressionDraftProvider.js";
+import {
+  fixedProgressionDraftForContext,
+  readProgressionShadowCases,
+  runProgressionShadowCases,
+} from "../commands/scenarios/progressionShadow.js";
 import { ResourceScenarioError } from "../commands/scenarios/resourceScenarioRegistry.js";
 import "../commands/scenarios/requirementScenarioAdapter.js";
 import "../commands/scenarios/topicScenarioAdapter.js";
@@ -101,7 +107,7 @@ const HELP = [
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
   "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
-  "  pms scenario progression plan|execute <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>]",
+  "  pms scenario progression plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -785,11 +791,28 @@ async function dispatchAgentProgression(
   requestId: string,
 ): Promise<unknown> {
   const [phase, rawResourceType, rawResourceId] = invocation.positionals;
-  if (phase !== "plan" && phase !== "execute") {
-    throw new CliArgumentError("scenario progression 需要 plan 或 execute");
+  if (phase !== "plan" && phase !== "execute" && phase !== "shadow") {
+    throw new CliArgumentError("scenario progression 需要 plan、execute 或 shadow");
   }
   const resourceType = parseAgentProgressionResourceType(rawResourceType);
   const resourceId = requireId(rawResourceId);
+  if (phase === "shadow") {
+    const providerName = invocation.options.provider ?? "mock";
+    if (providerName !== "mock") {
+      throw new CliArgumentError("外部 progression provider 尚未开启数据出站授权；当前只支持 --provider mock");
+    }
+    const casesPath = requiredOption(invocation.options, "cases-file");
+    const runtime = await deps.createRuntime(requestId);
+    const context = await runtime.client.context({ type: resourceType, id: resourceId }, { view: "focused" });
+    const cases = await readProgressionShadowCases(casesPath);
+    return runProgressionShadowCases({
+      cases,
+      context,
+      resourceType,
+      provider: new FixedProgressionDraftProvider(fixedProgressionDraftForContext(context)),
+      providerName: "mock",
+    });
+  }
   const intent = parseAgentProgressionIntent(requiredOption(invocation.options, "intent"));
   const executeMode = parseAgentProgressionExecuteMode(invocation.options["execute-mode"] ?? "auto");
   const draft = parseProgressionDraft(invocation.options["draft-json"]);

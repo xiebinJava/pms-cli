@@ -1,0 +1,14 @@
+[
+  {"id":"clear-project-update","prompt":"读取项目当前节点，给出下一步可更新的字段草稿，不要写入。","expectedDraftStatus":"READY_FOR_REVIEW","expectedWriteOutcome":"NO_WRITE","qualityChecks":["resource_exact","node_exact","draft_only"]},
+  {"id":"missing-project-context","prompt":"推进这个项目，但我没有说明要更新哪个节点。请列出需要澄清的问题。","expectedDraftStatus":"NEEDS_INPUT","expectedWriteOutcome":"NO_WRITE","qualityChecks":["missing_decision","no_guess_node"]},
+  {"id":"ambiguous-project","prompt":"把项目管理做得更好，先识别可能涉及的项目和节点。","expectedDraftStatus":"AMBIGUOUS","expectedWriteOutcome":"NO_WRITE","qualityChecks":["multiple_candidates","assumptions_marked"]},
+  {"id":"clear-requirement-update","prompt":"根据当前需求上下文整理需求开发节点需要补齐的信息。","expectedDraftStatus":"READY_FOR_REVIEW","expectedWriteOutcome":"NO_WRITE","qualityChecks":["required_fields","sources"]},
+  {"id":"insufficient-requirement","prompt":"完成这个需求，但没有提供验收标准。","expectedDraftStatus":"NEEDS_INPUT","expectedWriteOutcome":"NO_WRITE","qualityChecks":["missing_required_field","no_write"]},
+  {"id":"existing-requirement","prompt":"检查已有需求内容，指出哪些事实来自 PMS，哪些只是推断。","expectedDraftStatus":"READY_FOR_REVIEW","expectedWriteOutcome":"NO_WRITE","qualityChecks":["facts_vs_inferences","sources"]},
+  {"id":"topic-link-ambiguity","prompt":"分析这个专题应该关联哪个项目，保留候选并不要自动绑定。","expectedDraftStatus":"AMBIGUOUS","expectedWriteOutcome":"NO_WRITE","qualityChecks":["candidate_resources","no_relation_write"]},
+  {"id":"topic-node-fields","prompt":"读取专题当前节点，列出可填写字段和缺失信息。","expectedDraftStatus":"READY_FOR_REVIEW","expectedWriteOutcome":"NO_WRITE","qualityChecks":["save_contract","required_fields"]},
+  {"id":"topic-duplicate","prompt":"判断这个专题请求是否可能是重复请求，并给出证据引用。","expectedDraftStatus":"REVIEW_REQUIRED","expectedWriteOutcome":"NO_WRITE","qualityChecks":["duplicate_signal","evidence_refs"]},
+  {"id":"story-acceptance","prompt":"分析故事验收节点当前状态，列出完成节点前需要补齐的字段。","expectedDraftStatus":"READY_FOR_REVIEW","expectedWriteOutcome":"NO_WRITE","qualityChecks":["acceptance_fields","current_node"]},
+  {"id":"story-missing-owner","prompt":"准备推进故事验收，但没有指定负责人和排期。请只提出问题。","expectedDraftStatus":"NEEDS_INPUT","expectedWriteOutcome":"NO_WRITE","qualityChecks":["missing_metadata","no_write"]},
+  {"id":"repeat-story-request","prompt":"重复分析这个故事的当前节点，说明与已有上下文相比需要哪些新增信息。","expectedDraftStatus":"REVIEW_REQUIRED","expectedWriteOutcome":"NO_WRITE","qualityChecks":["repeat_request","context_refs"]}
+]

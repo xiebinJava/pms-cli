@@ -252,4 +252,17 @@ describe("agent progression dispatch", () => {
     expect(JSON.parse(unknown.stderr[0] ?? "{}").error.code).toBe("CLI_USAGE");
     expect(unknown.deps.createRuntime).not.toHaveBeenCalled();
   });
+
+  it("runs the shadow command with the fixed provider and never needs write methods", async () => {
+    const client = readClient();
+    const output = dependencies(client);
+    await runCli([
+      "scenario", "progression", "shadow", "story", "12",
+      "--cases-file", "tests/fixtures/progression-shadow-cases.json", "--provider", "mock",
+    ], output.deps);
+    expect(output.stderr).toEqual([]);
+    expect(JSON.parse(output.stdout[0] ?? "{}").data).toMatchObject({
+      mode: "read-only-shadow", provider: "mock", summary: { total: 12, generated: 12 },
+    });
+  });
 });

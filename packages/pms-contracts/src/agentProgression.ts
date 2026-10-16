@@ -5,6 +5,7 @@ import {
   resourceScenarioVerificationSchema,
 } from "./resourceScenario.js";
 import { resourceDetailSchema } from "./query.js";
+import { analysisItemSchema } from "./scenario.js";
 
 export const agentProgressionContractVersion = "agent-progression/v1" as const;
 
@@ -101,3 +102,31 @@ export type AgentProgressionInput = z.input<typeof agentProgressionInputSchema>;
 export type ParsedAgentProgressionInput = z.output<typeof agentProgressionInputSchema>;
 export type AgentProgressionPlan = z.infer<typeof agentProgressionPlanSchema>;
 export type AgentProgressionResult = z.infer<typeof agentProgressionResultSchema>;
+
+export const agentProgressionShadowCandidateResourceSchema = z.object({
+  resourceType: agentProgressionResourceTypeSchema,
+  resourceId: z.number().int().positive().optional(),
+  label: z.string().trim().min(1).optional(),
+  confidence: z.enum(["high", "medium", "low"]).optional(),
+}).strict();
+
+export const agentProgressionShadowCandidateNodeSchema = z.object({
+  nodeId: z.number().int().positive().optional(),
+  key: z.string().trim().min(1).optional(),
+  label: z.string().trim().min(1).optional(),
+  confidence: z.enum(["high", "medium", "low"]).optional(),
+}).strict();
+
+export const agentProgressionShadowDraftSchema = z.object({
+  facts: z.array(analysisItemSchema),
+  inferences: z.array(analysisItemSchema),
+  assumptions: z.array(analysisItemSchema),
+  unresolvedDecisions: z.array(analysisItemSchema),
+  candidateResources: z.array(agentProgressionShadowCandidateResourceSchema),
+  candidateNodes: z.array(agentProgressionShadowCandidateNodeSchema),
+  requiredFields: z.array(z.string().trim().min(1)),
+  proposedFieldValues: z.record(z.string(), z.unknown()),
+  references: z.array(z.string().trim().min(1)),
+}).strict();
+
+export type AgentProgressionShadowDraft = z.infer<typeof agentProgressionShadowDraftSchema>;
