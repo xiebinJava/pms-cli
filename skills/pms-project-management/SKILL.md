@@ -13,14 +13,14 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
 2. 涉及具体事项时，优先执行 `pms context <resourceType> <resourceId> --format agent`，获取外部 Agent 可消费的 `ContextSnapshot`、`NodeContract`、权限投影和上下文版本；需要排查原始字段时，再执行 `pms context <resourceType> <resourceId> --format json`。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 按 **读取 → 草稿 → 预览 → 执行 → 回读验证** 分阶段工作：读取和草稿不得写入 PMS；预览阶段使用 `pms operation preview` 或场景 plan 只生成变更；执行必须在当前对话获得用户明确确认，并携带对应的 `--preview-operation-id` 和 `--idempotency-key`。只有能力目录、节点契约和上下文版本都允许时，才执行 `pms operation execute`、`pms workflow action` 或场景 execute。
+4. 按 **读取 → 草稿 → 校验 → 执行 → 回读验证** 分阶段工作。默认仍可使用 `pms operation preview` 或场景 plan 生成可审阅变更；对于用户在当前对话中已经明确提出的低/中风险写入，可以使用 `pms operation auto <operation>`，它会在服务端内部完成预览校验、权限、版本、幂等和审计，不再重复弹出确认。高风险操作（删除、归档、回滚、批量写入、权限或成员变更）必须使用预览确认链路并携带 `--preview-operation-id` 和 `--idempotency-key`。
 
 ## 外部 Agent 协作协议
 
 - 子 Agent 只接收父 Agent 提供的 `ContextSnapshot` 和任务目标；子 Agent 不接收 PMS 登录凭据、Token、auth store 路径或写入回调，也不直接调用 `pms-cli`。
-- 父 Agent 负责读取能力和上下文、创建只读子 Agent、合并事实与草稿、发起预览、在当前对话取得明确确认，并独自调用 PMS 写入命令。
+- 父 Agent 负责读取能力和上下文、创建只读子 Agent、合并事实与草稿、选择风险等级，并独自调用 PMS 写入命令。低/中风险自动写入也必须来自当前对话的明确用户意图，不能由子 Agent 自行扩大范围。
 - 草稿必须区分事实、推断、假设、未决问题、建议字段和证据引用；子 Agent 的证据只能来自父快照中可读的 `sourceRefs`。
-- 预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。用户没有确认时只能返回草稿或预览。
+- 高风险预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。低/中风险使用 `operation auto` 时，仍要在执行结果中说明实际写入内容和操作 ID；用户没有明确写入意图时只能返回草稿或预览。
 - 若使用兼容旧入口 `pms requirement analysis save`，也必须遵守同样的上下文版本、字段白名单、幂等键和当前对话明确确认规则；新流程优先使用 scenario 的 plan/execute 分离入口。
 
 ## 需求分析和成果保存
@@ -66,10 +66,11 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 - 模板可以把组件绑定到不同节点；因此不能假设固定的“开发与迭代控制”“故事拆分”节点或固定字段。
 - 修改负责人、排期、动态字段或完成节点前，必须使用 `pms context` 读取当前节点 ID、字段 key、版本和 `allowedActions`。
 - 节点完成、字段更新和任务创建必须携带能力目录要求的事项类型、事项 ID、节点 ID、字段值或任务参数，以及当前版本信息。
+- 如果用户要求“完成节点”，优先使用 `development-item.node.complete-with-data`：在一个操作中提交 `version`、`ownerId`、`startDate`、`endDate` 和 `fieldValues`，再推进节点。不要先单独完成节点再补填详情；节点没有 `saveContract` 时应报告不能安全写入，而不是猜字段。
 
 ## 写操作要求
 
-- 写操作必须先有可回读的 preview，并在当前对话取得用户明确确认；不能因为 `permissionMode=write`、能力目录或模型判断而跳过确认。PMS 后端仍是最终权限裁决方，负责用户权限、业务校验、版本校验、幂等和审计。
+- 写操作必须经过 PMS 后端的预览校验、权限、业务规则、版本校验、幂等和审计。低/中风险且用户已明确要求的写入可通过 `pms operation auto` 执行；这只是去掉重复确认，不是绕过后端校验。高风险写入不能使用 auto，必须先 preview，再在当前对话确认后 execute。
 - 每次写操作必须提供新的、可追踪的 `idempotencyKey`；重试同一业务请求时复用同一个幂等键，不要为同一次意图生成多个幂等键。
 - 不要自动重试写操作。遇到权限不足、业务冲突或版本冲突时，返回错误并先重新读取能力/上下文。
 - 如果执行返回 `WRITE_RESULT_UNKNOWN`，说明写入可能已经发生但回读无法确认；保留操作 ID、警告和当前上下文，不要盲目重试或覆盖数据，先让用户决定后续核验。

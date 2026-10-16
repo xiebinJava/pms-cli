@@ -11,7 +11,7 @@ import { CliArgumentError, parseCliArguments, type CliInvocation } from "./parse
 import { listCapabilities } from "../commands/core/capabilities.js";
 import { getAgentContext, getContext } from "../commands/core/context.js";
 import { getResource } from "../commands/core/get.js";
-import { operationExecutePreview, operationPreview, type OperationOptions } from "../commands/core/operation.js";
+import { operationAuto, operationExecutePreview, operationPreview, type OperationOptions } from "../commands/core/operation.js";
 import { search } from "../commands/core/search.js";
 import { workflowAction } from "../commands/core/workflow.js";
 import { dashboardSummary } from "../commands/shortcuts/dashboard.js";
@@ -82,6 +82,7 @@ const HELP = [
   "  pms get <resourceType> <id>",
   "  pms context <resourceType> <id> [--format json|agent] [--view legacy|focused] [--node-id <id>] [--component <key>]",
   "  pms operation preview <operation> --arguments-json <json>",
+  "  pms operation auto <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms operation execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms project create --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
   "  pms requirement analysis save <id> --node-id <id> --version <version> --context-id <id> --context-version <version> --arguments-json <patch-json> --preview-operation-id <id> --idempotency-key <key>",
@@ -620,10 +621,10 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   }
   if (invocation.group === "operation") {
     const operation = invocation.positionals[0];
-    const previewOptions = invocation.command === "preview"
+    const previewOptions = invocation.command === "preview" || invocation.command === "auto"
       ? operationOptions(invocation.options, requestId)
       : undefined;
-    const idempotencyKey = invocation.command === "execute"
+    const idempotencyKey = invocation.command === "execute" || invocation.command === "auto"
       ? requiredOption(invocation.options, "idempotency-key")
       : undefined;
     const previewOperationId = invocation.command === "execute"
@@ -636,13 +637,19 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     if (invocation.command === "execute" && operation) {
       throw new CliArgumentError("operation execute 不接受操作名；预览 ID 已绑定具体操作");
     }
-    if (invocation.command !== "preview" && invocation.command !== "execute") {
+    if (invocation.command === "auto" && !operation) {
+      throw new CliArgumentError("operation auto 需要操作名");
+    }
+    if (invocation.command !== "preview" && invocation.command !== "execute" && invocation.command !== "auto") {
       throw new CliArgumentError("未知操作命令: " + (invocation.command ?? ""));
     }
+    if (invocation.command === "auto" && invocation.options["preview-operation-id"] !== undefined) {
+      throw new CliArgumentError("operation auto 不接受 preview-operation-id；它会在服务端内部校验");
+    }
     const runtime = await deps.createRuntime(requestId);
-    return invocation.command === "preview"
-      ? operationPreview(runtime.client, operation!, previewOptions)
-      : operationExecutePreview(runtime.client, previewOperationId!, idempotencyKey!);
+    if (invocation.command === "preview") return operationPreview(runtime.client, operation!, previewOptions);
+    if (invocation.command === "auto") return operationAuto(runtime.client, operation!, idempotencyKey!, previewOptions);
+    return operationExecutePreview(runtime.client, previewOperationId!, idempotencyKey!);
   }
   if (invocation.group === "workflow" && invocation.command === "action") {
     const [resourceType, rawId, action] = invocation.positionals;

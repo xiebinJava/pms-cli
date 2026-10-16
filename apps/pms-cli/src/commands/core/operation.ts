@@ -46,6 +46,30 @@ export async function operationExecute(
   return client.execute(requestFor(operation, { ...options, arguments: argumentsValue }, idempotencyKey));
 }
 
+/**
+ * Execute a low/medium-risk operation through PMS's automatic endpoint. The
+ * endpoint still performs server-side preview validation, permission checks,
+ * idempotency and audit logging; this CLI path only removes the repeated human
+ * confirmation prompt for an explicitly authorized agent turn.
+ */
+export async function operationAuto(
+  client: PmsClient,
+  operation: string,
+  idempotencyKey: string,
+  options: OperationOptions = {},
+): Promise<OperationResult> {
+  const resolver = new CapabilityResolver(client);
+  const action = await resolver.action(operation);
+  if (action.mode !== "automatic") {
+    throw new Error("operation auto 只允许自动写入能力");
+  }
+  if (action.risk === "high") {
+    throw new Error("高风险操作必须先 preview 再 execute");
+  }
+  const argumentsValue = resolver.validateArguments(operation, options.arguments ?? {});
+  return client.execute(requestFor(operation, { ...options, arguments: argumentsValue }, idempotencyKey));
+}
+
 export async function operationExecutePreview(
   client: PmsClient,
   operationId: string,

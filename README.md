@@ -34,6 +34,8 @@ pms context requirement 23 --view focused --node-id 299 --format json
 pms context project 7 --view focused --node-id 299 --component solution-design --format json
 pms operation preview project.create --arguments-json '{"name":"订单中心"}' --format json
 pms operation execute --preview-operation-id <preview-operation-id> --idempotency-key idem-1 --format json
+# 用户已明确要求的低/中风险写入可省略重复确认；高风险操作仍必须走上面的 preview/execute
+pms operation auto development-item.node.complete-with-data --arguments-json '{"itemType":"STORY","itemId":34,"nodeId":383,"version":4,"ownerId":2,"startDate":"2026-10-10","endDate":"2026-10-20","fieldValues":{"businessResult":"已完成"}}' --context-id story:34 --context-version 4 --idempotency-key story-34-node-383-complete-4 --format json
 pms scenario project-create plan --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --format json
 pms scenario project-create execute --arguments-json '{"name":"AI Native PMS","description":"让 AI 参与项目管理全生命周期"}' --preview-operation-id <preview-operation-id> --idempotency-key project-ai-native-pms-1 --format json
 pms scenario requirement-analysis plan 23 --node-id 301 --version 7 --arguments-json '{"interpretation":"补充用户场景"}' --format json

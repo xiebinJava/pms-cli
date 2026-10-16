@@ -43,6 +43,7 @@ Every failure writes an error envelope to stderr and exits non-zero:
 | `pms context <resource-type> <id> --format json` | `GET /integration/ai/v1/context/{type}/{id}` | read |
 | `pms context <type> <id> --view focused --node-id <id> [--component <key>]` | 同上，头部带 `nodeId/view/componentKey` 查询参数 | read（focused 仅在 meta.formatVersion=2 且核验通过后返回） |
 | `pms operation preview <operation> --arguments-json <json>` | `POST /integration/ai/v1/operations/preview` | dry-run |
+| `pms operation auto <operation> --arguments-json <json> --idempotency-key <key>` | `POST /integration/ai/v1/operations/execute` | explicit low/medium-risk automatic write; server still validates, audits and enforces idempotency |
 | `pms operation execute --preview-operation-id <id> --idempotency-key <key>` | `POST /ai/operations/{previewId}/execute` | explicit write bound to preview |
 | `pms scenario project-create plan ...` | capabilities + preview | read-only |
 | `pms scenario project-create execute ... --preview-operation-id <id> --idempotency-key <key>` | preview execute + project get/context | explicit write bound to preview |

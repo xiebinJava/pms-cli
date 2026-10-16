@@ -65,6 +65,124 @@ describe("safe write lifecycle CLI contract", () => {
     expect(JSON.parse(stdout[0] ?? "{}").data.operationId).toBe("operation-1");
   });
 
+  it("executes an explicitly authorized medium-risk operation without a second confirmation", async () => {
+    const execute = vi.fn(async () => ({
+      operationId: "operation-auto-1",
+      status: "SUCCEEDED" as const,
+      data: { saved: true },
+      warnings: [],
+      refreshScopes: ["story-detail"],
+    }));
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        resources: [{
+          type: "story",
+          actions: [{
+            name: "development-item.node.complete-with-data",
+            label: "完成节点并保存详情",
+            description: "保存并完成",
+            mode: "automatic",
+            risk: "medium",
+            scopes: [],
+            inputSchema: {},
+            requiresContext: true,
+            refreshScopes: ["story-detail"],
+          }],
+        }],
+        scopes: [],
+        workflowTypes: [],
+        today: "2026-10-16",
+      })),
+      execute,
+    };
+    const { dependencies, stdout, stderr } = deps(client as never);
+
+    await runCli([
+      "operation", "auto", "development-item.node.complete-with-data",
+      "--arguments-json", '{"itemType":"STORY","itemId":34,"nodeId":383,"version":4}',
+      "--context-id", "story:34", "--context-version", "4",
+      "--idempotency-key", "idem-auto-1",
+    ], dependencies);
+
+    expect(stderr).toEqual([]);
+    expect(execute).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "development-item.node.complete-with-data",
+      idempotencyKey: "idem-auto-1",
+      context: { id: "story:34", version: "4" },
+    }));
+    expect(JSON.parse(stdout[0] ?? "{}").data.operationId).toBe("operation-auto-1");
+  });
+
+  it("keeps high-risk operations on the preview confirmation path", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        resources: [{
+          type: "project",
+          actions: [{
+            name: "project.delete",
+            label: "删除项目",
+            description: "删除项目",
+            mode: "automatic",
+            risk: "high",
+            scopes: [],
+            inputSchema: {},
+            requiresContext: false,
+            refreshScopes: [],
+          }],
+        }],
+        scopes: [],
+        workflowTypes: [],
+        today: "2026-10-16",
+      })),
+      execute: vi.fn(),
+    };
+    const { dependencies, stderr } = deps(client as never);
+
+    await runCli([
+      "operation", "auto", "project.delete", "--arguments-json", '{"projectId":1}',
+      "--idempotency-key", "idem-dangerous-1",
+    ], dependencies);
+
+    expect(client.execute).not.toHaveBeenCalled();
+    expect(stderr[0]).toContain("高风险操作必须先 preview");
+  });
+
+  it("does not route read capabilities through the automatic write endpoint", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        resources: [{
+          type: "story",
+          actions: [{
+            name: "story.read",
+            label: "读取故事",
+            description: "读取故事",
+            mode: "read",
+            risk: "low",
+            scopes: [],
+            inputSchema: {},
+            requiresContext: false,
+            refreshScopes: [],
+          }],
+        }],
+        scopes: [],
+        workflowTypes: [],
+        today: "2026-10-16",
+      })),
+      execute: vi.fn(),
+    };
+    const { dependencies, stderr } = deps(client as never);
+
+    await runCli([
+      "operation", "auto", "story.read", "--idempotency-key", "idem-read-1",
+    ], dependencies);
+
+    expect(client.execute).not.toHaveBeenCalled();
+    expect(stderr[0]).toContain("只允许自动写入能力");
+  });
+
   it("does not accept a second argument payload during preview execution", async () => {
     const { dependencies, stderr } = deps({ executePreview: vi.fn() } as never);
 
