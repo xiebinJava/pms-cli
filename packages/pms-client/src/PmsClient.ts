@@ -17,6 +17,8 @@ import {
   orchestratorPlanSchema,
   orchestratorSessionSchema,
   orchestratorDraftSchema,
+  storyWorkbenchContractVersion,
+  scenarioContractVersion,
   type AutomaticOperationRequest,
   type CapabilityCatalog,
   type OperationResult,
@@ -258,7 +260,7 @@ export class PmsHttpClient implements PmsClient {
 
   async createConversation(request: CreateConversationRequest): Promise<OrchestratorConversation> {
     const normalized = z.object({
-      resourceType: z.literal("requirement"),
+      resourceType: z.enum(["requirement", "story"]),
       resourceId: z.number().int().positive(),
     }).strict().parse(request);
     return this.requestData(
@@ -274,7 +276,7 @@ export class PmsHttpClient implements PmsClient {
     const normalized = z.object({
       conversationId: z.number().int().positive(),
       message: z.string().trim().min(1),
-      contractVersion: z.literal("requirement-analysis/v1"),
+      contractVersion: z.union([z.literal(scenarioContractVersion), z.literal(storyWorkbenchContractVersion)]),
       draft: orchestratorDraftSchema,
       nodeId: z.number().int().positive().optional(),
       contextVersion: z.number().int().nonnegative().optional(),

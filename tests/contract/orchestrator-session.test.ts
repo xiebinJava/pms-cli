@@ -24,7 +24,58 @@ describe("AI orchestrator session contract", () => {
             status: "WAITING_CONFIRMATION",
             latestPlan: null,
           },
-          latestPlan: null,
+          latestPlan: {
+            planId: 30,
+            turnId: 20,
+            intent: "REQUIREMENT_ANALYSIS_SAVE",
+            status: "SUCCEEDED",
+            resourceType: "requirement",
+            resourceId: 33,
+            nodeId: 375,
+            contextVersion: 5,
+            contextSnapshot: { resourceType: "requirement", resourceId: 33, version: 5 },
+            draft: {
+              contractVersion: "requirement-analysis/v1",
+              draft: {
+                facts: [],
+                inferences: [],
+                assumptions: [],
+                unresolvedDecisions: [],
+                patch: { analysis: "已保存" },
+              },
+            },
+            preview: {
+              operationId: "op-1",
+              command: "requirement.analysis.save",
+              expiresAt: "2026-10-16T12:00:00Z",
+              contextVersion: "5",
+              warnings: [],
+              changes: [],
+              refreshScopes: [],
+              preconditions: [],
+            },
+            operation: {
+              operationId: "op-1",
+              status: "SUCCEEDED",
+              message: "已保存",
+              data: {},
+              refreshScopes: [],
+            },
+            verification: {
+              resourceReadback: true,
+              contextReadback: true,
+              protectedFieldsUnchanged: true,
+              patchApplied: true,
+              status: "SUCCEEDED",
+              message: "写入并回读验证成功",
+            },
+            validationErrors: [],
+            errorCode: null,
+            errorMessage: null,
+            idempotencyKey: "idem-1",
+            confirmedAt: "2026-10-16T11:00:00",
+            executedAt: "2026-10-16T11:00:01",
+          },
           events: [{
             sequenceNo: 5,
             eventType: "WAITING_CONFIRMATION",
@@ -42,6 +93,9 @@ describe("AI orchestrator session contract", () => {
 
     expect(session.sessionId).toBe(10);
     expect(session.conversation.status).toBe("WAITING_CONFIRMATION");
+    expect(session.latestPlan?.operation?.operationId).toBe("op-1");
+    expect(session.latestPlan?.verification?.status).toBe("SUCCEEDED");
+    expect(session.latestPlan?.idempotencyKey).toBe("idem-1");
     expect(session.events[0]?.sequenceNo).toBe(5);
     expect(session.afterSequence).toBe(4);
     expect(session.nextSequence).toBe(6);

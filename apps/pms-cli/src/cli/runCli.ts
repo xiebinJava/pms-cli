@@ -42,6 +42,14 @@ import {
   readRequirementAnalysisSession,
 } from "../commands/scenarios/requirementAnalysis.js";
 import {
+  appendStoryNodeTurn,
+  confirmStoryNodePlan,
+  createStoryNodeConversation,
+  previewStoryNodePlan,
+  readStoryNodeEvents,
+  readStoryNodeSession,
+} from "../commands/scenarios/storyOrchestrator.js";
+import {
   executeStoryWorkbenchScenario,
   planStoryWorkbenchScenario,
   runStoryWorkbenchScenario,
@@ -73,6 +81,7 @@ const HELP = [
   "  pms scenario requirement-analysis draft <id> --node-id <id> --version <version> --draft-json <draft-json>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events|session <id> [options]",
+  "  pms scenario story-orchestrator create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
   "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
@@ -443,6 +452,46 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     return draft
       ? { contractVersion: agentDraftContractVersion, draft, execution }
       : execution;
+  }
+  if (invocation.group === "scenario" && invocation.command === "story-orchestrator") {
+    const action = invocation.positionals[0];
+    if (action === "create") {
+      const storyId = requireId(invocation.positionals[1]);
+      const runtime = await deps.createRuntime(requestId);
+      return createStoryNodeConversation(runtime.client, storyId);
+    }
+    if (action === "turn") {
+      const conversationId = requireId(invocation.positionals[1]);
+      const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
+      const contextVersion = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
+      const draft = parseAgentDraftJson(requiredOption(invocation.options, "draft-json"));
+      const message = requiredOption(invocation.options, "message");
+      const runtime = await deps.createRuntime(requestId);
+      return appendStoryNodeTurn(runtime.client, {
+        conversationId, message, draft, nodeId, contextVersion, requestId,
+      });
+    }
+    if (action === "preview") {
+      const planId = requireId(invocation.positionals[1]);
+      const runtime = await deps.createRuntime(requestId);
+      return previewStoryNodePlan(runtime.client, planId, requestId);
+    }
+    if (action === "confirm") {
+      const planId = requireId(invocation.positionals[1]);
+      const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+      const runtime = await deps.createRuntime(requestId);
+      return confirmStoryNodePlan(runtime.client, planId, idempotencyKey, requestId);
+    }
+    if (action === "events" || action === "session") {
+      const conversationId = requireId(invocation.positionals[1]);
+      const afterSequence = invocation.options["after-sequence"] === undefined
+        ? 0 : nonNegativeInteger(invocation.options["after-sequence"], "after-sequence");
+      const runtime = await deps.createRuntime(requestId);
+      return action === "events"
+        ? readStoryNodeEvents(runtime.client, conversationId, afterSequence)
+        : readStoryNodeSession(runtime.client, conversationId, afterSequence);
+    }
+    throw new CliArgumentError("story-orchestrator 需要 create、turn、preview、confirm、events 或 session");
   }
   if (invocation.group === "scenario" && invocation.command === "story-workbench") {
     const phase = invocation.positionals[0];

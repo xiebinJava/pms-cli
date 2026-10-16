@@ -30,6 +30,21 @@ pnpm run verify:real-pms:project-create
 
 来源内容只按系统回读结果记录，不据此宣称外部资料真实或已被 PMS 验证；静态 Skill 测试只能验证约束文字，不能替代后端授权、字段白名单、版本、幂等和审计。
 
+## 故事节点编排真实验收
+
+`tests/e2e/orchestrator-story-node.e2e.test.ts` 覆盖上下文读取、`NEEDS_INPUT`、多轮草稿合并、预览、确认、执行、回读、幂等重放、版本冲突、跨 CLI 进程恢复和操作审计。它只允许写入一次性隔离数据库，并要求显式设置 `PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`。
+
+测试结束时会通过 `PMS_E2E_MYSQL_CLIENT` 查询 `pms_ai_operation`。没有宿主机 MySQL 客户端时，使用 `scripts/e2e-mysql-client.sh`，让查询在隔离 MySQL 容器内执行：
+
+```bash
+export PMS_E2E_MYSQL_CLIENT="$PWD/scripts/e2e-mysql-client.sh"
+export PMS_E2E_MYSQL_CONTAINER="pms-ai-e2e-${PMS_E2E_RUN_ID}-mysql-1"
+export PMS_E2E_DB_URL="mysql://pms_e2e:local-only-password@127.0.0.1:13306/${PMS_E2E_DATABASE_NAME}"
+pnpm run verify:real-pms:story-orchestrator
+```
+
+这段数据库访问只用于验收审计，不是 CLI 的运行时依赖。
+
 截至本地开发阶段，未在没有隔离配置的环境执行上述真实写入验收；“测试跳过”不计为真实场景通过。
 
 ## 场景级闭环验收

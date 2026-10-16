@@ -69,6 +69,30 @@ npm run verify:real-pms:cli
 
 测试会让构建后的 CLI 自己执行 `pms auth login`，并把授权 URL 输出到测试日志；CLI 在测试环境可以通过 `PMS_CLI_KEYRING_SERVICE` 指定独立的系统 keyring service，避免污染本机默认的 `pms-cli` 登录状态。普通用户无需设置这些变量。
 
+### 操作审计查询的 MySQL 客户端
+
+故事节点编排验收会在业务链路完成后只读查询 `pms_ai_operation`，确认执行状态和审计记录已经持久化。查询由 `tests/e2e/support/operationAudit.ts` 通过 `PMS_E2E_MYSQL_CLIENT` 启动：
+
+- 本机已安装 MySQL 客户端时，可以省略该变量；
+- 本机没有 `mysql` 命令时，使用仓库脚本调用一次性 MySQL 容器内置的客户端，不需要在宿主机安装 MySQL：
+
+```bash
+cd /Users/fs/Desktop/Project/pms-ai-connector
+export PMS_E2E_MYSQL_CLIENT="$PWD/scripts/e2e-mysql-client.sh"
+export PMS_E2E_MYSQL_CONTAINER="pms-ai-e2e-${PMS_E2E_RUN_ID}-mysql-1"
+```
+
+脚本只移除宿主机映射用的 `--host/--port` 参数，查询仍使用 `PMS_E2E_DB_URL` 中的账号和数据库名；容器外的业务 API 和 OAuth 流程不变。`PMS_E2E_MYSQL_CONTAINER` 省略时，脚本会根据 `PMS_E2E_RUN_ID` 推导默认容器名。
+
+故事节点编排验收还需要只读审计连接：
+
+```bash
+export PMS_E2E_DB_URL="mysql://pms_e2e:local-only-password@127.0.0.1:13306/${PMS_E2E_DATABASE_NAME}"
+pnpm run verify:real-pms:story-orchestrator
+```
+
+该查询只用于验证审计，不参与 CLI 正常运行；隔离环境停止后，数据库卷和其中的夹具一并删除。
+
 手动登录时，CLI 使用的是 `PMS_AUTH_ORIGIN`（而不是 `PMS_E2E_AUTH_ORIGIN`）：
 
 ```bash

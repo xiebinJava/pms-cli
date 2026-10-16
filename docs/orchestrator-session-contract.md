@@ -49,6 +49,9 @@ pms scenario requirement-analysis orchestrate preview 30
 pms scenario requirement-analysis orchestrate confirm 30 \
   --idempotency-key req-33-analysis-1
 pms scenario requirement-analysis orchestrate session 10 --after-sequence 5
+
+# 故事节点使用同一套跨进程会话协议
+pms scenario story-orchestrator session 20 --after-sequence 0
 ```
 
 The model or parent agent owns the natural-language interpretation and draft
@@ -90,12 +93,14 @@ The durable records support the following progress events:
 ```text
 CONTEXT_READ
 DRAFT_VALIDATED
+INPUT_REQUIRED
 PLAN_CREATED
 PREVIEW_CREATED
 WAITING_CONFIRMATION
 EXECUTION_STARTED
 EXECUTION_FINISHED
 VERIFICATION_FINISHED
+READBACK_UNKNOWN
 FAILED
 CONFLICT
 CANCELLED
