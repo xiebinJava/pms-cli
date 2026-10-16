@@ -58,7 +58,7 @@ The fixture advances the newly created requirement through the real owner, sched
 
 ## Shadow-case status
 
-The 12 prompts in `tests/fixtures/requirement-analysis-shadow-cases.json` are an evaluation matrix only. The provider abstraction is now implemented, but no external model credentials or human timing/quality baseline was configured in this run, so no natural-language quality or efficiency gain is claimed. The next experiment must record facts/inferences/assumptions/unresolved decisions, source coverage, clarification count, active effort, total time, revisions and reviewer score without writing to PMS.
+The 12 prompts in `tests/fixtures/requirement-analysis-shadow-cases.json` are an evaluation matrix only. The CLI intentionally does not contain a model provider or model credentials; an external Agent must run the prompts, generate the draft, and record facts/inferences/assumptions/unresolved decisions, source coverage, clarification count, active effort, total time, revisions and reviewer score without writing to PMS.
 
 ## Acceptance decision
 
