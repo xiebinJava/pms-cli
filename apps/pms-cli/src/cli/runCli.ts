@@ -1,6 +1,12 @@
 import type { PmsClient } from "../../../../packages/pms-client/src/index.js";
 import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-client/src/index.js";
-import type { AnalysisDraft, ContextReadOptions, QueryItem } from "../../../../packages/pms-contracts/src/index.js";
+import {
+  resourceScenarioContractVersion,
+  type AnalysisDraft,
+  type ContextReadOptions,
+  type QueryItem,
+  type ResourceScenarioResourceType,
+} from "../../../../packages/pms-contracts/src/index.js";
 import { CliArgumentError, parseCliArguments, type CliInvocation } from "./parseArguments.js";
 import { listCapabilities } from "../commands/core/capabilities.js";
 import { getAgentContext, getContext } from "../commands/core/context.js";
@@ -55,6 +61,10 @@ import {
   runStoryWorkbenchScenario,
 } from "../commands/scenarios/storyWorkbench.js";
 import {
+  executeResourceScenario,
+  planResourceScenario,
+} from "../commands/scenarios/resourceScenarioExecutor.js";
+import {
   toRequirementAnalysisWorkSession,
   toStoryWorkbenchWorkSession,
 } from "../commands/scenarios/agentWorkSession.js";
@@ -75,6 +85,8 @@ const HELP = [
   "  pms scenario project-create execute --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource-write plan <project|topic|story> <operation> --arguments-json <json>",
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
+  "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
+  "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -259,6 +271,9 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
     const runtime = await deps.createRuntime(requestId);
     return executeProjectCreateScenario(runtime.client, { ...options, idempotencyKey, previewOperationId });
+  }
+  if (invocation.group === "scenario" && invocation.command === "resource") {
+    return dispatchResourceScenario(invocation, deps, requestId);
   }
   if (invocation.group === "scenario" && isResourceWriteScenario(invocation.command)) {
     const scenario = resolveResourceWriteScenario(invocation.command, invocation.positionals);
@@ -675,6 +690,65 @@ function operationOptions(options: Record<string, string>, requestId: string): O
     contract: contractId && contractVersion ? { id: contractId, version: contractVersion } : undefined,
     requestId,
   };
+}
+
+async function dispatchResourceScenario(
+  invocation: CliInvocation,
+  deps: CliDependencies,
+  requestId: string,
+): Promise<unknown> {
+  const [phase, rawResourceType, operation, rawResourceId] = invocation.positionals;
+  if (phase !== "plan" && phase !== "execute") {
+    throw new CliArgumentError("scenario resource 需要 plan 或 execute");
+  }
+  const resourceType = requireResourceScenarioResourceType(rawResourceType);
+  if (!operation) throw new CliArgumentError("scenario resource 需要 operation");
+  const resourceId = rawResourceId === undefined ? undefined : requireId(rawResourceId);
+  if (phase === "plan") {
+    const draft = optionalAgentDraft(invocation.options);
+    if (draft === undefined && invocation.options["arguments-json"] === undefined) {
+      throw new CliArgumentError("资源场景 plan 必须提供 --arguments-json 或 --draft-json");
+    }
+    const argumentsValue = draft?.patch ?? parseJsonObject(
+      requiredOption(invocation.options, "arguments-json"),
+      "arguments-json",
+    );
+    const rawNodeId = invocation.options["node-id"];
+    const rawVersion = invocation.options.version;
+    const runtime = await deps.createRuntime(requestId);
+    return planResourceScenario(runtime.client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType,
+      ...(resourceId === undefined ? {} : { resourceId }),
+      operation,
+      ...(rawNodeId === undefined ? {} : { nodeId: positiveInteger(rawNodeId, "node-id") }),
+      ...(rawVersion === undefined ? {} : { contextVersion: nonNegativeInteger(rawVersion, "version") }),
+      arguments: argumentsValue,
+      ...(draft === undefined ? {} : { draft }),
+      requestId,
+    });
+  }
+  if (invocation.options["arguments-json"] !== undefined || invocation.options["draft-json"] !== undefined) {
+    throw new CliArgumentError("资源场景 execute 已绑定预览，不接受 arguments 或 draft；请先重新执行 plan");
+  }
+  const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
+  const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+  const runtime = await deps.createRuntime(requestId);
+  return executeResourceScenario(runtime.client, {
+    resourceType,
+    ...(resourceId === undefined ? {} : { resourceId }),
+    operation,
+    previewOperationId,
+    idempotencyKey,
+    requestId,
+  });
+}
+
+function requireResourceScenarioResourceType(raw: string | undefined): ResourceScenarioResourceType {
+  if (raw !== "requirement" && raw !== "topic" && raw !== "project") {
+    throw new CliArgumentError("资源场景仅支持 requirement、topic、project");
+  }
+  return raw;
 }
 
 function requiredOption(options: Record<string, string>, name: string): string {

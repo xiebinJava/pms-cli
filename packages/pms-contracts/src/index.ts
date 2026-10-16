@@ -7,3 +7,4 @@ export * from "./envelope.js";
 export * from "./scenario.js";
 export * from "./orchestrator.js";
 export * from "./agent.js";
+export * from "./resourceScenario.js";
