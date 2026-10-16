@@ -39,7 +39,6 @@ import {
 } from "../commands/scenarios/AgentDraftContract.js";
 import {
   FixedAnalysisDraftProvider,
-  OpenAICompatibleAnalysisDraftProvider,
 } from "../commands/scenarios/AnalysisDraftProvider.js";
 import {
   executeRequirementAnalysisScenario,
@@ -115,7 +114,7 @@ const HELP = [
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario story-orchestrator create|turn|preview|confirm|events|session <id> [options]",
-  "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
+  "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock]",
   "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--complete --owner-id <id> --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>] [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
   "  pms dashboard summary",
@@ -397,13 +396,9 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       const cases = await readAnalysisShadowCases(casesPath);
       const provider = providerName === "mock"
         ? new FixedAnalysisDraftProvider(fixedMockDraftForContext(context))
-        : providerName === "openai"
-          ? new OpenAICompatibleAnalysisDraftProvider({
-            baseUrl: requiredEnvironment("PMS_SHADOW_MODEL_BASE_URL"),
-            apiKey: requiredEnvironment("PMS_SHADOW_MODEL_API_KEY"),
-            model: requiredEnvironment("PMS_SHADOW_MODEL_NAME"),
-          })
-          : (() => { throw new CliArgumentError("--provider 只支持 mock 或 openai"); })();
+        : (() => {
+          throw new CliArgumentError("模型由外部 Agent 提供；pms-cli 只支持 --provider mock");
+        })();
       return runAnalysisShadowCases({ cases, context, provider });
     }
     if (phase !== "plan" && phase !== "execute" && phase !== "draft") {
@@ -960,12 +955,6 @@ async function validateAgentDraftForScenario(
     draft,
     save: false,
   }, async () => false);
-}
-
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim();
-  if (!value) throw new CliArgumentError(`外部模型需要环境变量 ${name}`);
-  return value;
 }
 
 function requireId(raw: string | undefined): number {

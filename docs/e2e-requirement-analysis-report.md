@@ -10,7 +10,7 @@
 
 ## Draft provider and read-only shadow command
 
-`AnalysisDraftProvider` 现在是生成结构化草稿的唯一入口。`FixedAnalysisDraftProvider` 用于确定性测试和链路冒烟；`OpenAICompatibleAnalysisDraftProvider` 通过兼容 OpenAI Chat Completions 的 HTTP 接口生成 JSON，并在进入场景编排前用 `analysisDraftSchema` 校验。两种 provider 都只生成草稿，不拥有 PMS preview/execute 权限。
+`AnalysisDraftProvider` 现在只保留生成结构化草稿的本地测试接口。`FixedAnalysisDraftProvider` 用于确定性测试和链路冒烟；真实模型由 Claude、Codex 或 DeepSeek 等外部 Agent 持有，pms-cli 不负责调用模型，也不持有模型 API Key。所有外部 Agent 草稿进入 PMS 场景前仍必须通过 `analysisDraftSchema` 和服务端契约校验。
 
 本地可用固定 Mock 运行只读影子评估：
 
@@ -21,7 +21,7 @@ node dist/pms-cli.js scenario requirement-analysis shadow 33 \
   --provider mock
 ```
 
-使用外部模型时设置 `PMS_SHADOW_MODEL_BASE_URL`、`PMS_SHADOW_MODEL_API_KEY` 和 `PMS_SHADOW_MODEL_NAME`，再把 `--provider` 改成 `openai`。这些变量只供 shadow 评估命令使用，不是生产 CLI 的通用模型配置。该命令只读取需求上下文和调用模型，不会执行 PMS preview 或 execute。
+影子命令只支持 `--provider mock`，用于验证本地链路。需要评估真实模型时，由 Claude、Codex 或 DeepSeek 在自身会话中读取 `pms context`，生成 `AnalysisDraft` 后再调用 CLI 的 draft/plan/execute 能力；pms-cli 不接收模型地址、API Key 或模型名称，也不会主动把 PMS 上下文发送到模型服务。
 
 生产 Agent 不需要任何模型配置。它可以先读取上下文并自行生成 `AnalysisDraft`，再通过 Agent Draft Contract 交给 CLI：
 

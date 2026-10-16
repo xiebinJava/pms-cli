@@ -133,7 +133,7 @@ describe("CLI runner", () => {
     expect(client.execute).not.toHaveBeenCalled();
   });
 
-  it("keeps external model settings scoped to the shadow command", async () => {
+  it("rejects model providers because the CLI is model-agnostic", async () => {
     const client = {
       context: vi.fn(async () => ({
         resource: { type: "requirement", id: 33 },
@@ -144,35 +144,15 @@ describe("CLI runner", () => {
       })),
     };
     const { deps, stderr } = makeDeps(client as never);
-    const previous = {
-      baseUrl: process.env.PMS_SHADOW_MODEL_BASE_URL,
-      apiKey: process.env.PMS_SHADOW_MODEL_API_KEY,
-      model: process.env.PMS_SHADOW_MODEL_NAME,
-      legacyBaseUrl: process.env.PMS_MODEL_BASE_URL,
-    };
-    try {
-      delete process.env.PMS_SHADOW_MODEL_BASE_URL;
-      delete process.env.PMS_SHADOW_MODEL_API_KEY;
-      delete process.env.PMS_SHADOW_MODEL_NAME;
-      process.env.PMS_MODEL_BASE_URL = "https://legacy.example/v1";
+    await runCli([
+      "scenario", "requirement-analysis", "shadow", "33",
+      "--cases-file", "tests/fixtures/requirement-analysis-shadow-cases.json",
+      "--provider", "openai",
+    ], deps);
 
-      await runCli([
-        "scenario", "requirement-analysis", "shadow", "33",
-        "--cases-file", "tests/fixtures/requirement-analysis-shadow-cases.json",
-        "--provider", "openai",
-      ], deps);
-
-      expect(stderr[0]).toContain("PMS_SHADOW_MODEL_BASE_URL");
-    } finally {
-      if (previous.baseUrl === undefined) delete process.env.PMS_SHADOW_MODEL_BASE_URL;
-      else process.env.PMS_SHADOW_MODEL_BASE_URL = previous.baseUrl;
-      if (previous.apiKey === undefined) delete process.env.PMS_SHADOW_MODEL_API_KEY;
-      else process.env.PMS_SHADOW_MODEL_API_KEY = previous.apiKey;
-      if (previous.model === undefined) delete process.env.PMS_SHADOW_MODEL_NAME;
-      else process.env.PMS_SHADOW_MODEL_NAME = previous.model;
-      if (previous.legacyBaseUrl === undefined) delete process.env.PMS_MODEL_BASE_URL;
-      else process.env.PMS_MODEL_BASE_URL = previous.legacyBaseUrl;
-    }
+    const error = JSON.parse(stderr[0] ?? "{}");
+    expect(error.error.code).toBe("CLI_USAGE");
+    expect(error.error.message).toContain("模型由外部 Agent 提供");
   });
 
   it("routes project-create scenario plan without executing a write", async () => {

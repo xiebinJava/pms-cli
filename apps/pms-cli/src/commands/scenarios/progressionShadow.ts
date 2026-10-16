@@ -22,7 +22,7 @@ export interface ProgressionShadowRunOptions {
   context: WorkflowContext;
   resourceType: "project" | "requirement" | "topic" | "story";
   provider: ProgressionDraftProvider;
-  providerName: "mock" | "external";
+  providerName: "mock";
 }
 
 export type ProgressionShadowCaseStatus = "GENERATED" | "PROVIDER_ERROR" | "VALIDATION_ERROR";
@@ -44,7 +44,7 @@ export interface ProgressionShadowCaseResult {
 
 export interface ProgressionShadowReport {
   mode: "read-only-shadow";
-  provider: "mock" | "external";
+  provider: "mock";
   resource: WorkflowContext["resource"];
   generatedAt: string;
   evaluation: {

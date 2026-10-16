@@ -13,14 +13,14 @@
 | 字段 | 值 |
 | --- | --- |
 | 用例文件 | `tests/fixtures/progression-shadow-cases.json` |
-| Provider | `mock` / `external` |
+| Draft source | `mock`（CLI 链路验证）/ 外部 Agent（Claude、Codex、DeepSeek） |
 | PMS 版本 | 待填写 |
 | pms-cli commit | 待填写 |
 | PMS context contract | 待填写 |
-| 模型与版本 | 仅 external 运行填写 |
+| 模型与版本 | 由外部 Agent 运行时在其会话中填写 |
 | Prompt 版本 | 待填写 |
 | 运行时间 | 待填写 |
 
 ## 人工对照字段
 
-每条用例填写主动投入时间、总耗时、澄清次数、遗漏数、返工次数和质量评分，并保留事实、推断、假设、未决问题的逐项备注。没有实际运行 external provider 时，模型输出和人工验收必须标为 `NOT_EVALUATED`/`PENDING`，不能写成收益。
+每条用例填写主动投入时间、总耗时、澄清次数、遗漏数、返工次数和质量评分，并保留事实、推断、假设、未决问题的逐项备注。CLI 不调用模型；模型输出和人工验收必须由外部 Agent 运行者记录，不能把 Mock 的程序通过写成模型收益。
