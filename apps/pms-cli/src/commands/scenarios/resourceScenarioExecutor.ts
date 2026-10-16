@@ -32,7 +32,7 @@ export async function planResourceScenario(
   const resolver = new CapabilityResolver(client);
   const action = await resolver.action(parsed.operation);
   const validatedArguments = resolver.validateArguments(parsed.operation, normalizedArguments);
-  adapter.validate(parsed, context, validatedArguments);
+  adapter.validate(parsed, context, validatedArguments, action);
   const preview = await operationPreview(client, parsed.operation, {
     arguments: validatedArguments,
     context: context ? { id: context.id, version: context.version } : { id: "global:pms", version: "v1" },
@@ -88,7 +88,7 @@ export async function executeResourceScenario(
     const resource = await client.get({ type: parsed.resourceType, id: resourceId });
     const context = await client.context({ type: parsed.resourceType, id: resourceId });
     const after: ResourceScenarioSnapshot = { resource, context };
-    const verification = adapter.verifyReadback(before, after, {});
+    const verification = adapter.verifyReadback(before, after, {}, operation);
     const status = verification.resourceReadback
       && verification.contextReadback
       && verification.patchApplied

@@ -64,6 +64,7 @@ import {
   executeResourceScenario,
   planResourceScenario,
 } from "../commands/scenarios/resourceScenarioExecutor.js";
+import "../commands/scenarios/requirementScenarioAdapter.js";
 import {
   toRequirementAnalysisWorkSession,
   toStoryWorkbenchWorkSession,

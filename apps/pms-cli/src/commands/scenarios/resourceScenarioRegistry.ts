@@ -1,5 +1,6 @@
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import type {
+  ActionCapability,
   OperationResult,
   ResourceScenarioExecuteInput,
   ParsedResourceScenarioInput,
@@ -29,12 +30,14 @@ export interface ResourceScenarioAdapter {
     input: ParsedResourceScenarioInput,
     context: ResourceScenarioContext | null,
     normalizedArguments: Record<string, unknown>,
+    capability?: ActionCapability,
   ): void;
   resolveReadbackId(input: ResourceScenarioExecuteInput | ParsedResourceScenarioInput, operation: OperationResult): number | null;
   verifyReadback(
     before: ResourceScenarioSnapshot | null,
     after: ResourceScenarioSnapshot,
     normalizedArguments: Record<string, unknown>,
+    operation: OperationResult,
   ): ResourceScenarioVerification;
 }
 
