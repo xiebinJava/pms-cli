@@ -85,6 +85,10 @@ export const storyWorkbenchInputSchema = z.object({
   variant: storyWorkbenchVariantSchema,
   patch: z.record(z.string().trim().min(1), z.unknown()),
   save: z.boolean(),
+  complete: z.boolean().optional(),
+  ownerId: z.number().int().positive().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
   previewOperationId: z.string().trim().min(1).max(160).optional(),
   requestId: z.string().trim().min(1).max(160).optional(),
@@ -112,6 +116,17 @@ export const storyWorkbenchVerificationSchema = z.object({
   protectedFieldsUnchanged: z.boolean(),
 }).strict();
 
+export const storyWorkbenchReadbackSchema = z.object({
+  resource: z.unknown().nullable(),
+  context: z.unknown().nullable(),
+}).strict();
+
+export const storyWorkbenchCurrentNodeSchema = z.object({
+  id: z.number().int().positive().nullable(),
+  key: z.string(),
+  label: z.string(),
+}).strict();
+
 export const storyWorkbenchResultSchema = z.object({
   contractVersion: z.literal(storyWorkbenchContractVersion),
   status: z.enum(["DRAFT", "PREVIEWED", "SUCCEEDED", "REJECTED", "CONFLICT", "WRITE_RESULT_UNKNOWN"]),
@@ -120,16 +135,21 @@ export const storyWorkbenchResultSchema = z.object({
   version: z.number().int().nonnegative(),
   variant: storyWorkbenchVariantSchema,
   patch: z.record(z.string(), z.unknown()),
+  complete: z.boolean().optional(),
   operationId: z.string().trim().min(1).optional(),
   operation: operationResultSchema.extend({
     previewOperationId: z.string().trim().min(1).optional(),
   }).optional(),
   preview: z.record(z.string(), z.unknown()).optional(),
   verification: storyWorkbenchVerificationSchema.optional(),
+  readback: storyWorkbenchReadbackSchema.optional(),
+  currentNode: storyWorkbenchCurrentNodeSchema.nullable().optional(),
   warnings: z.array(z.string()).default([]),
 }).strict();
 
 export type StoryWorkbenchVariant = z.infer<typeof storyWorkbenchVariantSchema>;
 export type StoryWorkbenchInput = z.infer<typeof storyWorkbenchInputSchema>;
 export type StoryWorkbenchVerification = z.infer<typeof storyWorkbenchVerificationSchema>;
+export type StoryWorkbenchReadback = z.infer<typeof storyWorkbenchReadbackSchema>;
+export type StoryWorkbenchCurrentNode = z.infer<typeof storyWorkbenchCurrentNodeSchema>;
 export type StoryWorkbenchResult = z.infer<typeof storyWorkbenchResultSchema>;

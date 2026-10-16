@@ -34,6 +34,32 @@ describe("story workbench write contract", () => {
     })).toMatchObject({ save: true, idempotencyKey: "story-34-node-384-v1" });
   });
 
+  it("accepts acceptance completion metadata while keeping it outside the patch", () => {
+    const parsed = storyWorkbenchInputSchema.parse({
+      ...baseInput,
+      variant: "acceptance",
+      patch: { acceptanceConclusion: "PASS", acceptanceNote: "通过" },
+      save: true,
+      complete: true,
+      ownerId: 2,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+      idempotencyKey: "story-34-acceptance-complete",
+    });
+    expect(parsed).toMatchObject({
+      complete: true,
+      ownerId: 2,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    });
+    expect(storyWorkbenchInputSchema.parse({
+      ...baseInput,
+      variant: "acceptance",
+      complete: true,
+      save: false,
+    }).complete).toBe(true);
+  });
+
   it("rejects an empty patch and an unsupported workbench variant", () => {
     expect(() => storyWorkbenchInputSchema.parse({
       ...baseInput,
@@ -54,6 +80,7 @@ describe("story workbench write contract", () => {
       version: 1,
       variant: "iteration",
       patch: { meetingNote: "确认进入本周迭代" },
+      complete: false,
       operationId: "operation-1",
       operation: {
         operationId: "operation-1",
@@ -70,6 +97,8 @@ describe("story workbench write contract", () => {
         patchApplied: true,
         protectedFieldsUnchanged: true,
       },
+      readback: { resource: {}, context: {} },
+      currentNode: { id: 385, key: "testing", label: "测试中" },
     });
 
     expect(result.verification?.patchApplied).toBe(true);

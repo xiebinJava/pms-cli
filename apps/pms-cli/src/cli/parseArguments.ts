@@ -24,9 +24,12 @@ const VALUE_OPTIONS = new Set([
   "draft-json",
   "patch-json",
   "variant",
+  "owner-id",
+  "start-date",
+  "end-date",
 ]);
 
-const BOOLEAN_OPTIONS = new Set(["help", "version", "global"]);
+const BOOLEAN_OPTIONS = new Set(["help", "version", "global", "complete"]);
 
 export interface CliInvocation {
   group: string;

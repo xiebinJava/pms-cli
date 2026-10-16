@@ -100,7 +100,7 @@ const HELP = [
   "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario story-orchestrator create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock|openai]",
-  "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--idempotency-key <key>] [--preview-operation-id <id>]",
+  "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--complete --owner-id <id> --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>] [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
   "  pms dashboard summary",
   "  pms setup | pms doctor --format json",
@@ -525,6 +525,11 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
     const version = nonNegativeInteger(requiredOption(invocation.options, "version"), "version");
     const variant = requiredOption(invocation.options, "variant") as "writing" | "iteration" | "development" | "acceptance" | "release" | "launch";
     const patch = parseJsonObject(requiredOption(invocation.options, "patch-json"), "patch-json");
+    const complete = invocation.options.complete === "true";
+    const ownerId = invocation.options["owner-id"] === undefined
+      ? undefined : positiveInteger(invocation.options["owner-id"], "owner-id");
+    const startDate = optionalIsoDate(invocation.options["start-date"], "start-date");
+    const endDate = optionalIsoDate(invocation.options["end-date"], "end-date");
     const common = {
       contractVersion: "story-workbench/v1" as const,
       resourceType: "story" as const,
@@ -533,6 +538,10 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       version,
       variant,
       patch,
+      ...(complete ? { complete: true as const } : {}),
+      ...(ownerId === undefined ? {} : { ownerId }),
+      ...(startDate === undefined ? {} : { startDate }),
+      ...(endDate === undefined ? {} : { endDate }),
       requestId,
     };
     if (phase === "execute") {
@@ -859,6 +868,18 @@ function nonNegativeInteger(raw: string, name: string): number {
   const value = Number(raw);
   if (!Number.isSafeInteger(value)) throw new CliArgumentError("--" + name + " 必须是非负整数");
   return value;
+}
+
+function optionalIsoDate(raw: string | undefined, name: string): string | undefined {
+  if (raw === undefined) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new CliArgumentError("--" + name + " 必须是 YYYY-MM-DD");
+  }
+  const parsed = new Date(raw + "T00:00:00Z");
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== raw) {
+    throw new CliArgumentError("--" + name + " 必须是有效日期");
+  }
+  return raw;
 }
 
 function boundedInteger(raw: string, name: string, max: number): number {

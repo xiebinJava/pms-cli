@@ -25,6 +25,9 @@ interface SaveContract {
   variant: string;
   fieldValuesPath: string;
   writableFields: string[];
+  completionCommand?: string;
+  completionSupported?: boolean;
+  completionRequiredMetadata?: string[];
 }
 
 interface PreparedStoryWorkbenchWrite {
@@ -33,6 +36,7 @@ interface PreparedStoryWorkbenchWrite {
   saveContract: SaveContract;
   arguments: Record<string, unknown>;
   operationContext: { id: string; version: string };
+  operationCommand: string;
 }
 
 export interface StoryWorkbenchScenarioPlan {
@@ -44,6 +48,10 @@ export interface StoryWorkbenchScenarioPlan {
   version: number;
   variant: StoryWorkbenchInput["variant"];
   patch: Record<string, unknown>;
+  complete?: boolean;
+  ownerId?: number;
+  startDate?: string;
+  endDate?: string;
   saveContract: SaveContract;
   preview: OperationPreview;
 }
@@ -53,7 +61,7 @@ export async function planStoryWorkbenchScenario(
   input: StoryWorkbenchInput,
 ): Promise<StoryWorkbenchScenarioPlan> {
   const prepared = await prepare(client, input);
-  const preview = await operationPreview(client, prepared.saveContract.command, {
+  const preview = await operationPreview(client, prepared.operationCommand, {
     arguments: prepared.arguments,
     context: prepared.operationContext,
     requestId: prepared.input.requestId,
@@ -67,6 +75,10 @@ export async function planStoryWorkbenchScenario(
     version: prepared.input.version,
     variant: prepared.input.variant,
     patch: prepared.input.patch,
+    complete: prepared.input.complete,
+    ownerId: prepared.input.ownerId,
+    startDate: prepared.input.startDate,
+    endDate: prepared.input.endDate,
     saveContract: prepared.saveContract,
     preview,
   };
@@ -77,7 +89,7 @@ export async function executeStoryWorkbenchScenario(
   input: StoryWorkbenchInput,
 ): Promise<StoryWorkbenchResult> {
   const prepared = await prepare(client, input);
-  const preview = await previewForWrite(client, prepared);
+  const preview = input.previewOperationId ? undefined : await previewForWrite(client, prepared);
   return executeAfterPreview(client, prepared, preview, input.previewOperationId);
 }
 
@@ -126,18 +138,31 @@ async function prepare(
   if (unknownField) {
     throw new Error(`草稿字段 ${unknownField} 不在 saveContract.writableFields 中`);
   }
-  const argumentsValue = {
+  const argumentsValue: Record<string, unknown> = {
     itemType: saveContract.itemType,
     itemId: saveContract.itemId,
     nodeId: saveContract.nodeId,
     version: parsed.version,
     fieldValues: fieldValuesAtPath(saveContract.fieldValuesPath, parsed.patch),
   };
+  const complete = parsed.complete === true;
+  if (complete) {
+    if (!saveContract.completionSupported || !saveContract.completionCommand) {
+      throw new Error("当前故事节点没有可用的完成命令");
+    }
+    if (parsed.variant !== "acceptance") {
+      throw new Error("当前版本只支持完成故事验收节点");
+    }
+    if (parsed.ownerId !== undefined) argumentsValue.ownerId = parsed.ownerId;
+    if (parsed.startDate !== undefined) argumentsValue.startDate = parsed.startDate;
+    if (parsed.endDate !== undefined) argumentsValue.endDate = parsed.endDate;
+  }
   return {
     input: parsed,
     context,
     saveContract,
     arguments: argumentsValue,
+    operationCommand: complete ? saveContract.completionCommand! : saveContract.command,
     operationContext: {
       id: `story:${parsed.resourceId}`,
       version: String(parsed.version),
@@ -178,6 +203,12 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
     variant: raw.variant,
     fieldValuesPath: raw.fieldValuesPath,
     writableFields,
+    ...(typeof raw.completionCommand === "string" ? { completionCommand: raw.completionCommand } : {}),
+    ...(typeof raw.completionSupported === "boolean"
+      ? { completionSupported: raw.completionSupported } : {}),
+    ...(Array.isArray(raw.completionRequiredMetadata)
+      && raw.completionRequiredMetadata.every((field) => typeof field === "string")
+      ? { completionRequiredMetadata: raw.completionRequiredMetadata } : {}),
   };
 }
 
@@ -201,6 +232,12 @@ function validateSaveContract(
   }
   if (contract.variant !== input.variant) {
     throw new Error(`saveContract variant ${contract.variant} 与请求 ${input.variant} 不一致`);
+  }
+  if (input.complete === true && input.variant !== "acceptance") {
+    throw new Error("当前版本只支持完成故事验收节点");
+  }
+  if (input.complete === true && (!contract.completionSupported || !contract.completionCommand)) {
+    throw new Error("saveContract 未声明故事节点完成能力");
   }
 }
 
@@ -231,6 +268,7 @@ async function executeAfterPreview(
         ...operation,
         previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
       },
+      complete: prepared.input.complete,
       ...(preview ? { preview } : {}),
       warnings: operation.warnings,
     };
@@ -268,6 +306,8 @@ async function executeAfterPreview(
         previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
       },
       ...(preview ? { preview } : {}),
+      readback: { resource, context },
+      currentNode: context.currentNode ?? null,
       verification,
       warnings,
     };
@@ -282,6 +322,8 @@ async function executeAfterPreview(
         previewOperationId: preview?.operationId ?? prepared.input.previewOperationId,
       },
       ...(preview ? { preview } : {}),
+      readback: { resource: null, context: null },
+      currentNode: null,
       verification: {
         resourceReadback: false,
         contextReadback: false,
@@ -298,7 +340,7 @@ async function previewForWrite(
   prepared: PreparedStoryWorkbenchWrite,
 ): Promise<OperationPreview | undefined> {
   try {
-    return await operationPreview(client, prepared.saveContract.command, {
+    return await operationPreview(client, prepared.operationCommand, {
       arguments: prepared.arguments,
       context: prepared.operationContext,
       requestId: prepared.input.requestId,
@@ -325,6 +367,7 @@ function baseResult(input: StoryWorkbenchInput, status: StoryWorkbenchResult["st
     version: input.version,
     variant: input.variant,
     patch: input.patch,
+    ...(input.complete === undefined ? {} : { complete: input.complete }),
     warnings: [],
   };
 }

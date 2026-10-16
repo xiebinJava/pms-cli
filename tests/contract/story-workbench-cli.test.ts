@@ -22,13 +22,32 @@ const catalog = {
       },
       requiresContext: true,
       refreshScopes: ["story-detail"],
-    }],
+    }, {
+        name: "development-item.node.complete-with-data",
+        label: "保存并完成故事节点",
+        description: "保存故事节点详情并推进流程",
+        mode: "automatic",
+        risk: "medium",
+        scopes: ["pms:story:write"],
+        inputSchema: {
+          itemType: { type: "string", label: "类型", required: true },
+          itemId: { type: "integer", label: "故事 ID", required: true },
+          nodeId: { type: "integer", label: "节点 ID", required: true },
+          fieldValues: { type: "object", label: "字段", required: true },
+          version: { type: "integer", label: "版本", required: true },
+          ownerId: { type: "integer", label: "负责人", required: false },
+          startDate: { type: "string", label: "开始日期", required: false },
+          endDate: { type: "string", label: "结束日期", required: false },
+        },
+        requiresContext: true,
+        refreshScopes: ["story-detail"],
+      }],
   }],
   scopes: ["pms:story:write"],
   workflowTypes: [],
 };
 
-function context() {
+function context(): any {
   return {
     resource: { type: "story" as const, id: 34 },
     version: 1,
@@ -53,6 +72,32 @@ function context() {
     }] },
     allowedActions: ["development-item.node.field.update"],
   };
+}
+
+function acceptanceContext() {
+  const value = context();
+  value.currentNode = { id: 387, key: "acceptance", label: "验收中" };
+  value.workflow.nodes[0] = {
+    id: 387,
+    components: [{
+      key: "story-node-workbench",
+      saveContract: {
+        command: "development-item.node.field.update",
+        completionCommand: "development-item.node.complete-with-data",
+        completionSupported: true,
+        completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+        itemType: "STORY",
+        itemId: 34,
+        nodeId: 387,
+        version: 1,
+        componentKey: "story-node-workbench",
+        variant: "acceptance",
+        fieldValuesPath: "__components.story-node-workbench",
+        writableFields: ["acceptanceConclusion", "acceptanceNote"],
+      },
+    }],
+  };
+  return value;
 }
 
 function deps(client: never) {
@@ -133,5 +178,45 @@ describe("story workbench CLI contract", () => {
 
     expect(dependencies.createRuntime).not.toHaveBeenCalled();
     expect(stderr[0]).toContain("preview-operation-id");
+  });
+
+  it("passes acceptance completion metadata through the CLI plan", async () => {
+    const client = {
+      capabilities: vi.fn(async () => catalog),
+      context: vi.fn(async () => acceptanceContext()),
+      preview: vi.fn(async (request: { operation: string; arguments: Record<string, unknown> }) => {
+        expect(request.operation).toBe("development-item.node.complete-with-data");
+        expect(request.arguments).toMatchObject({
+          ownerId: 2,
+          startDate: "2026-10-10",
+          endDate: "2026-10-20",
+        });
+        return {
+          operationId: "preview-story-acceptance",
+          command: request.operation,
+          expiresAt: "2026-10-15T12:00:00Z",
+          contextVersion: "1",
+          warnings: [],
+          changes: [],
+          refreshScopes: ["story-detail"],
+          preconditions: [],
+        };
+      }),
+    } as never;
+    const { dependencies, stdout, stderr } = deps(client);
+
+    await runCli([
+      "scenario", "story-workbench", "plan", "34",
+      "--node-id", "387", "--version", "1", "--variant", "acceptance",
+      "--patch-json", '{"acceptanceConclusion":"PASS","acceptanceNote":"通过"}',
+      "--complete", "--owner-id", "2", "--start-date", "2026-10-10", "--end-date", "2026-10-20",
+    ], dependencies);
+
+    expect(stderr).toEqual([]);
+    expect(JSON.parse(stdout[0] ?? "{}").data).toMatchObject({
+      phase: "plan",
+      complete: true,
+      preview: { operationId: "preview-story-acceptance" },
+    });
   });
 });

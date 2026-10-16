@@ -86,7 +86,7 @@ const responseEnvelopeSchema = z.object({
 
 const operationWireResultSchema = z.object({
   operationId: z.string().min(1),
-  status: z.enum(["SUCCEEDED", "REJECTED", "CONFLICT"]),
+  status: z.enum(["SUCCEEDED", "REJECTED", "CONFLICT", "WRITE_RESULT_UNKNOWN"]),
   message: z.string().optional(),
   data: z.record(z.string(), z.unknown()).nullable().optional(),
   refreshScopes: z.array(z.string()).nullable().optional(),

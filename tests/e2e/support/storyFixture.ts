@@ -170,6 +170,77 @@ export function existingStoryFixture(client: PmsClient, storyId: number): Promis
   });
 }
 
+/**
+ * Advances a disposable story with the legacy metadata commands until the
+ * requested workbench variant is current. The acceptance write itself is
+ * intentionally left to storyWorkbenchScenario so this helper only prepares
+ * an isolated fixture.
+ */
+export async function advanceStoryToVariant(
+  client: PmsClient,
+  runId: string,
+  storyId: number,
+  targetVariant: string,
+): Promise<{ nodeId: number; version: number }> {
+  const viewer = await client.capabilities().then((catalog) => catalog.viewer).catch(() => null);
+  const ownerId = saveContractNumber((viewer as Record<string, unknown> | null)?.id);
+  if (ownerId === null) throw new Error("故事夹具推进需要管理员 ownerId");
+
+  for (let attempt = 0; attempt < 15; attempt++) {
+    const context = await client.context({ type: "story", id: storyId }, { view: "focused" });
+    const node = currentNodeFromContext(context);
+    if (node === null) throw new Error("故事夹具当前没有可推进的流程节点");
+    const component = node.components.find((candidate) =>
+      candidate.key === "story-node-workbench" || candidate.key === "story-testing");
+    const contract = component?.saveContract;
+    const itemId = saveContractNumber(contract?.itemId);
+    const currentNodeId = saveContractNumber(contract?.nodeId);
+    const version = saveContractNumber(contract?.version, true);
+    const variant = typeof contract?.variant === "string"
+      ? contract.variant
+      : component?.key === "story-testing" ? "testing" : undefined;
+    if (itemId === null || currentNodeId === null || version === null || variant === undefined) {
+      throw new Error("故事夹具当前节点缺少可推进的 saveContract");
+    }
+    if (variant === targetVariant) return { nodeId: currentNodeId, version };
+
+    const owned = await operationExecute(client, "development-item.node.owner.update",
+      `${runId}-variant-owner-${attempt}`, {
+        arguments: { itemType: "STORY", itemId, nodeId: currentNodeId, ownerId, version },
+        context: { id: "global:pms", version: "v1" },
+      });
+    if (owned.status !== "SUCCEEDED") throw new Error("故事夹具推进负责人更新未成功");
+
+    const scheduleContext = await client.context(
+      { type: "story", id: storyId }, { nodeId: currentNodeId, view: "focused" },
+    );
+    const scheduleNode = currentNodeFromContext(scheduleContext);
+    const scheduleComponent = scheduleNode?.components.find((candidate) =>
+      candidate.key === "story-node-workbench" || candidate.key === "story-testing");
+    const scheduleContract = scheduleComponent?.saveContract;
+    const scheduleVersion = saveContractNumber(scheduleContract?.version, true);
+    if (scheduleVersion === null) throw new Error("故事夹具推进排期时节点版本读取失败");
+    const today = new Date().toISOString().slice(0, 10);
+    const scheduled = await operationExecute(client, "development-item.node.schedule.update",
+      `${runId}-variant-schedule-${attempt}`, {
+        arguments: {
+          itemType: "STORY", itemId, nodeId: currentNodeId,
+          startDate: today, endDate: today, version: scheduleVersion,
+        },
+        context: { id: "global:pms", version: "v1" },
+      });
+    if (scheduled.status !== "SUCCEEDED") throw new Error("故事夹具推进排期更新未成功");
+
+    const advanced = await operationExecute(client, "development-item.node.complete",
+      `${runId}-variant-complete-${attempt}`, {
+        arguments: { itemType: "STORY", itemId, nodeId: currentNodeId },
+        context: { id: "global:pms", version: "v1" },
+      });
+    if (advanced.status !== "SUCCEEDED") throw new Error("故事夹具节点完成推进未成功");
+  }
+  throw new Error("故事流程推进 15 步后仍未到达 " + targetVariant + " 节点 (story=" + storyId + ")");
+}
+
 export function storyWorkbenchPatch(context: WorkflowContext, marker: string): Record<string, unknown> {
   const node = currentWorkbenchNode(context);
   const component = node?.components.find((candidate) => candidate.key === "story-node-workbench");
@@ -224,6 +295,13 @@ function currentWorkbenchNode(context: WorkflowContext) {
         && candidate.id === context.currentNode?.id) ?? null;
   if (!node || !node.components.some((component) => component.key === "story-node-workbench")) return null;
   return node;
+}
+
+function currentNodeFromContext(context: WorkflowContext): FixtureNode | null {
+  const currentId = context.currentNode?.id;
+  if (currentId === null || currentId === undefined) return null;
+  return context.workflow?.nodes.map(asFixtureNode)
+    .find((candidate): candidate is FixtureNode => candidate !== null && candidate.id === currentId) ?? null;
 }
 
 function asFixtureNode(value: unknown): FixtureNode | null {

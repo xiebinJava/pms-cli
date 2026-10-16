@@ -28,13 +28,33 @@ const catalog = {
       },
       requiresContext: true,
       refreshScopes: ["story-detail"],
+    }, {
+      name: "development-item.node.complete-with-data",
+      label: "保存并完成故事节点",
+      description: "保存故事节点详情并推进流程",
+      mode: "automatic",
+      risk: "medium",
+      scopes: ["pms:story:write"],
+      inputSchema: {
+        itemType: { type: "string", label: "类型", required: true },
+        itemId: { type: "integer", label: "故事 ID", required: true },
+        nodeId: { type: "integer", label: "节点 ID", required: true },
+        fieldValues: { type: "object", label: "字段", required: true },
+        version: { type: "integer", label: "版本", required: true },
+        ownerId: { type: "integer", label: "负责人", required: false },
+        startDate: { type: "string", label: "开始日期", required: false },
+        endDate: { type: "string", label: "结束日期", required: false },
+      },
+      requiresContext: true,
+      refreshScopes: ["story-detail"],
     }],
   }],
   scopes: ["pms:story:write"],
   workflowTypes: [],
 };
 
-function makeContext(content: Record<string, unknown>, version = 1) {
+function makeContext(content: Record<string, unknown>, version = 1, variant: "iteration" | "acceptance" = "iteration") {
+  const acceptance = variant === "acceptance";
   return {
     resource: { type: "story" as const, id: 34 },
     version,
@@ -43,7 +63,7 @@ function makeContext(content: Record<string, unknown>, version = 1) {
       status: "IN_PROGRESS",
       ownerId: 2,
     },
-    currentNode: { id: 384, key: "custom-node-2", label: "迭代计划会" },
+    currentNode: { id: 384, key: acceptance ? "acceptance" : "custom-node-2", label: acceptance ? "验收中" : "迭代计划会" },
     workflow: {
       templateVersionId: 49,
       templateVersionNo: 1,
@@ -54,7 +74,7 @@ function makeContext(content: Record<string, unknown>, version = 1) {
         components: [{
           key: "story-node-workbench",
           label: "story-node-workbench",
-          config: { variant: "iteration" },
+          config: { variant },
           content,
           contentState: "LOADED",
           versions: { node: version },
@@ -65,9 +85,16 @@ function makeContext(content: Record<string, unknown>, version = 1) {
             nodeId: 384,
             version,
             componentKey: "story-node-workbench",
-            variant: "iteration",
+            variant,
             fieldValuesPath: "__components.story-node-workbench",
-            writableFields: ["dependencies", "developerIds", "iterationName", "iterationPlanId", "meetingNote", "testerIds"],
+            writableFields: acceptance
+              ? ["acceptanceConclusion", "acceptanceNote"]
+              : ["dependencies", "developerIds", "iterationName", "iterationPlanId", "meetingNote", "testerIds"],
+            ...(acceptance ? {
+              completionCommand: "development-item.node.complete-with-data",
+              completionSupported: true,
+              completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+            } : {}),
           },
         }],
       }],
@@ -77,14 +104,17 @@ function makeContext(content: Record<string, unknown>, version = 1) {
   };
 }
 
-function fakeClient(readbackContent: Record<string, unknown> = { meetingNote: "已确认进入本周迭代" }) {
+function fakeClient(
+  readbackContent: Record<string, unknown> = { meetingNote: "已确认进入本周迭代" },
+  variant: "iteration" | "acceptance" = "iteration",
+) {
   const calls: string[] = [];
   let saved = false;
   const client = {
     capabilities: vi.fn(async () => catalog),
     context: vi.fn(async () => {
       calls.push("context");
-      return makeContext(saved ? readbackContent : {});
+      return makeContext(saved ? readbackContent : {}, 1, variant);
     }),
     get: vi.fn(async () => {
       calls.push("get");
@@ -95,8 +125,11 @@ function fakeClient(readbackContent: Record<string, unknown> = { meetingNote: "�
         details: { id: 34, title: "项目管理标准", status: "IN_PROGRESS", ownerId: 2 },
       };
     }),
-    preview: vi.fn(async (request: { arguments: Record<string, unknown> }) => {
+    preview: vi.fn(async (request: { operation: string; arguments: Record<string, unknown> }) => {
       calls.push("preview");
+      expect(request.operation).toBe(
+        variant === "acceptance" ? "development-item.node.complete-with-data" : "development-item.node.field.update",
+      );
       expect(request.arguments).toMatchObject({
         itemType: "STORY",
         itemId: 34,
@@ -104,7 +137,9 @@ function fakeClient(readbackContent: Record<string, unknown> = { meetingNote: "�
         version: 1,
         fieldValues: {
           __components: {
-            "story-node-workbench": { meetingNote: "已确认进入本周迭代" },
+            "story-node-workbench": variant === "acceptance"
+              ? { acceptanceConclusion: "PASS", acceptanceNote: "验收通过" }
+              : { meetingNote: "已确认进入本周迭代" },
           },
         },
       });
@@ -253,6 +288,67 @@ describe("story workbench write scenario", () => {
 
     expect(result.status).toBe("SUCCEEDED");
     expect(result.operationId).toBe("operation-1");
+    expect(calls).toEqual(["context", "execute-preview", "get", "context"]);
+  });
+
+  it("uses the server completion command for acceptance and returns readback current node", async () => {
+    const { client, calls } = fakeClient(
+      { acceptanceConclusion: "PASS", acceptanceNote: "验收通过" },
+      "acceptance",
+    );
+    const result = await executeStoryWorkbenchScenario(client, {
+      ...input,
+      variant: "acceptance",
+      patch: { acceptanceConclusion: "PASS", acceptanceNote: "验收通过" },
+      complete: true,
+      ownerId: 2,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.complete).toBe(true);
+    expect(result.currentNode).toMatchObject({ id: 384, key: "acceptance" });
+    expect(result.readback?.resource).toBeTruthy();
+    expect((client.preview as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject({
+      operation: "development-item.node.complete-with-data",
+      arguments: {
+        ownerId: 2,
+        startDate: "2026-10-10",
+        endDate: "2026-10-20",
+        fieldValues: {
+          __components: {
+            "story-node-workbench": { acceptanceConclusion: "PASS", acceptanceNote: "验收通过" },
+          },
+        },
+      },
+    });
     expect(calls).toEqual(["context", "preview", "execute-preview", "get", "context"]);
+  });
+
+  it("rejects completion for a non-acceptance variant before preview", async () => {
+    const { client, calls } = fakeClient();
+    await expect(executeStoryWorkbenchScenario(client, {
+      ...input,
+      complete: true,
+      ownerId: 2,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    })).rejects.toThrow(/只支持完成故事验收节点/);
+    expect(calls).toEqual(["context"]);
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("rejects protected or unknown acceptance fields before preview", async () => {
+    const { client, calls } = fakeClient({}, "acceptance");
+
+    await expect(executeStoryWorkbenchScenario(client, {
+      ...input,
+      variant: "acceptance",
+      patch: { title: "不得修改" },
+      complete: true,
+    })).rejects.toThrow(/writableFields/);
+    expect(calls).toEqual(["context"]);
+    expect(client.preview).not.toHaveBeenCalled();
   });
 });
