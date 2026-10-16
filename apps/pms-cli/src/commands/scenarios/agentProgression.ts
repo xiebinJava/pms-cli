@@ -12,6 +12,7 @@ import {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
+import { assertSafeAgentPayload } from "./AgentDraftContract.js";
 import {
   executeResourceScenario,
   planResourceScenario,
@@ -28,6 +29,7 @@ export async function planAgentProgression(
   input: unknown,
 ): Promise<AgentProgressionPlan> {
   const parsed = agentProgressionInputSchema.parse(input);
+  if (parsed.draft) assertSafeAgentPayload(parsed.draft);
   if (parsed.intent === "READ_CONTEXT") return planReadContext(client, parsed);
   if (parsed.resourceType === "story") return planStoryProgression(client, parsed);
 
@@ -82,6 +84,7 @@ export async function validateAgentProgressionDraft(
   if (!parsed.draft) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "写入意图必须提供 draft");
   }
+  assertSafeAgentPayload(parsed.draft);
   const readback = await readContextSnapshot(client, parsed);
   return agentProgressionDraftResultSchema.parse({
     contractVersion: agentProgressionContractVersion,
@@ -100,6 +103,7 @@ export async function executeAgentProgression(
   input: unknown,
 ): Promise<AgentProgressionResult> {
   const parsed = agentProgressionInputSchema.parse(input);
+  if (parsed.draft) assertSafeAgentPayload(parsed.draft);
   if (parsed.intent === "READ_CONTEXT") return readContext(client, parsed);
   if (!parsed.previewOperationId || !parsed.idempotencyKey) {
     throw new Error("Agent Progression execute 必须提供 previewOperationId 和 idempotencyKey");

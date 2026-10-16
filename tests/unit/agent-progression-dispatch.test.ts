@@ -295,4 +295,17 @@ describe("agent progression dispatch", () => {
       phase: "draft", resourceType: "story", resourceId: 12,
     });
   });
+
+  it("rejects credential-shaped fields before a progression draft reaches PMS", async () => {
+    await expect(validateAgentProgressionDraft(readClient(), {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 12,
+      intent: "UPDATE_NODE_FIELDS",
+      draft: {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: { apiKey: "should-not-leave-the-agent" },
+      },
+    })).rejects.toThrow(/凭据|credential|apiKey/i);
+  });
 });

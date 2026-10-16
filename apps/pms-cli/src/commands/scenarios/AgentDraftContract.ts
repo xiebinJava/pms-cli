@@ -106,7 +106,7 @@ export function validateChildDraft(draft: AgentDraft, snapshot: ContextSnapshot)
 
 const forbiddenPayloadKey = /(?:token|api[_-]?key|auth(?:orization|store)?|password|secret|credential|cookie|callback)/i;
 
-function assertSafeAgentPayload(value: unknown, path = "$", seen = new WeakSet<object>()): void {
+export function assertSafeAgentPayload(value: unknown, path = "$", seen = new WeakSet<object>()): void {
   if (typeof value === "function") {
     throw new PmsClientError("validation", `CHILD_AGENT_PAYLOAD_EXECUTABLE: ${path} 不允许携带可执行回调`, {
       details: { code: "CHILD_AGENT_PAYLOAD_EXECUTABLE", path },
