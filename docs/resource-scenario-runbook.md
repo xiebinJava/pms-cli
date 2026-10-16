@@ -8,7 +8,7 @@ Claude/Codex 理解请求
 → 展示 preview 和 warnings
 → 用户确认
 → pms scenario resource execute
-→ PMS 回读 resource/context
+→ PMS 回读 resource/context，并返回 operationId/auditId
 → 根据 verification 汇报结果
 ```
 

@@ -6,6 +6,9 @@ import {
   planResourceScenario,
 } from "../../apps/pms-cli/src/commands/scenarios/resourceScenarioExecutor.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
+import "../../apps/pms-cli/src/commands/scenarios/requirementScenarioAdapter.js";
+import "../../apps/pms-cli/src/commands/scenarios/topicScenarioAdapter.js";
+import "../../apps/pms-cli/src/commands/scenarios/projectScenarioAdapter.js";
 import { resourceScenarioContractVersion, type ResourceScenarioResourceType } from "../../packages/pms-contracts/src/index.js";
 import { auditOperations } from "./support/operationAudit.js";
 import {
@@ -79,10 +82,10 @@ async function runUpdateScenario(
 ): Promise<void> {
   const beforeResource = await client.get({ type: resourceType, id: resourceId });
   const beforeContext = await client.context({ type: resourceType, id: resourceId });
-  const contextVersion = beforeContext.entityVersion ?? beforeContext.version;
-  if (contextVersion === null || contextVersion === undefined) {
-    throw new Error(`${resourceType}:${resourceId} 缺少可用于写入的实体版本`);
-  }
+  // Keep the E2E input aligned with each adapter's context contract: the
+  // workflow version guards requirement/topic plans, while project updates
+  // guard the project entity version.
+  const contextVersion = scenarioContextVersion(resourceType, beforeContext);
 
   const plan = await planResourceScenario(client, {
     contractVersion: resourceScenarioContractVersion,
@@ -126,7 +129,24 @@ async function runUpdateScenario(
   });
   expect(replay.status).toBe("SUCCEEDED");
   expect(replay.operation.operationId).toBe(first.operation.operationId);
-  expect(replay.readback.context?.entityVersion).not.toBe(beforeContext.entityVersion);
+  const updatedField = resourceType === "project" ? "name" : "title";
+  expect(replay.readback.resource?.details[updatedField]).toBe(argumentsValue[updatedField]);
+  if (beforeResource.entityVersion !== null && replay.readback.resource?.entityVersion !== null) {
+    expect(replay.readback.resource?.entityVersion).not.toBe(beforeResource.entityVersion);
+  }
+}
+
+function scenarioContextVersion(
+  resourceType: ResourceScenarioResourceType,
+  context: { version: number | null; entityVersion?: number | null },
+): number {
+  const value = resourceType === "project"
+    ? context.entityVersion ?? context.version
+    : context.version;
+  if (value === null || value === undefined) {
+    throw new Error(`${resourceType} 上下文缺少可用于计划的版本`);
+  }
+  return value;
 }
 
 async function titleOf(client: PmsHttpClient, resourceType: ResourceScenarioResourceType, resourceId: number): Promise<string> {

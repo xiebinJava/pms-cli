@@ -51,7 +51,10 @@ pnpm run verify:real-pms:story-orchestrator
 
 `tests/e2e/resource-scenario-real-pms.test.ts` 使用显式的 `PMS_E2E_RESOURCE_SCENARIO=true` gate，要求专用账号、一次性 `pms_ai_e2e_` 数据库、项目/专题/需求 ID 和 `PMS_E2E_DB_URL`。它会对三类资源分别执行 `plan → execute → readback`，重放同一幂等键，并查询 `pms_ai_operation` 审计记录。plan 后通过资源详情确认业务数据未改变，execute 后验证版本、operationId、auditId、verification 和回读结果。
 
-当前开发环境没有提供真实隔离 PMS 配置，因此本轮只完成测试与 runbook，未宣称真实三场景通过。MySQL 查询默认使用 `scripts/e2e-mysql-client.sh` 在指定容器内执行；未配置隔离 gate、账号或数据库时，显式运行该 E2E 会失败并说明缺失项。
+本次隔离运行 `resource-20261016e` 已通过真实 PMS：需求、专题、项目均完成
+`plan（含 preview）→ execute → resource/context readback`，并验证了 `operationId`、`auditId`、
+verification、业务字段回读和相同幂等键重放。运行使用一次性数据库和专用账号，未修改开发环境中的业务库。
+MySQL 查询使用 `scripts/e2e-mysql-client.sh` 在指定容器内执行；未配置隔离 gate、账号或数据库时，显式运行该 E2E 会失败并说明缺失项。
 
 ## 场景级闭环验收
 
