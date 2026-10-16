@@ -38,6 +38,10 @@ export interface CliInvocation {
 
 export class CliArgumentError extends Error {
   readonly name = "CliArgumentError";
+
+  constructor(message: string, readonly code: "CLI_USAGE" | "PREVIEW_REQUIRED" | "IDEMPOTENCY_REQUIRED" = "CLI_USAGE") {
+    super(message);
+  }
 }
 
 export function parseCliArguments(argv: string[]): CliInvocation {

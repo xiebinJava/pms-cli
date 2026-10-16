@@ -64,6 +64,7 @@ import {
   executeResourceScenario,
   planResourceScenario,
 } from "../commands/scenarios/resourceScenarioExecutor.js";
+import { ResourceScenarioError } from "../commands/scenarios/resourceScenarioRegistry.js";
 import "../commands/scenarios/requirementScenarioAdapter.js";
 import "../commands/scenarios/topicScenarioAdapter.js";
 import "../commands/scenarios/projectScenarioAdapter.js";
@@ -151,8 +152,10 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
     }
   } catch (error) {
     const pmsError = error instanceof PmsClientError ? error : undefined;
-    const code = error instanceof CliArgumentError
-      ? "CLI_USAGE"
+    const code = error instanceof ResourceScenarioError
+      ? error.code
+      : error instanceof CliArgumentError
+      ? error.code
       : pmsError
         ? pmsError.kind.toUpperCase()
         : "CLI_ERROR";
@@ -734,8 +737,8 @@ async function dispatchResourceScenario(
   if (invocation.options["arguments-json"] !== undefined || invocation.options["draft-json"] !== undefined) {
     throw new CliArgumentError("资源场景 execute 已绑定预览，不接受 arguments 或 draft；请先重新执行 plan");
   }
-  const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
-  const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+  const previewOperationId = requiredResourceScenarioOption(invocation.options, "preview-operation-id");
+  const idempotencyKey = requiredResourceScenarioOption(invocation.options, "idempotency-key");
   const runtime = await deps.createRuntime(requestId);
   return executeResourceScenario(runtime.client, {
     resourceType,
@@ -745,6 +748,20 @@ async function dispatchResourceScenario(
     idempotencyKey,
     requestId,
   });
+}
+
+function requiredResourceScenarioOption(
+  options: Record<string, string>,
+  name: "preview-operation-id" | "idempotency-key",
+): string {
+  const value = options[name]?.trim();
+  if (!value) {
+    throw new CliArgumentError(
+      `必须提供 --${name}`,
+      name === "preview-operation-id" ? "PREVIEW_REQUIRED" : "IDEMPOTENCY_REQUIRED",
+    );
+  }
+  return value;
 }
 
 function requireResourceScenarioResourceType(raw: string | undefined): ResourceScenarioResourceType {

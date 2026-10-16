@@ -10,10 +10,17 @@ import type {
   ResourceScenarioVerification,
 } from "../../../../../packages/pms-contracts/src/index.js";
 
+export type ResourceScenarioErrorCode =
+  | "CAPABILITY_UNAVAILABLE"
+  | "RESOURCE_NOT_FOUND"
+  | "CONTEXT_CONFLICT"
+  | "FORBIDDEN"
+  | "WRITE_RESULT_UNKNOWN";
+
 export class ResourceScenarioError extends Error {
   readonly name = "ResourceScenarioError";
 
-  constructor(readonly code: "CAPABILITY_UNAVAILABLE" | "RESOURCE_NOT_FOUND" | "CONTEXT_CONFLICT", message: string) {
+  constructor(readonly code: ResourceScenarioErrorCode, message: string) {
     super(`${code}: ${message}`);
   }
 }
