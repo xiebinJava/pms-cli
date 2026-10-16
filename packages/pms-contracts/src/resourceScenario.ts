@@ -88,7 +88,8 @@ export const resourceScenarioPlanSchema = z.object({
   normalizedArguments: z.record(z.string(), z.unknown()),
   capability: z.record(z.string(), z.unknown()),
   preview: operationPreviewSchema,
-  requiresConfirmation: z.literal(true),
+  requiresConfirmation: z.boolean(),
+  executionMode: z.enum(["read", "automatic", "confirmation"]).default("confirmation"),
   warnings: z.array(z.string()).default([]),
 }).strict();
 

@@ -33,6 +33,9 @@ export async function planResourceScenario(
   const action = await resolver.action(parsed.operation);
   const validatedArguments = resolver.validateArguments(parsed.operation, normalizedArguments);
   adapter.validate(parsed, context, validatedArguments, action);
+  const executionMode = action.mode === "read"
+    ? "read" as const
+    : action.risk === "high" ? "confirmation" as const : "automatic" as const;
   const preview = await operationPreview(client, parsed.operation, {
     arguments: validatedArguments,
     context: context ? { id: context.id, version: context.version } : { id: "global:pms", version: "v1" },
@@ -49,7 +52,8 @@ export async function planResourceScenario(
     normalizedArguments: validatedArguments,
     capability: action,
     preview,
-    requiresConfirmation: true,
+    requiresConfirmation: executionMode === "confirmation",
+    executionMode,
     warnings: [...preview.warnings],
   } as ResourceScenarioPlan;
 }

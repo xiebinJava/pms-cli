@@ -2,6 +2,11 @@ import type { PmsClient } from "../../../../packages/pms-client/src/index.js";
 import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-client/src/index.js";
 import {
   resourceScenarioContractVersion,
+  agentProgressionContractVersion,
+  agentProgressionDraftSchema,
+  type AgentProgressionExecuteMode,
+  type AgentProgressionIntent,
+  type AgentProgressionResourceType,
   type AnalysisDraft,
   type ContextReadOptions,
   type QueryItem,
@@ -64,6 +69,10 @@ import {
   executeResourceScenario,
   planResourceScenario,
 } from "../commands/scenarios/resourceScenarioExecutor.js";
+import {
+  executeAgentProgression,
+  planAgentProgression,
+} from "../commands/scenarios/agentProgression.js";
 import { ResourceScenarioError } from "../commands/scenarios/resourceScenarioRegistry.js";
 import "../commands/scenarios/requirementScenarioAdapter.js";
 import "../commands/scenarios/topicScenarioAdapter.js";
@@ -92,6 +101,7 @@ const HELP = [
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
   "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
+  "  pms scenario progression plan|execute <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -281,6 +291,9 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   }
   if (invocation.group === "scenario" && invocation.command === "resource") {
     return dispatchResourceScenario(invocation, deps, requestId);
+  }
+  if (invocation.group === "scenario" && invocation.command === "progression") {
+    return dispatchAgentProgression(invocation, deps, requestId);
   }
   if (invocation.group === "scenario" && isResourceWriteScenario(invocation.command)) {
     const scenario = resolveResourceWriteScenario(invocation.command, invocation.positionals);
@@ -764,6 +777,89 @@ async function dispatchResourceScenario(
     idempotencyKey,
     requestId,
   });
+}
+
+async function dispatchAgentProgression(
+  invocation: CliInvocation,
+  deps: CliDependencies,
+  requestId: string,
+): Promise<unknown> {
+  const [phase, rawResourceType, rawResourceId] = invocation.positionals;
+  if (phase !== "plan" && phase !== "execute") {
+    throw new CliArgumentError("scenario progression 需要 plan 或 execute");
+  }
+  const resourceType = parseAgentProgressionResourceType(rawResourceType);
+  const resourceId = requireId(rawResourceId);
+  const intent = parseAgentProgressionIntent(requiredOption(invocation.options, "intent"));
+  const executeMode = parseAgentProgressionExecuteMode(invocation.options["execute-mode"] ?? "auto");
+  const draft = parseProgressionDraft(invocation.options["draft-json"]);
+  if (phase === "plan") {
+    if (intent !== "READ_CONTEXT" && draft === undefined) {
+      throw new CliArgumentError("progression plan 的写入意图必须提供 --draft-json");
+    }
+    const runtime = await deps.createRuntime(requestId);
+    return planAgentProgression(runtime.client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType,
+      resourceId,
+      intent,
+      executeMode,
+      ...(draft === undefined ? {} : { draft }),
+      ...(invocation.options["node-id"] === undefined
+        ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
+      ...(invocation.options.version === undefined
+        ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+      requestId,
+    });
+  }
+  const previewOperationId = requiredOption(invocation.options, "preview-operation-id");
+  const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+  const runtime = await deps.createRuntime(requestId);
+  return executeAgentProgression(runtime.client, {
+    contractVersion: agentProgressionContractVersion,
+    resourceType,
+    resourceId,
+    intent,
+    executeMode,
+    previewOperationId,
+    idempotencyKey,
+    ...(draft === undefined ? {} : { draft }),
+    ...(invocation.options["node-id"] === undefined
+      ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
+    ...(invocation.options.version === undefined
+      ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+    requestId,
+  });
+}
+
+function parseProgressionDraft(raw: string | undefined) {
+  if (raw === undefined) return undefined;
+  try {
+    return agentProgressionDraftSchema.parse(JSON.parse(raw));
+  } catch (error) {
+    throw new CliArgumentError(error instanceof Error ? error.message : "--draft-json 无效");
+  }
+}
+
+function parseAgentProgressionResourceType(raw: string | undefined): AgentProgressionResourceType {
+  if (raw !== "project" && raw !== "requirement" && raw !== "topic" && raw !== "story") {
+    throw new CliArgumentError("progression 仅支持 project、requirement、topic、story");
+  }
+  return raw;
+}
+
+function parseAgentProgressionIntent(raw: string): AgentProgressionIntent {
+  if (raw !== "READ_CONTEXT" && raw !== "UPDATE_NODE_FIELDS" && raw !== "COMPLETE_NODE") {
+    throw new CliArgumentError("progression intent 仅支持 READ_CONTEXT、UPDATE_NODE_FIELDS、COMPLETE_NODE");
+  }
+  return raw;
+}
+
+function parseAgentProgressionExecuteMode(raw: string): AgentProgressionExecuteMode {
+  if (raw !== "plan" && raw !== "auto" && raw !== "confirm") {
+    throw new CliArgumentError("progression execute-mode 仅支持 plan、auto、confirm");
+  }
+  return raw;
 }
 
 function requiredResourceScenarioOption(

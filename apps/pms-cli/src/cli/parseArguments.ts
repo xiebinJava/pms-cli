@@ -27,6 +27,8 @@ const VALUE_OPTIONS = new Set([
   "owner-id",
   "start-date",
   "end-date",
+  "intent",
+  "execute-mode",
 ]);
 
 const BOOLEAN_OPTIONS = new Set(["help", "version", "global", "complete"]);

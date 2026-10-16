@@ -1,0 +1,103 @@
+import { z } from "zod";
+import { operationPreviewSchema, operationResultSchema } from "./operation.js";
+import {
+  resourceScenarioDraftSchema,
+  resourceScenarioVerificationSchema,
+} from "./resourceScenario.js";
+import { resourceDetailSchema } from "./query.js";
+
+export const agentProgressionContractVersion = "agent-progression/v1" as const;
+
+export const agentProgressionResourceTypeSchema = z.enum([
+  "project",
+  "requirement",
+  "topic",
+  "story",
+]);
+export type AgentProgressionResourceType = z.infer<typeof agentProgressionResourceTypeSchema>;
+
+export const agentProgressionIntentSchema = z.enum([
+  "READ_CONTEXT",
+  "UPDATE_NODE_FIELDS",
+  "COMPLETE_NODE",
+]);
+export type AgentProgressionIntent = z.infer<typeof agentProgressionIntentSchema>;
+
+export const agentProgressionExecuteModeSchema = z.enum(["plan", "auto", "confirm"]);
+export type AgentProgressionExecuteMode = z.infer<typeof agentProgressionExecuteModeSchema>;
+
+export const agentProgressionExecutionModeSchema = z.enum(["read", "automatic", "confirmation"]);
+export type AgentProgressionExecutionMode = z.infer<typeof agentProgressionExecutionModeSchema>;
+
+const contextVersionSchema = z.union([
+  z.string().trim().min(1),
+  z.number().int().nonnegative(),
+]).transform((value) => String(value));
+
+export const agentProgressionDraftSchema = resourceScenarioDraftSchema.extend({
+  ownerId: z.number().int().positive().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).strict();
+
+export const agentProgressionInputSchema = z.object({
+  contractVersion: z.literal(agentProgressionContractVersion),
+  resourceType: agentProgressionResourceTypeSchema,
+  resourceId: z.number().int().positive(),
+  nodeId: z.number().int().positive().optional(),
+  contextVersion: contextVersionSchema.optional(),
+  intent: agentProgressionIntentSchema,
+  draft: agentProgressionDraftSchema.optional(),
+  executeMode: agentProgressionExecuteModeSchema.default("plan"),
+  previewOperationId: z.string().trim().min(1).max(160).optional(),
+  idempotencyKey: z.string().trim().min(1).max(160).optional(),
+  requestId: z.string().trim().min(1).max(160).optional(),
+}).strict();
+
+export const agentProgressionPlanSchema = z.object({
+  contractVersion: z.literal(agentProgressionContractVersion),
+  phase: z.literal("plan"),
+  resourceType: agentProgressionResourceTypeSchema,
+  resourceId: z.number().int().positive(),
+  intent: agentProgressionIntentSchema,
+  operation: z.string().trim().min(1).nullable(),
+  context: z.unknown().nullable(),
+  normalizedArguments: z.record(z.string(), z.unknown()).default({}),
+  capability: z.record(z.string(), z.unknown()).nullable(),
+  preview: operationPreviewSchema.nullable(),
+  requiresConfirmation: z.boolean(),
+  executionMode: agentProgressionExecutionModeSchema,
+  warnings: z.array(z.string()).default([]),
+}).strict();
+
+export const agentProgressionResultSchema = z.object({
+  contractVersion: z.literal(agentProgressionContractVersion),
+  phase: z.literal("execute"),
+  status: z.enum([
+    "CONTEXT_READY",
+    "PLAN_READY",
+    "WAITING_CONFIRMATION",
+    "SUCCEEDED",
+    "REJECTED",
+    "CONFLICT",
+    "CAPABILITY_UNAVAILABLE",
+    "WRITE_RESULT_UNKNOWN",
+  ]),
+  resourceType: agentProgressionResourceTypeSchema,
+  resourceId: z.number().int().positive(),
+  intent: agentProgressionIntentSchema,
+  plan: agentProgressionPlanSchema.nullable(),
+  operation: operationResultSchema.nullable(),
+  readback: z.object({
+    resource: resourceDetailSchema.nullable(),
+    context: z.unknown().nullable(),
+  }).strict().nullable(),
+  verification: resourceScenarioVerificationSchema.nullable(),
+  warnings: z.array(z.string()).default([]),
+}).strict();
+
+export type AgentProgressionDraft = z.infer<typeof agentProgressionDraftSchema>;
+export type AgentProgressionInput = z.input<typeof agentProgressionInputSchema>;
+export type ParsedAgentProgressionInput = z.output<typeof agentProgressionInputSchema>;
+export type AgentProgressionPlan = z.infer<typeof agentProgressionPlanSchema>;
+export type AgentProgressionResult = z.infer<typeof agentProgressionResultSchema>;

@@ -8,3 +8,4 @@ export * from "./scenario.js";
 export * from "./orchestrator.js";
 export * from "./agent.js";
 export * from "./resourceScenario.js";
+export * from "./agentProgression.js";
