@@ -71,6 +71,7 @@ import {
 import {
   executeAgentProgression,
   planAgentProgression,
+  validateAgentProgressionDraft,
 } from "../commands/scenarios/agentProgression.js";
 import { FixedProgressionDraftProvider } from "../commands/scenarios/FixedProgressionDraftProvider.js";
 import {
@@ -106,7 +107,7 @@ const HELP = [
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
   "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
-  "  pms scenario progression plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
+  "  pms scenario progression draft|plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -786,8 +787,8 @@ async function dispatchAgentProgression(
   requestId: string,
 ): Promise<unknown> {
   const [phase, rawResourceType, rawResourceId] = invocation.positionals;
-  if (phase !== "plan" && phase !== "execute" && phase !== "shadow") {
-    throw new CliArgumentError("scenario progression 需要 plan、execute 或 shadow");
+  if (phase !== "draft" && phase !== "plan" && phase !== "execute" && phase !== "shadow") {
+    throw new CliArgumentError("scenario progression 需要 draft、plan、execute 或 shadow");
   }
   const resourceType = parseAgentProgressionResourceType(rawResourceType);
   const resourceId = requireId(rawResourceId);
@@ -811,6 +812,22 @@ async function dispatchAgentProgression(
   const intent = parseAgentProgressionIntent(requiredOption(invocation.options, "intent"));
   const executeMode = parseAgentProgressionExecuteMode(invocation.options["execute-mode"] ?? "auto");
   const draft = parseProgressionDraft(invocation.options["draft-json"]);
+  if (phase === "draft") {
+    const runtime = await deps.createRuntime(requestId);
+    return validateAgentProgressionDraft(runtime.client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType,
+      resourceId,
+      intent,
+      executeMode,
+      ...(draft === undefined ? {} : { draft }),
+      ...(invocation.options["node-id"] === undefined
+        ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
+      ...(invocation.options.version === undefined
+        ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+      requestId,
+    });
+  }
   if (phase === "plan") {
     if (intent !== "READ_CONTEXT" && draft === undefined) {
       throw new CliArgumentError("progression plan 的写入意图必须提供 --draft-json");

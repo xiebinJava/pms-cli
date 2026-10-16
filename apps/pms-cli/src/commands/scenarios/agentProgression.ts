@@ -6,6 +6,7 @@ import type {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import {
   agentProgressionContractVersion,
+  agentProgressionDraftResultSchema,
   agentProgressionInputSchema,
   agentProgressionResultSchema,
 } from "../../../../../packages/pms-contracts/src/index.js";
@@ -63,6 +64,35 @@ export async function planAgentProgression(
     executionMode,
     warnings: resourcePlan.warnings,
   };
+}
+
+/**
+ * Validates a draft produced by an external Agent against a fresh PMS context.
+ * This intentionally does not create a preview or execute an operation; the
+ * subsequent plan call remains the authoritative saveContract validation.
+ */
+export async function validateAgentProgressionDraft(
+  client: PmsClient,
+  input: unknown,
+) {
+  const parsed = agentProgressionInputSchema.parse(input);
+  if (parsed.intent === "READ_CONTEXT") {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "READ_CONTEXT 不需要 draft 校验");
+  }
+  if (!parsed.draft) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "写入意图必须提供 draft");
+  }
+  const readback = await readContextSnapshot(client, parsed);
+  return agentProgressionDraftResultSchema.parse({
+    contractVersion: agentProgressionContractVersion,
+    phase: "draft",
+    resourceType: parsed.resourceType,
+    resourceId: parsed.resourceId,
+    intent: parsed.intent,
+    contextVersion: String(readback.context.version),
+    draft: parsed.draft,
+    warnings: [],
+  });
 }
 
 export async function executeAgentProgression(

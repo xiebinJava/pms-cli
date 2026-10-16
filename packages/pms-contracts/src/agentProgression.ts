@@ -97,11 +97,23 @@ export const agentProgressionResultSchema = z.object({
   warnings: z.array(z.string()).default([]),
 }).strict();
 
+export const agentProgressionDraftResultSchema = z.object({
+  contractVersion: z.literal(agentProgressionContractVersion),
+  phase: z.literal("draft"),
+  resourceType: agentProgressionResourceTypeSchema,
+  resourceId: z.number().int().positive(),
+  intent: z.enum(["UPDATE_NODE_FIELDS", "COMPLETE_NODE"]),
+  contextVersion: z.string().trim().min(1),
+  draft: agentProgressionDraftSchema,
+  warnings: z.array(z.string()).default([]),
+}).strict();
+
 export type AgentProgressionDraft = z.infer<typeof agentProgressionDraftSchema>;
 export type AgentProgressionInput = z.input<typeof agentProgressionInputSchema>;
 export type ParsedAgentProgressionInput = z.output<typeof agentProgressionInputSchema>;
 export type AgentProgressionPlan = z.infer<typeof agentProgressionPlanSchema>;
 export type AgentProgressionResult = z.infer<typeof agentProgressionResultSchema>;
+export type AgentProgressionDraftResult = z.infer<typeof agentProgressionDraftResultSchema>;
 
 export const agentProgressionShadowCandidateResourceSchema = z.object({
   resourceType: agentProgressionResourceTypeSchema,

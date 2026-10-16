@@ -2,6 +2,16 @@
 
 本报告模板用于记录四类资源的自然语言草稿质量。影子运行只读取 PMS 上下文并生成草稿，不调用 `preview`、`execute` 或任何写命令。
 
+外部 Agent 生成草稿后，先通过只读 draft 入口绑定新鲜上下文：
+
+```bash
+pms scenario progression draft story 34 \
+  --intent UPDATE_NODE_FIELDS \
+  --draft-json '<AgentProgressionDraft JSON>'
+```
+
+该命令只校验结构并返回上下文版本；随后由 `plan` 依据服务端 `saveContract` 做字段白名单和 preview 校验，再根据能力策略进入 `execute`。pms-cli 不调用模型。
+
 每条用例同时记录三类结果：
 
 - **程序通过**：草稿符合 `AgentProgressionShadowDraft` schema，引用和候选结构可被机器解析。

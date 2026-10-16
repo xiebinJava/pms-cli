@@ -4,6 +4,7 @@ import { runCli } from "../../apps/pms-cli/src/cli/runCli.js";
 import {
   executeAgentProgression,
   planAgentProgression,
+  validateAgentProgressionDraft,
 } from "../../apps/pms-cli/src/commands/scenarios/agentProgression.js";
 import { agentProgressionContractVersion } from "../../packages/pms-contracts/src/index.js";
 
@@ -263,6 +264,35 @@ describe("agent progression dispatch", () => {
     expect(output.stderr).toEqual([]);
     expect(JSON.parse(output.stdout[0] ?? "{}").data).toMatchObject({
       mode: "read-only-shadow", provider: "mock", summary: { total: 12, generated: 12 },
+    });
+  });
+
+  it("validates an external Agent draft against a fresh context without preview or execute", async () => {
+    const context = readClient();
+    const result = await validateAgentProgressionDraft(context, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 12,
+      intent: "UPDATE_NODE_FIELDS",
+      draft: { facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: { summary: "已分析" } },
+    });
+
+    expect(result.phase).toBe("draft");
+    expect(result.contextVersion).toBe("1");
+    expect(context.context).toHaveBeenCalledTimes(1);
+  });
+
+  it("exposes progression draft validation through the CLI without preview", async () => {
+    const client = readClient();
+    const output = dependencies(client);
+    await runCli([
+      "scenario", "progression", "draft", "story", "12", "--intent", "UPDATE_NODE_FIELDS",
+      "--draft-json", JSON.stringify({ facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: {} }),
+    ], output.deps);
+
+    expect(output.stderr).toEqual([]);
+    expect(JSON.parse(output.stdout[0] ?? "{}").data).toMatchObject({
+      phase: "draft", resourceType: "story", resourceId: 12,
     });
   });
 });

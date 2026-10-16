@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   agentProgressionContractVersion,
+  agentProgressionDraftResultSchema,
   agentProgressionInputSchema,
   agentProgressionPlanSchema,
   agentProgressionResultSchema,
@@ -80,5 +81,20 @@ describe("agent progression contract", () => {
       references: ["story:12"],
     });
     expect(shadow.proposedFieldValues).toEqual({});
+  });
+
+  it("describes a read-only draft validation result without an operation", () => {
+    const result = agentProgressionDraftResultSchema.parse({
+      contractVersion: agentProgressionContractVersion,
+      phase: "draft",
+      resourceType: "story",
+      resourceId: 34,
+      intent: "UPDATE_NODE_FIELDS",
+      contextVersion: "12",
+      draft,
+      warnings: [],
+    });
+    expect(result.phase).toBe("draft");
+    expect(result.draft.patch).toEqual({ acceptanceConclusion: "PASS" });
   });
 });
