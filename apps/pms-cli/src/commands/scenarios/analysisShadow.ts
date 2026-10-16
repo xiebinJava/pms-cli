@@ -94,7 +94,7 @@ export function fixedMockDraftForContext(context: WorkflowContext): AnalysisDraf
 }
 
 /**
- * Runs model generation and local draft validation only. It deliberately does
+ * Runs draft generation through the injected source and local draft validation only. It deliberately does
  * not call operation preview or execute, so the shadow experiment cannot write
  * to PMS even if a prompt asks it to save.
  */

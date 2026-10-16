@@ -40,7 +40,7 @@ node dist/pms-cli.js scenario requirement-analysis plan 33 \
 - `tests/unit/e2e-safety.test.ts`: 8 passed。
 - `tests/unit/requirement-fixture.test.ts`: 4 passed。
 - `tests/unit/auth.test.ts`: 5 passed。
-- `tests/unit/analysis-draft-provider.test.ts`: 4 passed。
+- `tests/unit/analysis-draft-provider.test.ts`: 1 passed。
 - `tests/unit/analysis-shadow.test.ts`: 2 passed。
 - `tests/unit/cli-runner.test.ts`: 10 passed，包含只读 shadow 命令路由。
 - Final Connector suite excluding the environment-sensitive `tests/e2e/install.test.ts`: 123 passed，4 skipped。该安装测试依赖本机 OS keyring 子进程；本次单独重跑受本机凭据环境阻塞，未发现与本次 Provider 改动相关的断言失败。
@@ -62,4 +62,4 @@ The 12 prompts in `tests/fixtures/requirement-analysis-shadow-cases.json` are an
 
 ## Acceptance decision
 
-The deterministic context and save contract is ready for a controlled shadow experiment. A full chat workbench remains gated on that experiment: proceed only if active user effort improves without reducing review quality and without unauthorized/protected-field writes. Until then, build at most a preview-first “draft → preview → confirm” surface that reuses the tested scenario API.
+The deterministic context and save contract is ready for a controlled shadow experiment. The experiment is run by the external Agent; pms-cli only validates the returned draft and reuses the tested scenario API. A full chat workbench remains deferred until active user effort improves without reducing review quality and without unauthorized/protected-field writes.
