@@ -49,8 +49,9 @@ export async function planAgentProgression(
     ? null
     : await readFocusedProgressionContext(client, parsed);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
+  const draftExecutionMode = draftModeForRequest(parsed, executionMode);
   const draftPlan = parsed.draft && preflightContext
-    ? planAgentProgressionDraft(parsed.draft, preflightContext, parsed.nodeId, parsed.intent, executionMode)
+    ? planAgentProgressionDraft(parsed.draft, preflightContext, parsed.nodeId, parsed.intent, draftExecutionMode)
     : null;
   if (draftPlan && draftPlan.writeDecision !== "READY") {
     return {
@@ -232,6 +233,17 @@ function progressionWarnings(details: ReturnType<typeof planAgentProgressionDraf
     ...details.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
     ...details.unresolvedDecisions,
   ];
+}
+
+function draftModeForRequest(
+  input: ParsedAgentProgressionInput,
+  capabilityMode: "read" | "automatic" | "confirmation",
+): "read" | "automatic" | "confirmation" {
+  // Explicit confirm authorizes a high-risk preview+execute path. Auto and
+  // plan must still stop before preview for the same capability.
+  return input.executeMode === "confirm" && capabilityMode === "confirmation"
+    ? "automatic"
+    : capabilityMode;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

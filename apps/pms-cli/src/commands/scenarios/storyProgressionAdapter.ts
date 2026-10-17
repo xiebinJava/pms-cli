@@ -33,8 +33,11 @@ export async function planStoryProgression(
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
   const executionMode = deriveProgressionExecutionMode(capability);
+  const draftExecutionMode = input.executeMode === "confirm" && executionMode === "confirmation"
+    ? "automatic" as const
+    : executionMode;
   const draftPlan = input.draft
-    ? planAgentProgressionDraft(input.draft, binding.context, binding.nodeId, input.intent, executionMode)
+    ? planAgentProgressionDraft(input.draft, binding.context, binding.nodeId, input.intent, draftExecutionMode)
     : null;
   if (draftPlan && draftPlan.writeDecision !== "READY") {
     return {
