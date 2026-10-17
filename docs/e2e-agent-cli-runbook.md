@@ -69,6 +69,40 @@ npm run verify:real-pms:cli
 
 测试会让构建后的 CLI 自己执行 `pms auth login`，并把授权 URL 输出到测试日志；CLI 在测试环境可以通过 `PMS_CLI_KEYRING_SERVICE` 指定独立的系统 keyring service，避免污染本机默认的 `pms-cli` 登录状态。普通用户无需设置这些变量。
 
+## 节点详情自动补全 E2E
+
+需求和故事节点使用同一条 Agent progression 链：
+
+```text
+pms context --view focused
+  → Agent draft（fieldSources + requestedCompletion）
+  → scenario progression plan
+  → development-item.node.complete-with-data preview
+  → scenario progression execute
+  → get/context 回读与 verification
+```
+
+真实写入只允许在隔离数据库中执行。需求场景需要指定一个已经处于可完成测试节点的需求和节点；故事场景可以使用已有故事，也可以在隔离库中创建夹具并推进到验收节点：
+
+```bash
+export PMS_E2E_REQUIREMENT_ID=24
+export PMS_E2E_NODE_ID=387
+export PMS_E2E_STORY_ID=34                 # 不创建故事夹具时使用
+export PMS_E2E_CREATE_STORY_FIXTURE=false  # 创建夹具时改为 true
+
+pnpm run verify:real-pms:node-autofill
+```
+
+该命令还要求前面的隔离目标变量完整（`PMS_E2E_BASE_URL`、`PMS_E2E_ALLOWED_BASE_URL`、`PMS_E2E_DATABASE_NAME`、`PMS_E2E_ALLOWED_DATABASE_NAME`、`PMS_E2E_ACCOUNT_ID`、`PMS_E2E_RUN_ID`），并且必须设置 `PMS_E2E_WRITE=true` 和 `PMS_E2E_ISOLATED=true`。需求夹具不能自动清理已推进的流程节点，因此只应使用可销毁的隔离数据库；故事夹具同样随隔离数据库一起销毁。
+
+要只验证模型输出和缺失项，不写入 PMS，可以直接运行：
+
+```bash
+pnpm exec vitest run --cache=false tests/unit/agent-progression-plan.test.ts tests/contract/agent-scenario-cli.test.ts
+```
+
+其中 `NEEDS_INPUT` 会返回 `missingFields` 并保持 `preview=null`；`UPDATE_NODE_FIELDS` 只调用 `development-item.node.field.update`，不会推进节点。
+
 ### 操作审计查询的 MySQL 客户端
 
 故事节点编排验收会在业务链路完成后只读查询 `pms_ai_operation`，确认执行状态和审计记录已经持久化。查询由 `tests/e2e/support/operationAudit.ts` 通过 `PMS_E2E_MYSQL_CLIENT` 启动：
