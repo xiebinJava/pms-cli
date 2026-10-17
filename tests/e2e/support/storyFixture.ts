@@ -4,7 +4,17 @@ import type {
   OperationResult,
   WorkflowContext,
 } from "../../../packages/pms-contracts/src/index.js";
-import { operationExecute, operationPreview } from "../../../apps/pms-cli/src/commands/core/operation.js";
+import { operationExecutePreview, operationPreview } from "../../../apps/pms-cli/src/commands/core/operation.js";
+
+async function executePreviewed(
+  client: PmsClient,
+  operation: string,
+  idempotencyKey: string,
+  options: Parameters<typeof operationPreview>[2] = {},
+) {
+  const preview = await operationPreview(client, operation, options);
+  return operationExecutePreview(client, preview.operationId, idempotencyKey);
+}
 
 export interface StoryFixture {
   storyId: number;
@@ -37,14 +47,11 @@ export async function createStoryFixture(client: PmsClient, runId: string): Prom
   const templateVersionId = storyWorkbenchTemplateVersion(capabilities);
   const title = `AI-E2E-故事-${runId}`;
   const argumentsValue = { title, templateVersionId };
-  await operationPreview(client, "story.create", {
+  const createPreview = await operationPreview(client, "story.create", {
     arguments: argumentsValue,
     context: { id: "global:pms", version: "v1" },
   });
-  const result = await operationExecute(client, "story.create", `story-create-${runId}`, {
-    arguments: argumentsValue,
-    context: { id: "global:pms", version: "v1" },
-  });
+  const result = await operationExecutePreview(client, createPreview.operationId, `story-create-${runId}`);
   if (result.status !== "SUCCEEDED") throw new Error("故事夹具创建未成功");
   const storyId = readStoryId(result);
   if (storyId === null) throw new Error("故事夹具创建成功响应缺少故事 ID");
@@ -115,7 +122,7 @@ async function advanceToDevelopmentNode(client: PmsClient, runId: string, storyI
     }
     if (contract?.variant === "development") return;
 
-    const owned = await operationExecute(client, "development-item.node.owner.update",
+    const owned = await executePreviewed(client, "development-item.node.owner.update",
       `${runId}-advance-owner-${attempt}`, {
         arguments: { itemType: "STORY", itemId, nodeId: currentNodeId, ownerId, version },
         context: { id: "global:pms", version: "v1" },
@@ -132,7 +139,7 @@ async function advanceToDevelopmentNode(client: PmsClient, runId: string, storyI
       throw new Error("故事夹具推进时流程节点版本读取失败");
     }
     const today = new Date().toISOString().slice(0, 10);
-    const scheduled = await operationExecute(client, "development-item.node.schedule.update",
+    const scheduled = await executePreviewed(client, "development-item.node.schedule.update",
       `${runId}-advance-schedule-${attempt}`, {
         arguments: {
           itemType: "STORY", itemId, nodeId: currentNodeId,
@@ -143,7 +150,7 @@ async function advanceToDevelopmentNode(client: PmsClient, runId: string, storyI
       });
     if (scheduled.status !== "SUCCEEDED") throw new Error("故事夹具推进节点排期更新未成功");
 
-    const advanced = await operationExecute(client, "development-item.node.complete",
+    const advanced = await executePreviewed(client, "development-item.node.complete",
       `${runId}-advance-complete-${attempt}`, {
         arguments: { itemType: "STORY", itemId, nodeId: currentNodeId },
         context: { id: "global:pms", version: "v1" },
@@ -204,7 +211,7 @@ export async function advanceStoryToVariant(
     }
     if (variant === targetVariant) return { nodeId: currentNodeId, version };
 
-    const owned = await operationExecute(client, "development-item.node.owner.update",
+    const owned = await executePreviewed(client, "development-item.node.owner.update",
       `${runId}-variant-owner-${attempt}`, {
         arguments: { itemType: "STORY", itemId, nodeId: currentNodeId, ownerId, version },
         context: { id: "global:pms", version: "v1" },
@@ -221,7 +228,7 @@ export async function advanceStoryToVariant(
     const scheduleVersion = saveContractNumber(scheduleContract?.version, true);
     if (scheduleVersion === null) throw new Error("故事夹具推进排期时节点版本读取失败");
     const today = new Date().toISOString().slice(0, 10);
-    const scheduled = await operationExecute(client, "development-item.node.schedule.update",
+    const scheduled = await executePreviewed(client, "development-item.node.schedule.update",
       `${runId}-variant-schedule-${attempt}`, {
         arguments: {
           itemType: "STORY", itemId, nodeId: currentNodeId,
@@ -231,7 +238,7 @@ export async function advanceStoryToVariant(
       });
     if (scheduled.status !== "SUCCEEDED") throw new Error("故事夹具推进排期更新未成功");
 
-    const advanced = await operationExecute(client, "development-item.node.complete",
+    const advanced = await executePreviewed(client, "development-item.node.complete",
       `${runId}-variant-complete-${attempt}`, {
         arguments: { itemType: "STORY", itemId, nodeId: currentNodeId },
         context: { id: "global:pms", version: "v1" },

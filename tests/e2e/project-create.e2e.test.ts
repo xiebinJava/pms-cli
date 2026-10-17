@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AuthStore } from "../../apps/pms-cli/src/auth/AuthStore.js";
 import { BrowserAuth, type CliSession } from "../../apps/pms-cli/src/auth/BrowserAuth.js";
-import { operationExecute } from "../../apps/pms-cli/src/commands/core/operation.js";
+import { operationExecutePreview, operationPreview } from "../../apps/pms-cli/src/commands/core/operation.js";
 import {
   executeProjectCreateScenario,
   planProjectCreateScenario,
@@ -94,9 +94,11 @@ describe.skipIf(!enabled)("PMS CLI isolated project creation", () => {
         try {
           const failures: Array<{ id: number; error: string }> = [];
           const cleanup = await cleanupRecordedProjectIds(createdProjectIds, async (projectId) => {
-            const result = await operationExecute(client!, "project.delete", `${config.runId}-delete-${projectId}`, {
+            const preview = await operationPreview(client!, "project.delete", {
               arguments: { projectId },
             });
+            const result = await operationExecutePreview(client!, preview.operationId,
+              `${config.runId}-delete-${projectId}`);
             if (result.status !== "SUCCEEDED") throw new Error(result.message ?? "项目删除未成功");
           }, failures);
           if (cleanup.remainingIds.length > 0) {

@@ -87,6 +87,7 @@ pms context --view focused
 ```bash
 export PMS_E2E_REQUIREMENT_ID=24
 export PMS_E2E_NODE_ID=387
+export PMS_E2E_CREATE_REQUIREMENT_FIXTURE=false # 隔离库为空时改为 true，自动创建并推进需求夹具
 export PMS_E2E_STORY_ID=34                 # 不创建故事夹具时使用
 export PMS_E2E_CREATE_STORY_FIXTURE=false  # 创建夹具时改为 true
 

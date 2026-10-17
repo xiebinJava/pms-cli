@@ -12,17 +12,17 @@ import {
   expectedViewerId,
   isolatedE2EEnabled,
 } from "./support/isolatedSession.js";
+import { createRequirementFixture } from "./support/requirementFixture.js";
 
+const createFixture = process.env.PMS_E2E_CREATE_REQUIREMENT_FIXTURE === "true";
 const enabled = process.env.PMS_E2E_NODE_AUTOFILL_REQUIREMENT === "true"
   && isolatedE2EEnabled(process.env)
-  && positiveEnvNumber("PMS_E2E_REQUIREMENT_ID") !== null
-  && positiveEnvNumber("PMS_E2E_NODE_ID") !== null;
+  && (createFixture || (positiveEnvNumber("PMS_E2E_REQUIREMENT_ID") !== null
+    && positiveEnvNumber("PMS_E2E_NODE_ID") !== null));
 
 describe.skipIf(!enabled)("PMS CLI requirement node detail autofill", () => {
   it("plans, atomically completes, and verifies a requirement node", async () => {
     const config = assertIsolatedE2EConfig(process.env);
-    const requirementId = positiveEnvNumber("PMS_E2E_REQUIREMENT_ID")!;
-    const nodeId = positiveEnvNumber("PMS_E2E_NODE_ID")!;
     const auth = new BrowserAuth({
       baseUrl: config.baseUrl,
       authOrigin: config.authOrigin,
@@ -42,6 +42,11 @@ describe.skipIf(!enabled)("PMS CLI requirement node detail autofill", () => {
       if (!capabilities.viewer || !expectedViewerId(capabilities.viewer, config.accountId)) {
         throw new Error("浏览器批准身份与隔离 E2E 账号不一致，停止需求节点写入");
       }
+      const fixture = createFixture
+        ? await createRequirementFixture(client, config.runId + "-node-autofill")
+        : null;
+      const requirementId = fixture?.requirementId ?? positiveEnvNumber("PMS_E2E_REQUIREMENT_ID")!;
+      const nodeId = fixture?.nodeId ?? positiveEnvNumber("PMS_E2E_NODE_ID")!;
       const before = await client.context(
         { type: "requirement", id: requirementId },
         { nodeId, view: "focused" },
@@ -95,7 +100,10 @@ function draftForContext(context: any, runId: string) {
     if (!field.required || !contract.writableFields.includes(field.key)) continue;
     patch[field.key] = Array.isArray(field.options) && field.options.length > 0
       ? field.options[0]
-      : field.type === "boolean" ? true : `AI-E2E-${runId}`;
+      : field.type === "number" ? 4
+      : field.type === "boolean" ? true
+      : field.type === "array" ? [`AI-E2E-${runId}`]
+      : `AI-E2E-${runId}`;
     fieldSources[field.key] = {
       sourceType: "conversation",
       sourceRefs: [`conversation:${runId}`],

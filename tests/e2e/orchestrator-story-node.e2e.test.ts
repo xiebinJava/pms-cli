@@ -10,7 +10,7 @@ import {
   previewStoryNodePlan,
   readStoryNodeSession,
 } from "../../apps/pms-cli/src/commands/scenarios/storyOrchestrator.js";
-import { operationExecute } from "../../apps/pms-cli/src/commands/core/operation.js";
+import { operationExecutePreview, operationPreview } from "../../apps/pms-cli/src/commands/core/operation.js";
 import { assertIsolatedE2EConfig, expectedViewerId, isolatedE2EEnabled } from "./support/isolatedSession.js";
 import { auditOperations } from "./support/operationAudit.js";
 import { createStoryFixture, existingStoryFixture, storyWorkbenchPatch } from "./support/storyFixture.js";
@@ -192,17 +192,20 @@ describe.skipIf(!explicitlyRequested)("PMS AI story-node orchestrator isolated a
       const conflictPreview = await previewStoryNodePlan(client, conflictTurn.planId,
         `${config.runId}-preview-conflict-preview`);
       expect(conflictPreview.status).toBe("WAITING_CONFIRMATION");
-      await operationExecute(client, "development-item.node.owner.update",
-        `${config.runId}-concurrent-owner-bump`, {
-          arguments: {
-            itemType: "STORY", itemId: fixture.storyId, nodeId: fixture.nodeId,
-            ownerId: Number(config.accountId), version: (await client.context(
-              { type: "story", id: fixture.storyId },
-              { nodeId: fixture.nodeId, view: "focused", component: "story-node-workbench" },
-            )).version!,
-          },
-          context: { id: "global:pms", version: "v1" },
-        });
+      const concurrentOwnerOptions = {
+        arguments: {
+          itemType: "STORY", itemId: fixture.storyId, nodeId: fixture.nodeId,
+          ownerId: Number(config.accountId), version: (await client.context(
+            { type: "story", id: fixture.storyId },
+            { nodeId: fixture.nodeId, view: "focused", component: "story-node-workbench" },
+          )).version!,
+        },
+        context: { id: "global:pms", version: "v1" },
+      };
+      const concurrentOwnerPreview = await operationPreview(client,
+        "development-item.node.owner.update", concurrentOwnerOptions);
+      await operationExecutePreview(client, concurrentOwnerPreview.operationId,
+        `${config.runId}-concurrent-owner-bump`);
       await expect(confirmStoryNodePlan(client, conflictTurn.planId,
         `${config.runId}-conflict-confirm`, `${config.runId}-conflict-confirm-request`))
         .resolves.toMatchObject({ status: "CONFLICT", verification: null });

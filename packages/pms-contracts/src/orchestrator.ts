@@ -43,6 +43,7 @@ export const orchestratorOperationSchema = z.object({
   message: z.string().optional(),
   data: z.record(z.string(), z.unknown()).default({}),
   refreshScopes: z.array(z.string()).default([]),
+  auditId: z.string().trim().min(1).optional(),
 }).strict();
 
 export const orchestratorVerificationSchema = z.object({

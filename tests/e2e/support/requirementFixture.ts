@@ -1,6 +1,6 @@
 import type { PmsClient } from "../../../packages/pms-client/src/index.js";
 import type { CapabilityCatalog, OperationResult } from "../../../packages/pms-contracts/src/index.js";
-import { operationExecute, operationPreview } from "../../../apps/pms-cli/src/commands/core/operation.js";
+import { operationExecutePreview, operationPreview } from "../../../apps/pms-cli/src/commands/core/operation.js";
 
 export interface RequirementFixture {
   requirementId: number;
@@ -43,14 +43,11 @@ export async function createRequirementFixture(
     priority: 2,
     templateVersionId,
   };
-  await operationPreview(client, "requirement.create", {
+  const createPreview = await operationPreview(client, "requirement.create", {
     arguments: argumentsValue,
     context: { id: "global:pms", version: "v1" },
   });
-  const result = await operationExecute(client, "requirement.create", `requirement-create-${runId}`, {
-    arguments: argumentsValue,
-    context: { id: "global:pms", version: "v1" },
-  });
+  const result = await operationExecutePreview(client, createPreview.operationId, `requirement-create-${runId}`);
   const requirementId = readRequirementId(result);
   if (result.status !== "SUCCEEDED" || requirementId === null) {
     throw new Error("需求夹具创建成功响应缺少需求 ID");
@@ -66,7 +63,7 @@ export async function createRequirementFixture(
   // operations a user/agent would use, so the fixture enters the real
   // receiving-and-analysis node instead of guessing a node id.
   const initialNodeId = context.currentNode.id;
-  await operationPreview(client, "development-item.node.owner.update", {
+  const ownerPreview = await operationPreview(client, "development-item.node.owner.update", {
     arguments: {
       itemType: "REQUIREMENT",
       itemId: requirementId,
@@ -76,17 +73,8 @@ export async function createRequirementFixture(
     },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
   });
-  const ownerUpdate = await operationExecute(client, "development-item.node.owner.update",
-    `requirement-fixture-owner-${runId}`, {
-      arguments: {
-        itemType: "REQUIREMENT",
-        itemId: requirementId,
-        nodeId: initialNodeId,
-        ownerId,
-        version: context.version,
-      },
-      context: { id: `requirement:${requirementId}`, version: String(context.version) },
-    });
+  const ownerUpdate = await operationExecutePreview(client, ownerPreview.operationId,
+    `requirement-fixture-owner-${runId}`);
   if (ownerUpdate.status !== "SUCCEEDED") throw new Error("需求夹具无法分配需求录入节点负责人");
 
   context = await client.context({ type: "requirement", id: requirementId });
@@ -94,7 +82,7 @@ export async function createRequirementFixture(
     throw new Error("需求夹具分配负责人后上下文版本或当前节点异常");
   }
   const scheduleDates = fixtureScheduleDates();
-  await operationPreview(client, "development-item.node.schedule.update", {
+  const schedulePreview = await operationPreview(client, "development-item.node.schedule.update", {
     arguments: {
       itemType: "REQUIREMENT",
       itemId: requirementId,
@@ -105,25 +93,15 @@ export async function createRequirementFixture(
     },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
   });
-  const scheduleUpdate = await operationExecute(client, "development-item.node.schedule.update",
-    `requirement-fixture-schedule-${runId}`, {
-      arguments: {
-        itemType: "REQUIREMENT",
-        itemId: requirementId,
-        nodeId: initialNodeId,
-        startDate: scheduleDates.startDate,
-        endDate: scheduleDates.endDate,
-        version: context.version,
-      },
-      context: { id: `requirement:${requirementId}`, version: String(context.version) },
-    });
+  const scheduleUpdate = await operationExecutePreview(client, schedulePreview.operationId,
+    `requirement-fixture-schedule-${runId}`);
   if (scheduleUpdate.status !== "SUCCEEDED") throw new Error("需求夹具无法设置需求录入节点排期");
 
   context = await client.context({ type: "requirement", id: requirementId });
   if (context.version === null || context.currentNode?.id !== initialNodeId) {
     throw new Error("需求夹具设置排期后上下文版本或当前节点异常");
   }
-  await operationPreview(client, "development-item.node.field.update", {
+  const fieldPreview = await operationPreview(client, "development-item.node.field.update", {
     arguments: {
       itemType: "REQUIREMENT",
       itemId: requirementId,
@@ -133,32 +111,20 @@ export async function createRequirementFixture(
     },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
   });
-  const fieldUpdate = await operationExecute(client, "development-item.node.field.update",
-    `requirement-fixture-field-${runId}`, {
-      arguments: {
-        itemType: "REQUIREMENT",
-        itemId: requirementId,
-        nodeId: initialNodeId,
-        version: context.version,
-        fieldValues: { "requirement-business-line": 1 },
-      },
-      context: { id: `requirement:${requirementId}`, version: String(context.version) },
-    });
+  const fieldUpdate = await operationExecutePreview(client, fieldPreview.operationId,
+    `requirement-fixture-field-${runId}`);
   if (fieldUpdate.status !== "SUCCEEDED") throw new Error("需求夹具无法填写需求录入必填业务线");
 
   context = await client.context({ type: "requirement", id: requirementId });
   if (context.version === null || context.currentNode?.id !== initialNodeId) {
     throw new Error("需求夹具填写业务线后上下文版本或当前节点异常");
   }
-  await operationPreview(client, "development-item.node.complete", {
+  const completePreview = await operationPreview(client, "development-item.node.complete", {
     arguments: { itemType: "REQUIREMENT", itemId: requirementId, nodeId: initialNodeId },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
   });
-  const completed = await operationExecute(client, "development-item.node.complete",
-    `requirement-fixture-complete-${runId}`, {
-      arguments: { itemType: "REQUIREMENT", itemId: requirementId, nodeId: initialNodeId },
-      context: { id: `requirement:${requirementId}`, version: String(context.version) },
-    });
+  const completed = await operationExecutePreview(client, completePreview.operationId,
+    `requirement-fixture-complete-${runId}`);
   if (completed.status !== "SUCCEEDED") throw new Error("需求夹具无法进入需求接收节点");
 
   context = await client.context({ type: "requirement", id: requirementId });
