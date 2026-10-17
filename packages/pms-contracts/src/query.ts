@@ -134,6 +134,42 @@ export const workflowContextFieldSchema = z.object({
   fullWidth: z.boolean().nullable().optional(),
 });
 
+/** Field-level write metadata published by PMS for external Agent drafts. */
+export const workflowContextFieldContractSchema = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1).optional(),
+  type: z.string().trim().min(1).optional(),
+  required: z.boolean().optional(),
+  nullable: z.boolean().optional(),
+  collection: z.boolean().optional(),
+  options: z.array(z.string()).optional(),
+}).catchall(z.unknown());
+
+/**
+ * Additive save-contract envelope. Older PMS versions may still return arbitrary records, so
+ * unknown keys remain accepted while the node-detail fields get a stable typed surface.
+ */
+export const workflowContextSaveContractSchema = z.object({
+  contractVersion: z.string().trim().min(1).optional(),
+  componentContractVersion: z.string().trim().min(1).optional(),
+  command: z.string().trim().min(1).optional(),
+  itemType: z.string().trim().min(1).optional(),
+  itemId: z.number().int().positive().optional(),
+  nodeId: z.number().int().positive().optional(),
+  version: z.number().int().nonnegative().optional(),
+  componentKey: z.string().trim().min(1).optional(),
+  variant: z.string().trim().min(1).optional(),
+  fieldValuesPath: z.string().trim().min(1).optional(),
+  writableFields: z.array(z.string().trim().min(1)).optional(),
+  effectiveWritableFields: z.array(z.string().trim().min(1)).optional(),
+  protectedFields: z.array(z.string().trim().min(1)).optional(),
+  requiredFields: z.array(z.string().trim().min(1)).optional(),
+  fieldContracts: z.array(workflowContextFieldContractSchema).optional(),
+  completionSupported: z.boolean().optional(),
+  completionCommand: z.string().trim().min(1).optional(),
+  completionRequiredMetadata: z.array(z.string().trim().min(1)).optional(),
+}).catchall(z.unknown());
+
 export const workflowContextComponentSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
@@ -143,7 +179,7 @@ export const workflowContextComponentSchema = z.object({
   content: z.unknown().nullable().optional(),
   contentState: z.enum(["LOADED", "EMPTY", "NOT_REQUESTED", "UNSUPPORTED"]).nullable().optional(),
   versions: z.record(z.string(), z.number().int().nullable()).nullable().optional(),
-  saveContract: z.record(z.string(), z.unknown()).nullable().optional(),
+  saveContract: workflowContextSaveContractSchema.nullable().optional(),
 });
 
 export const workflowContextNodeSchema = z.object({
@@ -198,6 +234,8 @@ export const workflowContextMetaSchema = z.object({
 export type ContextMeta = z.infer<typeof workflowContextMetaSchema>;
 export type ContextNode = z.infer<typeof workflowContextNodeSchema>;
 export type ContextComponent = z.infer<typeof workflowContextComponentSchema>;
+export type ContextFieldContract = z.infer<typeof workflowContextFieldContractSchema>;
+export type ContextSaveContract = z.infer<typeof workflowContextSaveContractSchema>;
 
 export const workflowContextV2ResponseSchema = workflowContextResponseSchema.extend({
   meta: workflowContextMetaSchema,

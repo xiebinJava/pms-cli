@@ -35,10 +35,20 @@ const contextVersionSchema = z.union([
   z.number().int().nonnegative(),
 ]).transform((value) => String(value));
 
+export const agentProgressionFieldSourceSchema = z.object({
+  sourceType: z.enum(["pms_context", "conversation", "inference"]),
+  sourceRefs: z.array(z.string().trim().min(1)).min(1),
+  confidence: z.enum(["high", "medium", "low"]),
+}).strict();
+
+export type AgentProgressionFieldSource = z.infer<typeof agentProgressionFieldSourceSchema>;
+
 export const agentProgressionDraftSchema = resourceScenarioDraftSchema.extend({
   ownerId: z.number().int().positive().optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  fieldSources: z.record(z.string().trim().min(1), agentProgressionFieldSourceSchema).optional(),
+  requestedCompletion: z.boolean().optional(),
 }).strict();
 
 export const agentProgressionInputSchema = z.object({

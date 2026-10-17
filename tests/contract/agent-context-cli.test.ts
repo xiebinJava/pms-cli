@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { CliDependencies } from "../../apps/pms-cli/src/cli/runCli.js";
 import { runCli } from "../../apps/pms-cli/src/cli/runCli.js";
+import {
+  agentProgressionDraftSchema,
+  workflowContextSaveContractSchema,
+} from "../../packages/pms-contracts/src/index.js";
 
 const context = {
   resource: { type: "story", id: 34 },
@@ -70,6 +74,47 @@ function deps(client: never) {
 }
 
 describe("pms context --format agent", () => {
+  it("accepts the node detail contract and field provenance additions", () => {
+    const saveContract = workflowContextSaveContractSchema.parse({
+      contractVersion: "node-detail/v1",
+      command: "development-item.node.field.update",
+      completionCommand: "development-item.node.complete-with-data",
+      completionSupported: true,
+      completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+      writableFields: ["testResult"],
+      fieldContracts: [{
+        key: "testResult",
+        label: "测试结果",
+        type: "enum",
+        required: true,
+        nullable: false,
+        collection: false,
+        options: ["PASS", "FAIL"],
+      }],
+      protectedFields: ["status", "ownerId", "startDate", "endDate"],
+    });
+    const draft = agentProgressionDraftSchema.parse({
+      facts: [],
+      inferences: [],
+      assumptions: [],
+      unresolvedDecisions: [],
+      patch: { testResult: "PASS" },
+      fieldSources: {
+        testResult: {
+          sourceType: "conversation",
+          sourceRefs: ["conversation:latest"],
+          confidence: "high",
+        },
+      },
+      requestedCompletion: true,
+    });
+
+    expect(saveContract.contractVersion).toBe("node-detail/v1");
+    expect(saveContract.fieldContracts?.[0]?.options).toEqual(["PASS", "FAIL"]);
+    expect(draft.fieldSources?.testResult?.sourceType).toBe("conversation");
+    expect(draft.requestedCompletion).toBe(true);
+  });
+
   it("returns an AgentWorkSession and preserves raw JSON as the default format", async () => {
     const client = {
       capabilities: vi.fn(async () => ({
