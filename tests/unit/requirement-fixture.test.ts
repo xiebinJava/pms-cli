@@ -135,8 +135,8 @@ function clientFor(resultData: Record<string, unknown>, context: Record<string, 
           refreshScopes: [],
         };
       },
-      execute: async (request: unknown) => {
-        calls.push({ method: "execute", value: request });
+      executePreview: async (operationId: string, idempotencyKey: string) => {
+        calls.push({ method: "executePreview", value: { operationId, idempotencyKey } });
         return { operationId: "create-1", status: "SUCCEEDED", data: resultData, warnings: [], refreshScopes: [] };
       },
       get: async () => ({
@@ -206,9 +206,8 @@ describe("requirement fixture", () => {
       operation: "requirement.create",
       arguments: { title: "AI-E2E-需求-run-valid", templateVersionId: 17 },
     }});
-    expect(calls[1]).toMatchObject({ method: "execute", value: {
-      operation: "requirement.create",
-      arguments: { title: "AI-E2E-需求-run-valid", templateVersionId: 17 },
+    expect(calls[1]).toMatchObject({ method: "executePreview", value: {
+      operationId: "preview-1",
       idempotencyKey: "requirement-create-run-valid",
     }});
   });
