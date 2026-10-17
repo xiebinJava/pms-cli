@@ -1,0 +1,152 @@
+import { describe, expect, it } from "vitest";
+import {
+  agentProgressionRunContractVersion,
+  agentProgressionRunResultSchema,
+} from "../../packages/pms-contracts/src/index.js";
+
+function plan(writeDecision: "READY" | "NEEDS_INPUT" | "WAITING_CONFIRMATION" = "READY") {
+  return {
+    contractVersion: "agent-progression/v1" as const,
+    phase: "plan" as const,
+    resourceType: "requirement" as const,
+    resourceId: 33,
+    intent: "UPDATE_NODE_FIELDS" as const,
+    operation: "development-item.node.field.update",
+    context: {},
+    normalizedArguments: {},
+    capability: {},
+    preview: null,
+    fieldChanges: [],
+    missingFields: [],
+    preconditions: [],
+    writeDecision,
+    requiresConfirmation: writeDecision === "WAITING_CONFIRMATION",
+    executionMode: "automatic" as const,
+    warnings: [],
+  };
+}
+
+describe("agent progression run contract", () => {
+  it("accepts a read-only run result without operation identifiers", () => {
+    const parsed = agentProgressionRunResultSchema.parse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "CONTEXT_READY",
+      resourceType: "requirement",
+      resourceId: 33,
+      intent: "READ_CONTEXT",
+      writeDecision: "READY",
+      plan: null,
+      result: null,
+      previewOperationId: null,
+      operationId: null,
+      auditId: null,
+      readback: { resource: null, context: { resource: { type: "requirement", id: 33 } } },
+      verification: null,
+      warnings: [],
+    });
+
+    expect(parsed.contractVersion).toBe("agent-progression-run/v1");
+    expect(parsed.status).toBe("CONTEXT_READY");
+  });
+
+  it("accepts a preview-only missing-input result", () => {
+    const parsed = agentProgressionRunResultSchema.parse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "NEEDS_INPUT",
+      resourceType: "story",
+      resourceId: 34,
+      intent: "COMPLETE_NODE",
+      writeDecision: "NEEDS_INPUT",
+      plan: { ...plan("NEEDS_INPUT"), resourceType: "story", resourceId: 34, intent: "COMPLETE_NODE" },
+      result: null,
+      previewOperationId: null,
+      operationId: null,
+      auditId: null,
+      readback: null,
+      verification: null,
+      warnings: ["缺少验收结论"],
+    });
+
+    expect(parsed.plan?.writeDecision).toBe("NEEDS_INPUT");
+    expect(parsed.result).toBeNull();
+  });
+
+  it("preserves preview, operation, audit, readback, and verification identifiers", () => {
+    const parsed = agentProgressionRunResultSchema.parse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "SUCCEEDED",
+      resourceType: "topic",
+      resourceId: 12,
+      intent: "UPDATE_NODE_FIELDS",
+      writeDecision: "READY",
+      plan: { ...plan(), resourceType: "topic", resourceId: 12 },
+      result: {
+        contractVersion: "agent-progression/v1",
+        phase: "execute",
+        status: "SUCCEEDED",
+        resourceType: "topic",
+        resourceId: 12,
+        intent: "UPDATE_NODE_FIELDS",
+        plan: null,
+        operation: {
+          operationId: "operation-1",
+          status: "SUCCEEDED",
+          data: {},
+          warnings: [],
+          refreshScopes: [],
+          auditId: "audit-1",
+        },
+        readback: { resource: null, context: null },
+        verification: {
+          resourceReadback: true,
+          contextReadback: true,
+          patchApplied: true,
+          protectedFieldsUnchanged: true,
+        },
+        warnings: [],
+      },
+      previewOperationId: "preview-1",
+      operationId: "operation-1",
+      auditId: "audit-1",
+      readback: { resource: null, context: null },
+      verification: {
+        resourceReadback: true,
+        contextReadback: true,
+        patchApplied: true,
+        protectedFieldsUnchanged: true,
+      },
+      warnings: [],
+    });
+
+    expect(parsed.previewOperationId).toBe("preview-1");
+    expect(parsed.operationId).toBe("operation-1");
+    expect(parsed.auditId).toBe("audit-1");
+    expect(parsed.verification?.patchApplied).toBe(true);
+  });
+
+  it("rejects unknown top-level fields", () => {
+    const result = agentProgressionRunResultSchema.safeParse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "CONTEXT_READY",
+      resourceType: "requirement",
+      resourceId: 33,
+      intent: "READ_CONTEXT",
+      writeDecision: "READY",
+      plan: null,
+      result: null,
+      previewOperationId: null,
+      operationId: null,
+      auditId: null,
+      readback: null,
+      verification: null,
+      warnings: [],
+      leakedToken: "must fail",
+    });
+
+    expect(result.success).toBe(false);
+  });
+});

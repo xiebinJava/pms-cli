@@ -9,3 +9,5 @@ export * from "./orchestrator.js";
 export * from "./agent.js";
 export * from "./resourceScenario.js";
 export * from "./agentProgression.js";
+
+export * from "./agentProgressionRun.js";
