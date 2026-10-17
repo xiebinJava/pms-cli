@@ -144,3 +144,34 @@ PMS_E2E_RUN_ID=codex20261015d ./scripts/stop-ai-e2e.sh
 ```
 
 停止脚本会删除本次隔离服务和数据库卷。不要把共享开发数据库作为写入 E2E 的目标。
+
+## 统一 Agent progression run E2E
+
+新增的 `tests/e2e/agent-progression-run.e2e.test.ts` 验证需求节点的统一运行入口：外部 Agent 草稿 → fresh preview → 低/中风险 auto 执行 → PMS 回读与 verification → 同一幂等键 replay → 只读审计查询。测试不调用模型，默认跳过。
+
+在上面的隔离 PMS 启动完成后，额外设置：
+
+```bash
+export PMS_E2E_AGENT_PROGRESSION=true
+export PMS_E2E_WRITE=true
+export PMS_E2E_ISOLATED=true
+export PMS_E2E_BASE_URL=http://127.0.0.1:18080/api
+export PMS_E2E_ALLOWED_BASE_URL="$PMS_E2E_BASE_URL"
+export PMS_E2E_AUTH_ORIGIN=http://127.0.0.1:15173
+export PMS_E2E_DATABASE_NAME=pms_ai_e2e_agent_progression
+export PMS_E2E_ALLOWED_DATABASE_NAME="$PMS_E2E_DATABASE_NAME"
+export PMS_E2E_DB_URL="mysql://pms_e2e:local-only-password@127.0.0.1:13306/${PMS_E2E_DATABASE_NAME}"
+export PMS_E2E_MYSQL_CLIENT="$PWD/scripts/e2e-mysql-client.sh"
+export PMS_E2E_ACCOUNT_ID=1
+export PMS_E2E_RUN_ID=agent-progression-20261017
+export PMS_E2E_REQUIREMENT_ID=24
+export PMS_E2E_NODE_ID=387
+```
+
+运行：
+
+```bash
+pnpm vitest run tests/e2e/agent-progression-run.e2e.test.ts --maxWorkers=1 --minWorkers=1
+```
+
+也可以设置 `PMS_E2E_CREATE_AGENT_PROGRESSION_FIXTURE=true` 和 `PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`，让测试在一次性数据库中创建本轮需求夹具。创建夹具会推进真实流程节点，不能用于共享环境。
