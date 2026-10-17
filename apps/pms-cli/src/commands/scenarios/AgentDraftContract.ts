@@ -2,6 +2,7 @@ import { PmsClientError } from "../../../../../packages/pms-client/src/index.js"
 import type {
   AgentDraft,
   AgentProgressionDraft,
+  AgentProgressionIntent,
   ChildAgentTaskPayload,
   AgentTask,
   AnalysisDraft,
@@ -45,6 +46,20 @@ export interface AgentProgressionDraftDiagnostics {
   missingSources: string[];
   unsafePayloadKeys: string[];
   unresolvedDecisions: string[];
+}
+
+export interface AgentProgressionPlanDetails extends AgentProgressionDraftDiagnostics {
+  fieldChanges: Array<{
+    key: string;
+    label: string;
+    from: unknown;
+    to: unknown;
+    sourceType: "pms_context" | "conversation" | "inference" | null;
+    confidence: "high" | "medium" | "low" | null;
+  }>;
+  missingFields: Array<{ key: string; label: string; reason: string }>;
+  preconditions: unknown[];
+  writeDecision: "READY" | "NEEDS_INPUT" | "WAITING_CONFIRMATION" | "CAPABILITY_UNAVAILABLE";
 }
 
 const highRiskInferenceFields = new Set([
@@ -98,6 +113,56 @@ export function validateAgentProgressionDraftFields(
     missingSources,
     unsafePayloadKeys: [],
     unresolvedDecisions,
+  };
+}
+
+/** Builds a plan summary directly from the PMS saveContract and current component content. */
+export function planAgentProgressionDraft(
+  draft: AgentProgressionDraft,
+  context: WorkflowContext,
+  nodeId: number | undefined,
+  intent: AgentProgressionIntent,
+  executionMode: "read" | "automatic" | "confirmation",
+): AgentProgressionPlanDetails {
+  const contract = readNodeDetailContract(context, nodeId);
+  const diagnostics = validateAgentProgressionDraftFields(draft, context, nodeId);
+  const fieldChanges = Object.keys(draft.patch ?? {})
+    .filter((key) => contract.writableFields.includes(key))
+    .map((key) => {
+      const source = draft.fieldSources?.[key];
+      return {
+        key,
+        label: contract.labels.get(key) ?? key,
+        from: contract.currentValues.get(key) ?? null,
+        to: draft.patch[key] ?? null,
+        sourceType: source?.sourceType ?? null,
+        confidence: source?.confidence ?? null,
+      };
+    });
+  const missingFields = intent === "COMPLETE_NODE"
+    ? requiredNodeFields(contract, draft)
+    : [];
+  const completionMissing = intent === "COMPLETE_NODE" && draft.requestedCompletion !== false
+    ? contract.completionRequiredMetadata
+        .filter((key) => missingCompletionMetadata(context, nodeId, draft, key))
+        .map((key) => ({ key, label: completionLabel(key), reason: "完成节点需要提供该信息" }))
+    : [];
+  const allMissing = [...missingFields, ...completionMissing];
+  let writeDecision: AgentProgressionPlanDetails["writeDecision"] = "READY";
+  if (contract.writableFields.length === 0 || !contract.command) writeDecision = "CAPABILITY_UNAVAILABLE";
+  else if (diagnostics.unknownFields.length > 0 || diagnostics.protectedFields.length > 0) {
+    writeDecision = "CAPABILITY_UNAVAILABLE";
+  } else if (allMissing.length > 0 || diagnostics.missingSources.length > 0) {
+    writeDecision = "NEEDS_INPUT";
+  } else if (diagnostics.unresolvedDecisions.length > 0 || executionMode === "confirmation") {
+    writeDecision = "WAITING_CONFIRMATION";
+  }
+  return {
+    ...diagnostics,
+    fieldChanges,
+    missingFields: allMissing,
+    preconditions: [],
+    writeDecision,
   };
 }
 
@@ -195,21 +260,98 @@ export function assertSafeAgentPayload(value: unknown, path = "$", seen = new We
 function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
   writableFields: string[];
   protectedFields: string[];
+  requiredFields: Set<string>;
+  labels: Map<string, string>;
+  currentValues: Map<string, unknown>;
+  completionRequiredMetadata: string[];
+  command?: string;
 } {
   const selectedNodeId = nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id;
   const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
   const node = nodes.find((candidate) => isRecord(candidate)
     && (selectedNodeId === undefined || candidate.id === selectedNodeId));
-  if (!isRecord(node)) return { writableFields: [], protectedFields: [] };
+  if (!isRecord(node)) {
+    return {
+      writableFields: [], protectedFields: [], requiredFields: new Set(), labels: new Map(),
+      currentValues: new Map(), completionRequiredMetadata: [],
+    };
+  }
   const components = Array.isArray(node.components) ? node.components : [];
   const component = components.find((candidate) => isRecord(candidate)
     && isRecord(candidate.saveContract))
     ?? components.find((candidate) => isRecord(candidate));
   const saveContract = component && isRecord(component.saveContract) ? component.saveContract : undefined;
+  const labels = new Map<string, string>();
+  const currentValues = new Map<string, unknown>();
+  if (Array.isArray(saveContract?.fieldContracts)) {
+    for (const raw of saveContract.fieldContracts) {
+      if (!isRecord(raw) || typeof raw.key !== "string") continue;
+      labels.set(raw.key, typeof raw.label === "string" && raw.label.trim() !== "" ? raw.label : raw.key);
+    }
+  }
+  for (const key of stringArray(saveContract?.writableFields)) {
+    if (!labels.has(key)) labels.set(key, key);
+    if (component && isRecord(component.content)
+      && Object.prototype.hasOwnProperty.call(component.content, key)) {
+      currentValues.set(key, component.content[key]);
+    }
+  }
+  const requiredFields = new Set(stringArray(saveContract?.requiredFields));
+  if (Array.isArray(saveContract?.fieldContracts)) {
+    for (const raw of saveContract.fieldContracts) {
+      if (isRecord(raw) && raw.required === true && typeof raw.key === "string") requiredFields.add(raw.key);
+    }
+  }
   return {
     writableFields: stringArray(saveContract?.writableFields),
     protectedFields: stringArray(saveContract?.protectedFields),
+    requiredFields,
+    labels,
+    currentValues,
+    completionRequiredMetadata: stringArray(saveContract?.completionRequiredMetadata),
+    command: typeof saveContract?.command === "string" ? saveContract.command : undefined,
   };
+}
+
+function requiredNodeFields(
+  contract: ReturnType<typeof readNodeDetailContract>,
+  draft: AgentProgressionDraft,
+): Array<{ key: string; label: string; reason: string }> {
+  return [...contract.requiredFields]
+    .filter((key) => isMissingValue(draft.patch[key] ?? contract.currentValues.get(key)))
+    .map((key) => ({
+      key,
+      label: contract.labels.get(key) ?? key,
+      reason: "当前节点完成前必须填写",
+    }));
+}
+
+function missingCompletionMetadata(
+  context: WorkflowContext,
+  nodeId: number | undefined,
+  draft: AgentProgressionDraft,
+  key: string,
+): boolean {
+  if (draft[key as keyof AgentProgressionDraft] !== undefined) return false;
+  const selectedNodeId = nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id;
+  const node = Array.isArray(context.workflow?.nodes)
+    ? context.workflow.nodes.find((candidate) => isRecord(candidate)
+      && (selectedNodeId === undefined || candidate.id === selectedNodeId))
+    : undefined;
+  if (!isRecord(node)) return true;
+  const value = key === "ownerId" ? node.ownerId : key === "startDate" ? node.startDate : node.endDate;
+  return isMissingValue(value);
+}
+
+function completionLabel(key: string): string {
+  return key === "ownerId" ? "负责人" : key === "startDate" ? "开始日期" : key === "endDate" ? "结束日期" : key;
+}
+
+function isMissingValue(value: unknown): boolean {
+  return value === undefined || value === null
+    || (typeof value === "string" && value.trim() === "")
+    || (Array.isArray(value) && value.length === 0)
+    || (isRecord(value) && Object.keys(value).length === 0);
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

@@ -14,6 +14,7 @@ import type { PmsClient } from "../../../../../packages/pms-client/src/index.js"
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import {
   assertSafeAgentPayload,
+  planAgentProgressionDraft,
   validateAgentProgressionDraftFields,
 } from "./AgentDraftContract.js";
 import {
@@ -41,6 +42,34 @@ export async function planAgentProgression(
   if (declaredCapability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
+  const preflightContext = parsed.resourceType === "project"
+    ? null
+    : await readFocusedProgressionContext(client, parsed);
+  const executionMode = deriveProgressionExecutionMode(declaredCapability);
+  const draftPlan = parsed.draft && preflightContext
+    ? planAgentProgressionDraft(parsed.draft, preflightContext, parsed.nodeId, parsed.intent, executionMode)
+    : null;
+  if (draftPlan && draftPlan.writeDecision !== "READY") {
+    return {
+      contractVersion: agentProgressionContractVersion,
+      phase: "plan",
+      resourceType: parsed.resourceType,
+      resourceId: parsed.resourceId,
+      intent: parsed.intent,
+      operation,
+      context: preflightContext,
+      normalizedArguments: {},
+      capability: declaredCapability,
+      preview: null,
+      fieldChanges: draftPlan.fieldChanges,
+      missingFields: draftPlan.missingFields,
+      preconditions: draftPlan.preconditions,
+      writeDecision: draftPlan.writeDecision,
+      requiresConfirmation: draftPlan.writeDecision === "WAITING_CONFIRMATION",
+      executionMode: draftPlan.writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
+      warnings: progressionWarnings(draftPlan),
+    };
+  }
   const resourcePlan = await planResourceScenario(client, {
     contractVersion: "resource-scenario/v1",
     resourceType: parsed.resourceType,
@@ -53,7 +82,9 @@ export async function planAgentProgression(
     requestId: parsed.requestId,
   });
   const capability = resourcePlan.capability as ActionCapability;
-  const executionMode = deriveProgressionExecutionMode(capability);
+  const preconditions = resourcePlan.preview?.preconditions ?? [];
+  const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
+  const writeDecision = blockedByPrecondition ? "NEEDS_INPUT" : draftPlan?.writeDecision ?? "READY";
   return {
     contractVersion: agentProgressionContractVersion,
     phase: "plan",
@@ -65,9 +96,13 @@ export async function planAgentProgression(
     normalizedArguments: resourcePlan.normalizedArguments,
     capability,
     preview: resourcePlan.preview,
-    requiresConfirmation: executionMode === "confirmation",
-    executionMode,
-    warnings: resourcePlan.warnings,
+    fieldChanges: draftPlan?.fieldChanges ?? [],
+    missingFields: draftPlan?.missingFields ?? [],
+    preconditions,
+    writeDecision,
+    requiresConfirmation: writeDecision === "WAITING_CONFIRMATION" || executionMode === "confirmation",
+    executionMode: writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
+    warnings: [...resourcePlan.warnings, ...(blockedByPrecondition ? ["PMS preview 返回阻塞前置条件"] : [])],
   };
 }
 
@@ -163,10 +198,41 @@ async function planReadContext(
     normalizedArguments: {},
     capability: null,
     preview: null,
+    fieldChanges: [],
+    missingFields: [],
+    preconditions: [],
+    writeDecision: "READY",
     requiresConfirmation: false,
     executionMode: "read",
     warnings: [],
   };
+}
+
+async function readFocusedProgressionContext(
+  client: PmsClient,
+  input: ParsedAgentProgressionInput,
+) {
+  const context = await client.context(
+    { type: input.resourceType, id: input.resourceId },
+    input.nodeId === undefined ? { view: "focused" } : { nodeId: input.nodeId, view: "focused" },
+  );
+  if (input.contextVersion !== undefined && String(context.version) !== input.contextVersion) {
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "请求的上下文版本已过期");
+  }
+  return context;
+}
+
+function progressionWarnings(details: ReturnType<typeof planAgentProgressionDraft>): string[] {
+  return [
+    ...details.unknownFields.map((key) => `草稿字段 ${key} 不在当前 PMS 可写契约中`),
+    ...details.protectedFields.map((key) => `草稿字段 ${key} 是受保护字段`),
+    ...details.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
+    ...details.unresolvedDecisions,
+  ];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function readContext(

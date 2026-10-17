@@ -16,6 +16,7 @@ import {
   executeStoryWorkbenchScenario,
   planStoryWorkbenchScenario,
 } from "./storyWorkbench.js";
+import { planAgentProgressionDraft } from "./AgentDraftContract.js";
 import { deriveProgressionExecutionMode, mayExecuteProgression } from "./progressionPolicy.js";
 import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
 
@@ -31,8 +32,40 @@ export async function planStoryProgression(
   if (capability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
-  const plan = await planStoryWorkbenchScenario(client, workbenchInput);
   const executionMode = deriveProgressionExecutionMode(capability);
+  const draftPlan = input.draft
+    ? planAgentProgressionDraft(input.draft, binding.context, binding.nodeId, input.intent, executionMode)
+    : null;
+  if (draftPlan && draftPlan.writeDecision !== "READY") {
+    return {
+      contractVersion: agentProgressionContractVersion,
+      phase: "plan",
+      resourceType: "story",
+      resourceId: input.resourceId,
+      intent: input.intent,
+      operation: declaredCommand,
+      context: binding.context,
+      normalizedArguments: storyArguments(workbenchInput, declaredCommand),
+      capability,
+      preview: null,
+      fieldChanges: draftPlan.fieldChanges,
+      missingFields: draftPlan.missingFields,
+      preconditions: draftPlan.preconditions,
+      writeDecision: draftPlan.writeDecision,
+      requiresConfirmation: draftPlan.writeDecision === "WAITING_CONFIRMATION",
+      executionMode: draftPlan.writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
+      warnings: [
+        ...draftPlan.unknownFields.map((key) => `草稿字段 ${key} 不在当前 PMS 可写契约中`),
+        ...draftPlan.protectedFields.map((key) => `草稿字段 ${key} 是受保护字段`),
+        ...draftPlan.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
+        ...draftPlan.unresolvedDecisions,
+      ],
+    };
+  }
+  const plan = await planStoryWorkbenchScenario(client, workbenchInput);
+  const preconditions = plan.preview.preconditions ?? [];
+  const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
+  const writeDecision = blockedByPrecondition ? "NEEDS_INPUT" : draftPlan?.writeDecision ?? "READY";
   return {
     contractVersion: agentProgressionContractVersion,
     phase: "plan",
@@ -44,9 +77,13 @@ export async function planStoryProgression(
     normalizedArguments: storyArguments(workbenchInput, plan.preview.command),
     capability,
     preview: plan.preview,
-    requiresConfirmation: executionMode === "confirmation",
-    executionMode,
-    warnings: [...plan.preview.warnings],
+    fieldChanges: draftPlan?.fieldChanges ?? [],
+    missingFields: draftPlan?.missingFields ?? [],
+    preconditions,
+    writeDecision,
+    requiresConfirmation: writeDecision === "WAITING_CONFIRMATION" || executionMode === "confirmation",
+    executionMode: writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
+    warnings: [...plan.preview.warnings, ...(blockedByPrecondition ? ["PMS preview 返回阻塞前置条件"] : [])],
   };
 }
 

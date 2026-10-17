@@ -70,6 +70,79 @@ describe("scenario --format agent", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("returns a blocking plan without creating a preview when completion metadata is missing", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "v1",
+        resources: [{
+          type: "story",
+          actions: [{
+            name: "development-item.node.complete-with-data",
+            label: "保存并完成故事节点",
+            description: "保存并完成故事节点",
+            mode: "automatic",
+            risk: "medium",
+            scopes: [],
+            inputSchema: {},
+            requiresContext: true,
+            refreshScopes: [],
+          }],
+        }],
+        scopes: [],
+        workflowTypes: [],
+      })),
+      context: vi.fn(async () => ({
+        resource: { type: "story", id: 34 },
+        version: 3,
+        currentNode: { id: 387, key: "acceptance", label: "验收中" },
+        workflow: {
+          nodes: [{
+            id: 387,
+            key: "acceptance",
+            label: "验收中",
+            components: [{
+              key: "story-node-workbench",
+              content: { acceptanceConclusion: "" },
+              saveContract: {
+                command: "development-item.node.field.update",
+                completionCommand: "development-item.node.complete-with-data",
+                completionSupported: true,
+                version: 3,
+                variant: "acceptance",
+                completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+                writableFields: ["acceptanceConclusion"],
+                protectedFields: ["status", "ownerId", "startDate", "endDate"],
+                fieldContracts: [{ key: "acceptanceConclusion", label: "验收结论", required: true }],
+              },
+            }],
+          }],
+        },
+        allowedActions: ["development-item.node.complete-with-data"],
+      })),
+      preview: vi.fn(),
+    };
+    const cli = deps(client as never);
+    await runCli([
+      "scenario", "progression", "plan", "story", "34", "--node-id", "387",
+      "--intent", "COMPLETE_NODE", "--format", "agent", "--draft-json", JSON.stringify({
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: { acceptanceConclusion: "PASS" },
+        fieldSources: {
+          acceptanceConclusion: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" },
+        },
+        requestedCompletion: true,
+        ownerId: 2,
+      }),
+    ], cli.value);
+
+    expect(cli.stderr).toEqual([]);
+    const output = JSON.parse(cli.stdout[0] ?? "{}");
+    expect(output.data.writeDecision).toBe("NEEDS_INPUT");
+    expect(output.data.missingFields.map((field: { key: string }) => field.key)).toEqual(["startDate", "endDate"]);
+    expect(output.data.preview).toBeNull();
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
   it("normalizes a story-workbench plan without changing the existing command arguments", async () => {
     const context = {
       resource: { type: "story" as const, id: 34 },

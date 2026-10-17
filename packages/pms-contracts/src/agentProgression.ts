@@ -30,6 +30,29 @@ export type AgentProgressionExecuteMode = z.infer<typeof agentProgressionExecute
 export const agentProgressionExecutionModeSchema = z.enum(["read", "automatic", "confirmation"]);
 export type AgentProgressionExecutionMode = z.infer<typeof agentProgressionExecutionModeSchema>;
 
+export const agentProgressionWriteDecisionSchema = z.enum([
+  "READY",
+  "NEEDS_INPUT",
+  "WAITING_CONFIRMATION",
+  "CAPABILITY_UNAVAILABLE",
+]);
+export type AgentProgressionWriteDecision = z.infer<typeof agentProgressionWriteDecisionSchema>;
+
+export const agentProgressionFieldChangeSchema = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  from: z.unknown().nullable(),
+  to: z.unknown().nullable(),
+  sourceType: z.enum(["pms_context", "conversation", "inference"]).nullable(),
+  confidence: z.enum(["high", "medium", "low"]).nullable(),
+}).strict();
+
+export const agentProgressionMissingFieldSchema = z.object({
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  reason: z.string().trim().min(1),
+}).strict();
+
 const contextVersionSchema = z.union([
   z.string().trim().min(1),
   z.number().int().nonnegative(),
@@ -76,6 +99,10 @@ export const agentProgressionPlanSchema = z.object({
   normalizedArguments: z.record(z.string(), z.unknown()).default({}),
   capability: z.record(z.string(), z.unknown()).nullable(),
   preview: operationPreviewSchema.nullable(),
+  fieldChanges: z.array(agentProgressionFieldChangeSchema).default([]),
+  missingFields: z.array(agentProgressionMissingFieldSchema).default([]),
+  preconditions: z.array(z.unknown()).default([]),
+  writeDecision: agentProgressionWriteDecisionSchema.default("READY"),
   requiresConfirmation: z.boolean(),
   executionMode: agentProgressionExecutionModeSchema,
   warnings: z.array(z.string()).default([]),
