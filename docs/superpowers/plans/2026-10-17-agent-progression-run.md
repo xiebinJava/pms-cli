@@ -25,7 +25,7 @@
 
 - A read request accidentally creating a preview or write: Task 2 test asserts both client methods are untouched.
 - A high-risk operation executing under `auto`: Task 2 test asserts `WAITING_CONFIRMATION` and zero execute calls.
-- A write proceeding without an idempotency key: Task 3 dispatch test asserts a CLI usage error before runtime creation.
+- An executing write proceeding without an idempotency key: Task 3 dispatch test asserts a CLI usage error before runtime creation; plan mode remains allowed without one.
 - A draft becoming stale or unsafe between validation and preview: Task 2/5 tests assert context conflict and protected/unknown fields stop before execution.
 - Operation/audit/readback identifiers being dropped from the combined result: Task 1 contract test and Task 2 result test assert all identifiers survive parsing.
 
@@ -179,7 +179,7 @@
 
 - [ ] **Step 1: Add documentation tests/checks**
 
-  Extend the existing documentation/static checks (or add a focused unit check if no suitable test exists) to assert the run command, model-boundary statement, idempotency requirement, and no-guessing rule are present.
+  Modify `tests/contract/skill-analysis-contract.test.ts` to assert the run command, model-boundary statement, idempotency requirement, and no-guessing rule are present in the installed skill text.
 
 - [ ] **Step 2: Update the skill and runbooks**
 
@@ -209,7 +209,7 @@
 **Interfaces:**
 - Uses the existing isolated PMS/MySQL harness and cleanup safeguards.
 - Creates or discovers a run-scoped requirement/story fixture, reads its focused node context, submits a deterministic external-Agent draft through `progression run`, and verifies PMS readback, operation ID, audit ID, and idempotent behavior.
-- Includes a high-risk auto case that proves no write occurs and returns `WAITING_CONFIRMATION` if the fixture exposes such a capability; otherwise records the capability-dependent skip explicitly.
+- Verifies one real low/medium-risk requirement or story write from preview through execute and readback. High-risk auto behavior is covered deterministically by Task 2 unit tests, so this E2E does not depend on a particular fixture capability catalogue.
 
 - [ ] **Step 1: Add the isolated E2E test behind an explicit gate**
 
@@ -219,7 +219,7 @@
 
   Run the documented `pnpm vitest run tests/e2e/agent-progression-run.e2e.test.ts --maxWorkers=1 --minWorkers=1` command with an isolated database and authenticated PMS endpoint.
 
-  Expected: PASS with actual preview, execution, readback, operation/audit evidence, or an explicit `WAITING_CONFIRMATION` assertion for high risk.
+  Expected: PASS with actual preview, execution, readback, operation/audit evidence for the run-scoped fixture.
 
 - [ ] **Step 3: Run the final connector suite**
 
