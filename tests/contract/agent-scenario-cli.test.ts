@@ -18,6 +18,58 @@ function deps(client: never) {
 }
 
 describe("scenario --format agent", () => {
+  it("returns draft diagnostics without creating a preview or executing a write", async () => {
+    const client = {
+      get: vi.fn(async () => ({
+        resourceType: "story", resourceId: 34, entityVersion: 7, details: { title: "项目管理标准" },
+      })),
+      context: vi.fn(async () => ({
+        resource: { type: "story", id: 34 },
+        version: 3,
+        currentNode: { id: 387, key: "acceptance", label: "验收中" },
+        workflow: {
+          nodes: [{
+            id: 387,
+            key: "acceptance",
+            label: "验收中",
+            components: [{
+              key: "story-node-workbench",
+              saveContract: {
+                command: "development-item.node.field.update",
+                writableFields: ["testResult"],
+                protectedFields: ["status"],
+              },
+            }],
+          }],
+        },
+        allowedActions: ["development-item.node.field.update"],
+      })),
+      preview: vi.fn(),
+      executePreview: vi.fn(),
+    };
+    const cli = deps(client as never);
+    await runCli([
+      "scenario", "progression", "draft", "story", "34", "--node-id", "387",
+      "--intent", "UPDATE_NODE_FIELDS", "--draft-json", JSON.stringify({
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: { testResult: "PASS", status: "DONE" },
+        fieldSources: {
+          testResult: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" },
+          status: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" },
+        },
+      }),
+    ], cli.value);
+
+    expect(cli.stderr).toEqual([]);
+    const output = JSON.parse(cli.stdout[0] ?? "{}");
+    expect(output.data.diagnostics).toMatchObject({
+      unknownFields: [],
+      protectedFields: ["status"],
+    });
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
   it("normalizes a story-workbench plan without changing the existing command arguments", async () => {
     const context = {
       resource: { type: "story" as const, id: 34 },

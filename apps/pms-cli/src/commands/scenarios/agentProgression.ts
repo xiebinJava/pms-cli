@@ -12,7 +12,10 @@ import {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
-import { assertSafeAgentPayload } from "./AgentDraftContract.js";
+import {
+  assertSafeAgentPayload,
+  validateAgentProgressionDraftFields,
+} from "./AgentDraftContract.js";
 import {
   executeResourceScenario,
   planResourceScenario,
@@ -86,6 +89,11 @@ export async function validateAgentProgressionDraft(
   }
   assertSafeAgentPayload(parsed.draft);
   const readback = await readContextSnapshot(client, parsed);
+  const diagnostics = validateAgentProgressionDraftFields(
+    parsed.draft,
+    readback.context,
+    parsed.nodeId,
+  );
   return agentProgressionDraftResultSchema.parse({
     contractVersion: agentProgressionContractVersion,
     phase: "draft",
@@ -94,6 +102,7 @@ export async function validateAgentProgressionDraft(
     intent: parsed.intent,
     contextVersion: String(readback.context.version),
     draft: parsed.draft,
+    diagnostics,
     warnings: [],
   });
 }

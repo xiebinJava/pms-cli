@@ -115,6 +115,19 @@ export const agentProgressionDraftResultSchema = z.object({
   intent: z.enum(["UPDATE_NODE_FIELDS", "COMPLETE_NODE"]),
   contextVersion: z.string().trim().min(1),
   draft: agentProgressionDraftSchema,
+  diagnostics: z.object({
+    unknownFields: z.array(z.string().trim().min(1)).default([]),
+    protectedFields: z.array(z.string().trim().min(1)).default([]),
+    missingSources: z.array(z.string().trim().min(1)).default([]),
+    unsafePayloadKeys: z.array(z.string().trim().min(1)).default([]),
+    unresolvedDecisions: z.array(z.string().trim().min(1)).default([]),
+  }).strict().default({
+    unknownFields: [],
+    protectedFields: [],
+    missingSources: [],
+    unsafePayloadKeys: [],
+    unresolvedDecisions: [],
+  }),
   warnings: z.array(z.string()).default([]),
 }).strict();
 

@@ -1,6 +1,7 @@
 import { PmsClientError } from "../../../../../packages/pms-client/src/index.js";
 import type {
   AgentDraft,
+  AgentProgressionDraft,
   ChildAgentTaskPayload,
   AgentTask,
   AnalysisDraft,
@@ -36,6 +37,68 @@ export function parseAgentDraftJson(raw: string): AnalysisDraft {
 export function validateAgentDraft(draft: AnalysisDraft, context: WorkflowContext): AnalysisDraft {
   AnalysisDraftValidator.validate(draft, context);
   return draft;
+}
+
+export interface AgentProgressionDraftDiagnostics {
+  unknownFields: string[];
+  protectedFields: string[];
+  missingSources: string[];
+  unsafePayloadKeys: string[];
+  unresolvedDecisions: string[];
+}
+
+const highRiskInferenceFields = new Set([
+  "acceptanceConclusion",
+  "businessConfirmation",
+  "conclusion",
+  "decision",
+  "designReviewStatus",
+  "productReviewStatus",
+  "selfTestResult",
+  "strategicFitScore",
+  "technicalReviewStatus",
+  "testResult",
+  "testStatus",
+]);
+
+/**
+ * Checks only the field-level write boundary declared by the current PMS context. It returns
+ * diagnostics instead of throwing so `scenario progression draft` can ask one consolidated
+ * question and still guarantees that no preview or write was created.
+ */
+export function validateAgentProgressionDraftFields(
+  draft: AgentProgressionDraft,
+  context: WorkflowContext,
+  nodeId?: number,
+): AgentProgressionDraftDiagnostics {
+  const patch = draft.patch ?? {};
+  const patchKeys = Object.keys(patch);
+  const contract = readNodeDetailContract(context, nodeId);
+  const writable = new Set(contract.writableFields);
+  const protectedFields = new Set(contract.protectedFields);
+  const fieldSources = draft.fieldSources ?? {};
+  const protectedPatchFields = patchKeys.filter((key) => protectedFields.has(key));
+  const unknownFields = patchKeys.filter((key) => !writable.has(key) && !protectedFields.has(key));
+  const missingSources = patchKeys.filter((key) => {
+    const source = fieldSources[key];
+    return writable.has(key) && (source === undefined || source.sourceRefs.length === 0);
+  });
+  const unresolvedDecisions = [
+    ...draft.unresolvedDecisions.map((item) => item.text),
+    ...patchKeys.filter((key) => {
+      const source = fieldSources[key];
+      return highRiskInferenceFields.has(key)
+        && source?.sourceType === "inference"
+        && source.confidence !== "high";
+    }).map((key) => `${key}: 低置信度推断不能自动写入高风险业务结论`),
+  ];
+  return {
+    unknownFields,
+    protectedFields: protectedPatchFields,
+    missingSources,
+    unsafePayloadKeys: [],
+    unresolvedDecisions,
+  };
 }
 
 export function buildChildAgentTask(input: {
@@ -127,4 +190,34 @@ export function assertSafeAgentPayload(value: unknown, path = "$", seen = new We
     }
     assertSafeAgentPayload(entry, `${path}.${key}`, seen);
   }
+}
+
+function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
+  writableFields: string[];
+  protectedFields: string[];
+} {
+  const selectedNodeId = nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id;
+  const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
+  const node = nodes.find((candidate) => isRecord(candidate)
+    && (selectedNodeId === undefined || candidate.id === selectedNodeId));
+  if (!isRecord(node)) return { writableFields: [], protectedFields: [] };
+  const components = Array.isArray(node.components) ? node.components : [];
+  const component = components.find((candidate) => isRecord(candidate)
+    && isRecord(candidate.saveContract))
+    ?? components.find((candidate) => isRecord(candidate));
+  const saveContract = component && isRecord(component.saveContract) ? component.saveContract : undefined;
+  return {
+    writableFields: stringArray(saveContract?.writableFields),
+    protectedFields: stringArray(saveContract?.protectedFields),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim() !== "")
+    : [];
 }
