@@ -49,6 +49,7 @@ export async function planAgentProgression(
     ? null
     : await readFocusedProgressionContext(client, parsed);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
+  const riskRequiresConfirmation = executionMode === "confirmation" && parsed.executeMode !== "confirm";
   const draftExecutionMode = draftModeForRequest(parsed, executionMode);
   const draftPlan = parsed.draft && preflightContext
     ? planAgentProgressionDraft(parsed.draft, preflightContext, parsed.nodeId, parsed.intent, draftExecutionMode)
@@ -88,7 +89,12 @@ export async function planAgentProgression(
   const capability = resourcePlan.capability as ActionCapability;
   const preconditions = resourcePlan.preview?.preconditions ?? [];
   const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
-  const writeDecision = blockedByPrecondition ? "NEEDS_INPUT" : draftPlan?.writeDecision ?? "READY";
+  const draftDecision = draftPlan?.writeDecision;
+  const writeDecision = blockedByPrecondition
+    ? "NEEDS_INPUT"
+    : draftDecision && draftDecision !== "READY"
+      ? draftDecision
+      : riskRequiresConfirmation ? "WAITING_CONFIRMATION" : "READY";
   return {
     contractVersion: agentProgressionContractVersion,
     phase: "plan",
@@ -241,9 +247,8 @@ function draftModeForRequest(
 ): "read" | "automatic" | "confirmation" {
   // Explicit confirm authorizes a high-risk preview+execute path. Auto and
   // plan must still stop before preview for the same capability.
-  return input.executeMode === "confirm" && capabilityMode === "confirmation"
-    ? "automatic"
-    : capabilityMode;
+  if (capabilityMode !== "confirmation") return capabilityMode;
+  return input.executeMode === "auto" ? "confirmation" : "automatic";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

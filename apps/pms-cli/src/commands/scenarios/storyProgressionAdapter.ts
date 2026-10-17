@@ -33,9 +33,10 @@ export async function planStoryProgression(
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
   const executionMode = deriveProgressionExecutionMode(capability);
-  const draftExecutionMode = input.executeMode === "confirm" && executionMode === "confirmation"
-    ? "automatic" as const
-    : executionMode;
+  const riskRequiresConfirmation = executionMode === "confirmation" && input.executeMode !== "confirm";
+  const draftExecutionMode = executionMode === "confirmation" && input.executeMode === "auto"
+    ? "confirmation" as const
+    : "automatic" as const;
   const draftPlan = input.draft
     ? planAgentProgressionDraft(input.draft, binding.context, binding.nodeId, input.intent, draftExecutionMode)
     : null;
@@ -68,7 +69,12 @@ export async function planStoryProgression(
   const plan = await planStoryWorkbenchScenario(client, workbenchInput);
   const preconditions = plan.preview.preconditions ?? [];
   const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
-  const writeDecision = blockedByPrecondition ? "NEEDS_INPUT" : draftPlan?.writeDecision ?? "READY";
+  const draftDecision = draftPlan?.writeDecision;
+  const writeDecision = blockedByPrecondition
+    ? "NEEDS_INPUT"
+    : draftDecision && draftDecision !== "READY"
+      ? draftDecision
+      : riskRequiresConfirmation ? "WAITING_CONFIRMATION" : "READY";
   return {
     contractVersion: agentProgressionContractVersion,
     phase: "plan",

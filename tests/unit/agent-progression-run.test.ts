@@ -197,6 +197,17 @@ describe("agent progression run", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("creates a high-risk preview in plan mode before waiting for confirmation", async () => {
+    const client = requirementClient("high");
+    const result = await runAgentProgression(client, input("plan"));
+
+    expect(result.status).toBe("WAITING_CONFIRMATION");
+    expect(result.plan?.preview?.operationId).toBe("preview-requirement-complete");
+    expect(result.previewOperationId).toBe("preview-requirement-complete");
+    expect(client.preview).toHaveBeenCalledOnce();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
   it("executes a high-risk draft only after explicit confirm", async () => {
     const client = requirementClient("high");
     const result = await runAgentProgression(client, input("confirm", {
