@@ -42,7 +42,7 @@ pms scenario progression run <project|requirement|topic|story> <id> \\
   --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> \\
   [--node-id <id>] [--version <version>] [--draft-json <json>] \\
   [--execute-mode plan|auto|confirm] \\
-  [--preview-operation-id <id>] [--idempotency-key <key>]
+  [--idempotency-key <key>]
 ```
 
 `run` is a convenience composition over existing scenario functions; it must not duplicate resource adapters or PMS business rules. It creates a fresh preview inside the same invocation. Resuming an already-created preview remains the responsibility of the existing `execute` command.
