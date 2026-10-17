@@ -27,6 +27,9 @@ import {
   mayExecuteProgression,
 } from "./progressionPolicy.js";
 import { executeStoryProgression, planStoryProgression } from "./storyProgressionAdapter.js";
+import "./requirementScenarioAdapter.js";
+import "./topicScenarioAdapter.js";
+import "./projectScenarioAdapter.js";
 
 export async function planAgentProgression(
   client: PmsClient,
@@ -77,7 +80,7 @@ export async function planAgentProgression(
     operation,
     ...(parsed.nodeId === undefined ? {} : { nodeId: parsed.nodeId }),
     ...(parsed.contextVersion === undefined ? {} : { contextVersion: parsed.contextVersion }),
-    arguments: {},
+    arguments: progressionArguments(parsed),
     ...(parsed.draft === undefined ? {} : { draft: toResourceDraft(parsed) }),
     requestId: parsed.requestId,
   });
@@ -271,13 +274,31 @@ function resourceOperation(
   resourceType: Exclude<ParsedAgentProgressionInput["resourceType"], "story">,
   intent: ParsedAgentProgressionInput["intent"],
 ): string {
+  if (intent === "COMPLETE_NODE") {
+    if (resourceType === "project") {
+      throw new ResourceScenarioError(
+        "CAPABILITY_UNAVAILABLE",
+        "project 当前没有注册 COMPLETE_NODE 能力；项目节点完成将在第二期开放",
+      );
+    }
+    return "development-item.node.complete-with-data";
+  }
   if (intent !== "UPDATE_NODE_FIELDS") {
     throw new ResourceScenarioError(
       "CAPABILITY_UNAVAILABLE",
-      `${resourceType} 当前没有注册 ${intent} 能力；节点完成只开放给故事验收节点`,
+      `${resourceType} 当前没有注册 ${intent} 能力`,
     );
   }
   return resourceType === "project" ? "node.field.update" : "development-item.node.field.update";
+}
+
+function progressionArguments(input: ParsedAgentProgressionInput): Record<string, unknown> {
+  if (!input.draft || input.intent !== "COMPLETE_NODE") return {};
+  return {
+    ...(input.draft.ownerId === undefined ? {} : { ownerId: input.draft.ownerId }),
+    ...(input.draft.startDate === undefined ? {} : { startDate: input.draft.startDate }),
+    ...(input.draft.endDate === undefined ? {} : { endDate: input.draft.endDate }),
+  };
 }
 
 function toResourceDraft(input: ParsedAgentProgressionInput) {

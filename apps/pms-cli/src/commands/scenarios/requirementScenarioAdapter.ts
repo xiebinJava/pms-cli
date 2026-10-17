@@ -20,6 +20,7 @@ const REQUIREMENT_OPERATIONS = new Set([
   "requirement.execution-target.change",
   "requirement.execution-target.unlink",
   "development-item.node.field.update",
+  "development-item.node.complete-with-data",
 ]);
 
 type SaveContract = {
@@ -31,6 +32,8 @@ type SaveContract = {
   fieldValuesPath: string;
   writableFields: string[];
   protectedFields: string[];
+  completionCommand?: string;
+  completionSupported?: boolean;
 };
 
 export const requirementScenarioAdapter: ResourceScenarioAdapter = {
@@ -43,7 +46,8 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
   async loadContext(client, input) {
     const requirementId = requireResourceId(input);
     const focused = input.operation === "requirement.analysis.save"
-      || input.operation === "development-item.node.field.update";
+      || input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data";
     const context = await client.context(
       { type: "requirement", id: requirementId },
       focused
@@ -75,17 +79,30 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
       };
     }
 
-    if (input.operation === "development-item.node.field.update") {
+    if (input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       const saveContract = readSaveContract(rawContext, nodeId);
       const patch = readPatch(input);
-      return {
+      const normalized = {
         itemType: saveContract.itemType,
         itemId: saveContract.itemId,
         nodeId: saveContract.nodeId,
         version: saveContract.version,
         fieldValues: fieldValuesAtPath(saveContract.fieldValuesPath, patch),
       };
+      if (input.operation === "development-item.node.complete-with-data") {
+        if (!saveContract.completionSupported || saveContract.completionCommand !== input.operation) {
+          throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点未声明原子完成能力");
+        }
+        return {
+          ...normalized,
+          ...(input.arguments.ownerId === undefined ? {} : { ownerId: input.arguments.ownerId }),
+          ...(input.arguments.startDate === undefined ? {} : { startDate: input.arguments.startDate }),
+          ...(input.arguments.endDate === undefined ? {} : { endDate: input.arguments.endDate }),
+        };
+      }
+      return normalized;
     }
 
     if (input.operation === "requirement.update") {
@@ -119,7 +136,9 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
       );
     }
 
-    if (input.operation === "requirement.analysis.save" || input.operation === "development-item.node.field.update") {
+    if (input.operation === "requirement.analysis.save"
+      || input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       if (rawContext.currentNode?.id !== nodeId) {
         throw new ResourceScenarioError(
@@ -258,6 +277,10 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
     fieldValuesPath: raw.fieldValuesPath,
     writableFields: raw.writableFields,
     protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
+    ...(raw.completionCommand === "development-item.node.complete-with-data"
+      ? { completionCommand: raw.completionCommand } : {}),
+    ...(typeof raw.completionSupported === "boolean"
+      ? { completionSupported: raw.completionSupported } : {}),
   };
 }
 
@@ -306,7 +329,8 @@ function validateSuppliedArguments(
     assertMatchingNumber(input.arguments.version, requireNodeVersion(input, context), "version");
     return;
   }
-  if (input.operation === "development-item.node.field.update") {
+  if (input.operation === "development-item.node.field.update"
+    || input.operation === "development-item.node.complete-with-data") {
     const nodeId = requireNodeId(input);
     const contract = readSaveContract(context, nodeId);
     if (input.arguments.itemType !== undefined && input.arguments.itemType !== contract.itemType) {

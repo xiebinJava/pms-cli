@@ -16,6 +16,7 @@ const TOPIC_OPERATIONS = new Set([
   "topic.update",
   "topic.project.link",
   "development-item.node.field.update",
+  "development-item.node.complete-with-data",
 ]);
 
 type SaveContract = {
@@ -29,6 +30,8 @@ type SaveContract = {
   sourceProjectNodeKey: string | null;
   writableFields: string[];
   protectedFields: string[];
+  completionCommand?: string;
+  completionSupported?: boolean;
 };
 
 type ContextBundle = {
@@ -46,7 +49,8 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
   async loadContext(client, input) {
     if (input.operation === "topic.create") return null;
     const topicId = requireTopicId(input);
-    const focused = input.operation === "development-item.node.field.update";
+    const focused = input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data";
     const topic = await client.context(
       { type: "topic", id: topicId },
       focused ? { nodeId: requireNodeId(input), view: "focused" } : undefined,
@@ -70,16 +74,29 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
     const topic = readTopicContext(context);
     if (!topic) throw new ResourceScenarioError("RESOURCE_NOT_FOUND", "专题上下文不存在");
 
-    if (input.operation === "development-item.node.field.update") {
+  if (input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       const saveContract = readSaveContract(topic, nodeId);
-      return {
+      const normalized = {
         itemType: saveContract.itemType,
         itemId: saveContract.itemId,
         nodeId: saveContract.nodeId,
         version: saveContract.version,
         fieldValues: fieldValuesAtPath(saveContract.fieldValuesPath, readPatch(input)),
       };
+      if (input.operation === "development-item.node.complete-with-data") {
+        if (!saveContract.completionSupported || saveContract.completionCommand !== input.operation) {
+          throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "专题节点未声明原子完成能力");
+        }
+        return {
+          ...normalized,
+          ...(input.arguments.ownerId === undefined ? {} : { ownerId: input.arguments.ownerId }),
+          ...(input.arguments.startDate === undefined ? {} : { startDate: input.arguments.startDate }),
+          ...(input.arguments.endDate === undefined ? {} : { endDate: input.arguments.endDate }),
+        };
+      }
+      return normalized;
     }
     return {
       ...input.arguments,
@@ -112,7 +129,8 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
       );
     }
     validateSuppliedArguments(input, topic, normalizedArguments);
-    if (input.operation === "development-item.node.field.update") {
+    if (input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       if (topic.currentNode?.id !== nodeId) {
         throw new ResourceScenarioError("CONTEXT_CONFLICT", "专题节点不是当前 focused 节点");
@@ -211,7 +229,8 @@ function validateSuppliedArguments(
 ): void {
   assertMatchingNumber(input.arguments.topicId, topic.resource.id, "topicId");
   assertMatchingNumber(input.arguments.itemId, topic.resource.id, "itemId");
-  if (input.operation === "development-item.node.field.update") {
+  if (input.operation === "development-item.node.field.update"
+    || input.operation === "development-item.node.complete-with-data") {
     const nodeId = requireNodeId(input);
     assertMatchingNumber(input.arguments.nodeId, nodeId, "nodeId");
     const expectedVersion = readNode(topic, nodeId)?.version;
@@ -278,6 +297,10 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
     sourceProjectNodeKey: typeof raw.sourceProjectNodeKey === "string" ? raw.sourceProjectNodeKey : null,
     writableFields: raw.writableFields,
     protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
+    ...(raw.completionCommand === "development-item.node.complete-with-data"
+      ? { completionCommand: raw.completionCommand } : {}),
+    ...(typeof raw.completionSupported === "boolean"
+      ? { completionSupported: raw.completionSupported } : {}),
   };
 }
 
