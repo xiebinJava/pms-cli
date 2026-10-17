@@ -125,4 +125,3 @@ function statusForDecision(
   if (decision === "CAPABILITY_UNAVAILABLE") return "CAPABILITY_UNAVAILABLE";
   return null;
 }
-
