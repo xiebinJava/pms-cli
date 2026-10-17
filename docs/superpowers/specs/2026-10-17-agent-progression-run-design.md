@@ -45,7 +45,7 @@ pms scenario progression run <project|requirement|topic|story> <id> \\
   [--preview-operation-id <id>] [--idempotency-key <key>]
 ```
 
-`run` is a convenience composition over existing scenario functions; it must not duplicate resource adapters or PMS business rules.
+`run` is a convenience composition over existing scenario functions; it must not duplicate resource adapters or PMS business rules. It creates a fresh preview inside the same invocation. Resuming an already-created preview remains the responsibility of the existing `execute` command.
 
 - `READ_CONTEXT`: reads resource and focused context and returns `CONTEXT_READY`; it does not accept a draft and never previews or writes.
 - `UPDATE_NODE_FIELDS` / `COMPLETE_NODE`: require a draft. The command validates the draft against fresh context before previewing.
