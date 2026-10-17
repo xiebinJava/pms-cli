@@ -44,6 +44,29 @@ pms requirement analysis save 23 \
   --format json
 ```
 
+## Claude/Codex 自然语言推进
+
+安装并授权后，外部工作台中的 Claude、Codex 或 DeepSeek 负责理解对话，`pms-cli` 负责 PMS 真源读取、能力校验、preview、写入和回读。模型凭据留在外部工作台；不要在 CLI 中配置模型 URL、API Key 或模型名称。
+
+先读取上下文，再让外部模型基于返回的节点合同生成草稿：
+
+```bash
+pms scenario progression run story 34 --intent READ_CONTEXT --format json
+pms scenario progression run story 34 --intent UPDATE_NODE_FIELDS \
+  --execute-mode plan --node-id <node-id> \
+  --draft-json '<agent-progression/v1 draft>' --format json
+```
+
+计划确认后，低/中风险写入可由当前已明确的用户意图直接使用 `auto`；高风险使用 `confirm`。两者都必须由调用方提供幂等键，CLI 不会猜测节点、字段或幂等键：
+
+```bash
+pms scenario progression run story 34 --intent UPDATE_NODE_FIELDS \
+  --execute-mode auto --node-id <node-id> \
+  --draft-json '<same draft>' --idempotency-key story-34-node-<node>-1 --format json
+```
+
+返回的 `status`、`operationId`、`auditId`、`readback` 和 `verification` 是机器可读交接结果。当前统一入口支持需求、专题、故事；项目节点写入仍使用现有命令。
+
 ## 场景级自然语言演示
 
 项目创建建议先执行只读计划，再由调用方明确执行：

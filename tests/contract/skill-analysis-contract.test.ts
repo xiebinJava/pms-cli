@@ -24,5 +24,9 @@ describe("requirement analysis Skill contract", () => {
     expect(skill).toContain("子 Agent");
     expect(skill).toContain("不接收 PMS 登录凭据");
     expect(skill).toContain("WRITE_RESULT_UNKNOWN");
+    expect(skill).toContain("pms scenario progression run");
+    expect(skill).toContain("模型凭据留在 Claude/Codex/DeepSeek");
+    expect(skill).toContain("auto/confirm");
+    expect(skill).toContain("不能猜测 nodeId");
   });
 });

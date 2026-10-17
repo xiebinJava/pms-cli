@@ -32,6 +32,7 @@ pms get project 7 --format json
 pms context project 7 --format json
 pms context requirement 23 --view focused --node-id 299 --format json
 pms context project 7 --view focused --node-id 299 --component solution-design --format json
+pms scenario progression run requirement 23 --intent READ_CONTEXT --format json
 pms operation preview project.create --arguments-json '{"name":"订单中心"}' --format json
 pms operation execute --preview-operation-id <preview-operation-id> --idempotency-key idem-1 --format json
 # 用户已明确要求的低/中风险写入可省略重复确认；高风险操作仍必须走上面的 preview/execute
@@ -46,6 +47,8 @@ pms dashboard summary --format json
 ```
 
 CLI-Anything 用于生成和核验 CLI harness 的命令、Skill 和测试形态；运行时不依赖 CLI-Anything，不使用浏览器点击自动化，也不复制 PMS 业务规则。
+
+自然语言推进由外部 Claude/Codex/DeepSeek 负责理解，`pms-cli` 负责读取 PMS 上下文、生成预览、执行和回读。模型凭据留在外部工作台，不配置在 CLI 中。需求、专题和故事可通过统一的 `pms scenario progression run` 入口推进；项目节点写入仍沿用现有入口，待后续阶段统一。
 
 ## 工作台 Skill
 
@@ -84,3 +87,4 @@ pnpm verify:real-pms:readonly
 场景结果中的 `trace.operationId` 是 PMS 持久化 AI 操作记录的审计引用；如果后端返回独立 `auditId`，会一并透传。重复业务请求必须复用同一幂等键，连接器不会自动重试写操作。
 
 详见 [安装说明](docs/installation.md)、[Feishu CLI 对齐说明](docs/feishu-cli-alignment.md)、[兼容矩阵](docs/compatibility-matrix.md) 和 [E2E 验收报告](docs/e2e-report.md)。
+统一推进入口详见 [Agent 推进运行手册](docs/agent-progression-runbook.md)。

@@ -13,7 +13,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
 2. 涉及具体事项时，优先执行 `pms context <resourceType> <resourceId> --format agent`，获取外部 Agent 可消费的 `ContextSnapshot`、`NodeContract`、权限投影和上下文版本；需要排查原始字段时，再执行 `pms context <resourceType> <resourceId> --format json`。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 按 **读取 → 草稿 → 校验 → 执行 → 回读验证** 分阶段工作。默认仍可使用 `pms operation preview` 或场景 plan 生成可审阅变更；对于用户在当前对话中已经明确提出的低/中风险写入，可以使用 `pms operation auto <operation>`，它会在服务端内部完成预览校验、权限、版本、幂等和审计，不再重复弹出确认。高风险操作（删除、归档、回滚、批量写入、权限或成员变更）必须使用预览确认链路并携带 `--preview-operation-id` 和 `--idempotency-key`。
+4. 按 **读取 → 草稿 → 校验 → 执行 → 回读验证** 分阶段工作。默认仍可使用 `pms operation preview` 或场景 plan 生成可审阅变更；对于用户在当前对话中已经明确提出的低/中风险写入，可以使用 `pms operation auto <operation>`，它会在服务端内部完成预览校验、权限、版本、幂等和审计，不再重复弹出确认。高风险操作（删除、归档、回滚、批量写入、权限或成员变更）使用预览确认链路并携带 `--preview-operation-id` 和 `--idempotency-key`；统一 `progression run` 会在本次调用内部生成 fresh preview，因此不接受该参数。
 
 ## 外部 Agent 协作协议
 
@@ -22,6 +22,42 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 - 草稿必须区分事实、推断、假设、未决问题、建议字段和证据引用；子 Agent 的证据只能来自父快照中可读的 `sourceRefs`。
 - 高风险预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。低/中风险使用 `operation auto` 时，仍要在执行结果中说明实际写入内容和操作 ID；用户没有明确写入意图时只能返回草稿或预览。
 - 若使用兼容旧入口 `pms requirement analysis save`，也必须遵守同样的上下文版本、字段白名单、幂等键和当前对话明确确认规则；新流程优先使用 scenario 的 plan/execute 分离入口。
+
+## 统一 Agent 推进入口
+
+需求、专题和故事的节点推进可以通过统一入口完成。推荐顺序是：
+
+```text
+Claude/Codex/DeepSeek 理解自然语言
+→ pms capabilities / pms context 读取 PMS 真源
+→ 外部模型生成 agent-progression/v1 草稿和 sourceRefs
+→ pms scenario progression run 生成 preview
+→ auto（低/中风险且用户已明确要求）或 confirm（高风险明确授权）
+→ PMS 执行、回读、验证并返回 operationId/auditId
+```
+
+模型凭据留在 Claude/Codex/DeepSeek；`pms-cli` 不配置模型 URL、API Key 或模型名称，也不把 PMS Token 交给模型。CLI 只负责 PMS 上下文、能力、预览、执行和回读。
+
+自然语言工作台可以调用：
+
+```bash
+pms scenario progression run requirement <requirement-id> \
+  --intent READ_CONTEXT --format json
+
+pms scenario progression run requirement <requirement-id> \
+  --intent UPDATE_NODE_FIELDS --execute-mode plan \
+  --node-id <node-id> --draft-json '<agent-progression/v1 draft>' \
+  --format json
+
+pms scenario progression run requirement <requirement-id> \
+  --intent UPDATE_NODE_FIELDS --execute-mode auto \
+  --node-id <node-id> --draft-json '<same draft>' \
+  --idempotency-key <new-key> --format json
+```
+
+`READ_CONTEXT` 和 `plan` 不需要幂等键；`auto/confirm` 写入必须由调用方提供幂等键，CLI 不代生成。高风险能力在 `auto` 下只返回 `WAITING_CONFIRMATION`，只有当前对话已经明确授权、并使用 `confirm` 时才会执行。`run` 当前支持需求、专题、故事，项目节点写入仍使用旧入口并留在后续阶段。
+
+外部模型不能猜测 nodeId、字段 key、组件或版本。必须从本次 `pms context --format agent` 返回的 `NodeContract` 和 `saveContract` 中选择，并在草稿中为写入字段保留可读的 `fieldSources.sourceRefs`。字段缺失、受保护、未知、上下文过期或能力不可用时，只返回结构化状态，不要修改 PMS。
 
 ## 需求分析和成果保存
 
