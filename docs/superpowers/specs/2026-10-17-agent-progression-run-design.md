@@ -51,7 +51,7 @@ pms scenario progression run <project|requirement|topic|story> <id> \\
 - `UPDATE_NODE_FIELDS` / `COMPLETE_NODE`: require a draft. The command validates the draft against fresh context before previewing.
 - `plan`: returns a plan and preview, with `NEEDS_INPUT`, `WAITING_CONFIRMATION`, or `CAPABILITY_UNAVAILABLE` when applicable; it never executes.
 - `auto`: executes only when the live capability is automatic and low/medium risk. If the capability requires confirmation, returns `WAITING_CONFIRMATION` and does not write.
-- `confirm`: is an explicit execution authorization supplied by the calling Agent after the user authorized the write. It can execute non-read capabilities, including high-risk ones, but still requires the preview operation ID and a fresh idempotency key.
+- `confirm`: is an explicit execution authorization supplied by the calling Agent after the user authorized the write. It can execute non-read capabilities, including high-risk ones, and requires a fresh idempotency key. The run command creates the preview internally; resuming an old preview uses the existing execute command.
 - A write run requires an explicit `--idempotency-key`; the CLI never invents a retry key.
 - Execution cannot accept a second draft or changed arguments after preview. A changed draft requires a new run.
 
