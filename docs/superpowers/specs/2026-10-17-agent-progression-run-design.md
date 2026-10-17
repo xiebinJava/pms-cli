@@ -38,7 +38,7 @@ The CLI never sends PMS context to a model. The external Agent decides when a us
 Add:
 
 ```text
-pms scenario progression run <project|requirement|topic|story> <id> \\
+pms scenario progression run <requirement|topic|story> <id> \\
   --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> \\
   [--node-id <id>] [--version <version>] [--draft-json <json>] \\
   [--execute-mode plan|auto|confirm] \\
@@ -47,12 +47,12 @@ pms scenario progression run <project|requirement|topic|story> <id> \\
 
 `run` is a convenience composition over existing scenario functions; it must not duplicate resource adapters or PMS business rules. It creates a fresh preview inside the same invocation. Resuming an already-created preview remains the responsibility of the existing `execute` command.
 
-- `READ_CONTEXT`: reads resource and focused context and returns `CONTEXT_READY`; it does not accept a draft and never previews or writes.
+- `READ_CONTEXT`: reads requirement, topic, or story resource and focused context and returns `CONTEXT_READY`; it does not accept a draft and never previews or writes. Project node writes remain outside this entry point.
 - `UPDATE_NODE_FIELDS` / `COMPLETE_NODE`: require a draft. The command validates the draft against fresh context before previewing.
 - `plan`: returns a plan and preview, with `NEEDS_INPUT`, `WAITING_CONFIRMATION`, or `CAPABILITY_UNAVAILABLE` when applicable; it never executes.
 - `auto`: executes only when the live capability is automatic and low/medium risk. If the capability requires confirmation, returns `WAITING_CONFIRMATION` and does not write.
 - `confirm`: is an explicit execution authorization supplied by the calling Agent after the user authorized the write. It can execute non-read capabilities, including high-risk ones, and requires a fresh idempotency key. The run command creates the preview internally; resuming an old preview uses the existing execute command.
-- A write run requires an explicit `--idempotency-key`; the CLI never invents a retry key.
+- An executing run (`auto` or `confirm`) requires an explicit `--idempotency-key`; `plan` and `READ_CONTEXT` do not. The CLI never invents a retry key.
 - Execution cannot accept a second draft or changed arguments after preview. A changed draft requires a new run.
 
 The result is a new `agent-progression-run/v1` envelope containing the original `agent-progression/v1` plan and, when execution was attempted, the existing progression result. It includes `status`, `writeDecision`, `previewOperationId`, `operationId`, `auditId`, `readback`, `verification`, and warnings without exposing credentials.
@@ -62,7 +62,7 @@ The result is a new `agent-progression-run/v1` envelope containing the original 
 - Unknown/protected fields, missing evidence references, stale context, missing required completion fields, and blocked preview preconditions stop before execution.
 - `WAITING_CONFIRMATION` and `NEEDS_INPUT` are successful protocol outcomes, not retries.
 - PMS conflicts and `WRITE_RESULT_UNKNOWN` are returned with their operation/idempotency references. The CLI does not retry writes.
-- For `READ_CONTEXT`, no `--idempotency-key`, preview, or write capability is required.
+- For `READ_CONTEXT` and `plan`, no `--idempotency-key` or execution capability is required.
 - Existing commands and schemas remain backwards compatible; the new run result has its own versioned schema.
 
 ## Testing
@@ -73,7 +73,7 @@ The result is a new `agent-progression-run/v1` envelope containing the original 
    - read context never calls preview or execute;
    - auto executes a permitted low/medium operation;
    - auto stops at `WAITING_CONFIRMATION` for high risk;
-   - confirm executes high risk only with preview and idempotency key;
+   - confirm executes high risk only with the fresh internal preview and idempotency key;
    - missing fields, stale versions, and protected-field drafts do not write;
    - readback and audit identifiers are preserved.
 4. One isolated real-PMS E2E test for a requirement or story node, using a disposable database and the already established runbook gates.

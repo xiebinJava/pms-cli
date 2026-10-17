@@ -15,11 +15,11 @@
 - `pms-cli` must not contain a model SDK, model URL, API key, model name, prompt orchestration, or model network call.
 - The run command must reuse the existing progression adapters and PMS preview/execute/readback flow.
 - `READ_CONTEXT` is read-only and must never call preview or execute.
-- A write run requires an explicit idempotency key; the CLI must never invent one.
+- An executing run (`auto` or `confirm`) requires an explicit idempotency key; `plan` and `READ_CONTEXT` do not. The CLI must never invent one.
 - `auto` may execute only automatic low/medium-risk capabilities; high-risk auto requests return `WAITING_CONFIRMATION` without writing.
 - `confirm` is an explicit authorization from the external Agent after the user authorized the write; PMS permission, version, idempotency, audit, and readback checks remain authoritative.
 - Existing `draft`, `plan`, and `execute` commands remain backwards compatible.
-- Project node writes remain outside this phase.
+- The new run entry point supports requirement, topic, and story; project node writes remain outside this phase.
 
 ## Review Focus
 
@@ -37,7 +37,7 @@
 - Create: `tests/contract/agent-progression-run-contract.test.ts`
 
 **Interfaces:**
-- Produces `agentProgressionRunContractVersion = "agent-progression-run/v1"`.
+- Produces `agentProgressionRunContractVersion = "agent-progression-run/v1"` and restricts the run resource type to requirement, topic, or story.
 - Produces `agentProgressionRunResultSchema` and `AgentProgressionRunResult`.
 - The result includes `phase: "run"`, resource/intent, `status`, `writeDecision`, nullable `plan`, nullable `result`, nullable `previewOperationId`, `operationId`, `auditId`, `readback`, `verification`, and `warnings`.
 - Status values are `CONTEXT_READY`, `PLAN_READY`, `NEEDS_INPUT`, `WAITING_CONFIRMATION`, `CAPABILITY_UNAVAILABLE`, `SUCCEEDED`, `REJECTED`, `CONFLICT`, and `WRITE_RESULT_UNKNOWN`.
@@ -131,12 +131,12 @@
 **Interfaces:**
 - Adds `run` to the progression help line.
 - Dispatches `scenario progression run <resourceType> <id>` to `runAgentProgression` with the same input parsing used by existing progression commands.
-- Requires `--draft-json` for write intents and `--idempotency-key` for `auto`/`confirm` execution; usage errors occur before `createRuntime`.
+- Requires `--draft-json` for write intents and `--idempotency-key` only for `auto`/`confirm` execution; usage errors occur before `createRuntime`.
 - Accepts no `--preview-operation-id`; existing `scenario progression execute` remains the resume path.
 
 - [ ] **Step 1: Write failing dispatch tests**
 
-  Add tests for a read run, a write run with JSON draft and idempotency key, missing idempotency key, and invalid resource type. Assert the exact contract version/result phase and that usage failures do not authenticate.
+  Add tests for a read run, a plan run without an idempotency key, an auto write run with JSON draft and idempotency key, missing idempotency key for execution, project rejection, and invalid resource type. Assert the exact contract version/result phase and that usage failures do not authenticate.
 
 - [ ] **Step 2: Run the focused dispatch tests and verify they fail**
 
