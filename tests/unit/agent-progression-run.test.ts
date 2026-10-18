@@ -100,6 +100,114 @@ function requirementClient(risk: Risk = "medium") {
   } as any;
 }
 
+function projectClient(options: { withCompletion?: boolean } = {}) {
+  const withCompletion = options.withCompletion === true;
+  const context = {
+    resource: { type: "project" as const, id: 42 },
+    version: 3,
+    entityVersion: 3,
+    currentNode: { id: 301, key: "design", label: "方案设计" },
+    workflow: {
+      nodes: [{
+        id: 301,
+        key: "design",
+        label: "方案设计",
+        version: 4,
+        components: [{
+          key: "solution-design",
+          content: { solutionPackage: "旧方案" },
+          saveContract: {
+            command: "node.field.update",
+            projectId: 42,
+            nodeId: 301,
+            nodeVersion: 4,
+            workbench: "solution-design",
+            writableFields: ["solutionPackage"],
+            protectedFields: ["status"],
+            dynamicFields: false,
+            ...(withCompletion ? {
+              completionSupported: true,
+              completionCommand: "node.complete-with-data",
+              completionRequiredMetadata: [],
+            } : {}),
+          },
+        }],
+      }],
+    },
+    allowedActions: ["node.field.update"],
+  };
+  const detail = {
+    resourceType: "project" as const,
+    resourceId: 42,
+    entityVersion: 3,
+    details: { name: "PMS 项目", status: "ACTIVE" },
+  };
+  return {
+    context: vi.fn(async () => context),
+    get: vi.fn(async () => detail),
+    capabilities: vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "project",
+        actions: [{
+          name: "node.field.update",
+          label: "更新项目节点",
+          description: "更新项目节点",
+          mode: "automatic" as const,
+          risk: "medium" as const,
+          scopes: [],
+          inputSchema: {
+            projectId: { type: "integer", label: "项目" },
+            nodeId: { type: "integer", label: "节点" },
+            workbench: { type: "string", label: "工作台" },
+            fields: { type: "object", label: "字段" },
+          },
+          requiresContext: true,
+          refreshScopes: [],
+        },
+          ...(withCompletion ? [{
+            name: "node.complete-with-data",
+            label: "保存并完成",
+            description: "保存项目节点详情并完成节点",
+            mode: "automatic" as const,
+            risk: "medium" as const,
+            scopes: [],
+            inputSchema: {
+              projectId: { type: "integer", label: "项目" },
+              nodeId: { type: "integer", label: "节点" },
+              workbench: { type: "string", label: "工作台" },
+              fields: { type: "object", label: "字段" },
+            },
+            requiresContext: true,
+            refreshScopes: [],
+          }] : []),
+        ],
+      }],
+      scopes: [],
+      workflowTypes: [],
+    })),
+    preview: vi.fn(async () => ({
+      operationId: "preview-project-complete",
+      command: "node.field.update",
+      expiresAt: "2099-01-01T00:00:00Z",
+      contextVersion: "3",
+      warnings: [],
+      changes: [{ field: "solutionPackage", to: "新方案" }],
+      refreshScopes: [],
+      preconditions: [],
+    })),
+    executePreview: vi.fn(async () => ({
+      operationId: "operation-project-update",
+      command: "node.field.update",
+      status: "SUCCEEDED" as const,
+      data: { projectId: 42 },
+      warnings: [],
+      refreshScopes: [],
+      auditId: "audit-project-update",
+    })),
+  } as any;
+}
+
 function draft(patch: Record<string, unknown> = { testResult: "PASS" }) {
   return {
     facts: [],
@@ -241,5 +349,94 @@ describe("agent progression run", () => {
     expect(protectedResult.status).toBe("CAPABILITY_UNAVAILABLE");
     expect(protectedClient.preview).not.toHaveBeenCalled();
     expect(protectedClient.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("runs a project node field update through the shared resource scenario", async () => {
+    const client = projectClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      nodeId: 301,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "auto",
+      idempotencyKey: "run-project-update-1",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { solutionPackage: "新方案" },
+        fieldSources: {
+          solutionPackage: {
+            sourceType: "conversation",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.resourceType).toBe("project");
+    expect(result.operationId).toBe("operation-project-update");
+    expect(client.executePreview).toHaveBeenCalledWith(
+      "preview-project-complete",
+      "run-project-update-1",
+    );
+  });
+
+  it("reports project node completion as unavailable without preview or execute", async () => {
+    const client = projectClient();
+    await expect(runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      nodeId: 301,
+      intent: "COMPLETE_NODE",
+      executeMode: "auto",
+      idempotencyKey: "run-project-complete-1",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { solutionPackage: "新方案" },
+      },
+    })).rejects.toMatchObject({ code: "CAPABILITY_UNAVAILABLE" });
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("completes a project node through the atomic save-and-complete operation", async () => {
+    const client = projectClient({ withCompletion: true });
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      nodeId: 301,
+      intent: "COMPLETE_NODE",
+      executeMode: "auto",
+      idempotencyKey: "run-project-complete-with-data-1",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { solutionPackage: "新方案" },
+      },
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.plan?.operation).toBe("node.complete-with-data");
+    expect(client.preview).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "node.complete-with-data",
+      arguments: expect.objectContaining({
+        projectId: 42,
+        nodeId: 301,
+        workbench: "solution-design",
+        fields: { solutionPackage: "新方案" },
+      }),
+    }));
   });
 });

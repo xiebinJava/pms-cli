@@ -8,6 +8,7 @@ import {
   type NodeContract,
   type WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 
 type AgentResourceType = "project" | "requirement" | "topic" | "story";
 
@@ -82,6 +83,7 @@ export function buildAgentContext(
       resource,
       contextVersion,
       capturedAt: context.meta?.loadedAt ?? new Date().toISOString(),
+      ...(context.resourceDetails ? { resourceDetails: context.resourceDetails } : {}),
       currentNode: context.currentNode ?? null,
       workflowNodes: context.workflow?.nodes ?? [],
       relations,
@@ -103,6 +105,10 @@ export function buildAgentContext(
     confirmation: { status: "NOT_REQUIRED" },
     operation: null,
     verification: null,
+    userFacing: buildUserFacingDisplay({
+      resourceType: resource.type,
+      context,
+    }),
   });
 }
 
@@ -151,6 +157,12 @@ export function buildNodeContract(
     && node.version !== null
     && node.version !== undefined;
   const missingInputRules = stringArray(saveContract?.missingInputRules);
+  const completionMode = typeof saveContract?.completionMode === "string"
+    ? saveContract.completionMode : undefined;
+  const completionAutomaticConfirmation = typeof saveContract?.completionAutomaticConfirmation === "boolean"
+    ? saveContract.completionAutomaticConfirmation : undefined;
+  const completionBlockReason = typeof saveContract?.completionBlockReason === "string"
+    ? saveContract.completionBlockReason : undefined;
   if (!saveContract) {
     missingInputRules.push("当前节点/组件未公开 saveContract，禁止生成写入预览");
   } else if (!actionAuthorized) {
@@ -184,6 +196,10 @@ export function buildNodeContract(
     allowedActions: unique(actions),
     allowedTransitions: stringArray(saveContract?.allowedTransitions),
     missingInputRules: unique(missingInputRules),
+    ...(completionMode === "AUTO_CONFIRM" || completionMode === "VALIDATE_ONLY"
+      || completionMode === "REQUIRES_DOMAIN_CONFIRMATION" ? { completionMode } : {}),
+    ...(completionAutomaticConfirmation === undefined ? {} : { completionAutomaticConfirmation }),
+    ...(completionBlockReason === undefined ? {} : { completionBlockReason }),
     writeCapable,
   };
 }

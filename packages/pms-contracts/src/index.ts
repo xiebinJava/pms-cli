@@ -1,4 +1,5 @@
 export * from "./operation.js";
+export * from "./userFacing.js";
 export * from "./capability.js";
 export * from "./capability-normalizer.js";
 export * from "./query.js";

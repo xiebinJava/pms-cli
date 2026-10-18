@@ -146,6 +146,36 @@ describe("pms context --format agent", () => {
     expect(rawOutput.data.meta.contextVersion).toBe("story:34:entity:7");
   });
 
+  it("resolves context by an exact resource name", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "v1",
+        resources: [],
+        scopes: [],
+        features: { readonlyWorkflowContext: true, focusedWorkflowContext: true },
+        workflowTypes: [],
+        agentContractVersion: "agent-contract/v1",
+      })),
+      query: vi.fn(async () => ({
+        resourceType: "story",
+        items: [{ type: "story", id: 34, name: "项目管理标准", summary: {} }],
+        total: 1,
+        page: 1,
+        pageSize: 100,
+        totalPage: 1,
+        queryScope: "current-user-readable",
+      })),
+      context: vi.fn(async () => context),
+    };
+    const agent = deps(client as never);
+
+    await runCli(["context", "story", "--name", "项目管理标准", "--format", "agent"], agent.value);
+
+    expect(agent.stderr).toEqual([]);
+    expect(client.context).toHaveBeenCalledWith({ type: "story", id: 34 }, {});
+    expect(client.query).toHaveBeenCalledOnce();
+  });
+
   it("fails with a structured capability error when agent context is unavailable", async () => {
     const agent = deps({
       capabilities: vi.fn(async () => ({

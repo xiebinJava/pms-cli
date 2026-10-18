@@ -16,6 +16,7 @@ const PROJECT_OPERATIONS = new Set([
   "project.create",
   "project.update",
   "node.field.update",
+  "node.complete-with-data",
 ]);
 
 type SaveContract = {
@@ -27,6 +28,12 @@ type SaveContract = {
   writableFields: string[];
   protectedFields: string[];
   dynamicFields: boolean;
+  completionSupported: boolean;
+  completionCommand?: string;
+  completionRequiredMetadata: string[];
+  completionMode?: string;
+  completionAutomaticConfirmation?: boolean;
+  completionBlockReason?: string;
 };
 
 export const projectScenarioAdapter: ResourceScenarioAdapter = {
@@ -39,7 +46,7 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
   async loadContext(client, input) {
     if (input.operation === "project.create") return null;
     const projectId = requireProjectId(input);
-    const focused = input.operation === "node.field.update";
+    const focused = input.operation === "node.field.update" || input.operation === "node.complete-with-data";
     const context = await client.context(
       { type: "project", id: projectId },
       focused ? { nodeId: requireNodeId(input), view: "focused" } : undefined,
@@ -63,13 +70,22 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     const project = readProjectContext(context);
     if (!project) throw new ResourceScenarioError("RESOURCE_NOT_FOUND", "项目上下文不存在");
     const nodeId = requireNodeId(input);
-    const saveContract = readSaveContract(project, nodeId, input.arguments.workbench);
-    return {
+    const saveContract = readSaveContract(project, nodeId, input.arguments.workbench, readPatch(input));
+    const normalized: Record<string, unknown> = {
       projectId: saveContract.projectId,
       nodeId: saveContract.nodeId,
       workbench: saveContract.workbench,
       fields: readPatch(input),
     };
+    if (input.operation === "node.complete-with-data") {
+      if (!saveContract.completionSupported || saveContract.completionCommand !== input.operation) {
+        throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目节点未声明原子完成能力");
+      }
+      for (const key of ["ownerId", "startDate", "endDate"] as const) {
+        if (Object.prototype.hasOwnProperty.call(input.arguments, key)) normalized[key] = input.arguments[key];
+      }
+    }
+    return normalized;
   },
 
   validate(input, context, normalizedArguments, capability) {
@@ -99,11 +115,16 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     }
 
     const nodeId = requireNodeId(input);
-    const saveContract = readSaveContract(project, nodeId, normalizedArguments.workbench);
+    const fieldsForContract = isRecord(normalizedArguments.fields) ? normalizedArguments.fields : {};
+    const saveContract = readSaveContract(project, nodeId, normalizedArguments.workbench, fieldsForContract);
     if (normalizedArguments.projectId !== saveContract.projectId
       || normalizedArguments.nodeId !== saveContract.nodeId
       || normalizedArguments.workbench !== saveContract.workbench) {
       throw new ResourceScenarioError("CONTEXT_CONFLICT", "项目节点参数与 saveContract 不一致");
+    }
+    if (input.operation === "node.complete-with-data"
+      && (!saveContract.completionSupported || saveContract.completionCommand !== input.operation)) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目节点未声明原子完成能力");
     }
     validateNodeFields(saveContract, normalizedArguments.fields);
   },
@@ -165,16 +186,34 @@ function readPatch(input: ParsedResourceScenarioInput): Record<string, unknown> 
   return {};
 }
 
-function readSaveContract(context: WorkflowContext, nodeId: number, requestedWorkbench: unknown): SaveContract {
+function readSaveContract(
+  context: WorkflowContext,
+  nodeId: number,
+  requestedWorkbench: unknown,
+  patch: Record<string, unknown> = {},
+): SaveContract {
   const node = readNode(context, nodeId);
   const components = node?.components;
-  const matching = (Array.isArray(components) ? components : []).filter((candidate) => {
+  const candidates = (Array.isArray(components) ? components : []).filter((candidate) => {
     if (!isRecord(candidate) || !isRecord(candidate.saveContract)) return false;
     return requestedWorkbench === undefined || candidate.saveContract.workbench === requestedWorkbench;
   });
+  const matching = requestedWorkbench === undefined && Object.keys(patch).length > 0
+    ? candidates.filter((candidate) => {
+      const contract = candidate.saveContract;
+      if (contract.dynamicFields === true) return true;
+      return isStringArray(contract.writableFields)
+        && Object.keys(patch).every((field) => contract.writableFields.includes(field));
+    })
+    : candidates;
   const raw = matching.length === 1 && isRecord(matching[0]) ? matching[0].saveContract : null;
   if (!isRecord(raw)) {
-    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目节点没有可用的 saveContract");
+    throw new ResourceScenarioError(
+      "CAPABILITY_UNAVAILABLE",
+      candidates.length > 1 && Object.keys(patch).length === 0
+        ? "项目节点存在多个可写 saveContract，请指定 workbench"
+        : "项目节点没有可用的 saveContract",
+    );
   }
   if (raw.command !== "node.field.update" || !isPositiveInteger(raw.projectId)
     || !isPositiveInteger(raw.nodeId) || !isNonNegativeInteger(raw.nodeVersion)
@@ -190,6 +229,14 @@ function readSaveContract(context: WorkflowContext, nodeId: number, requestedWor
     writableFields: raw.writableFields,
     protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
     dynamicFields: raw.dynamicFields === true,
+    completionSupported: raw.completionSupported === true,
+    ...(typeof raw.completionCommand === "string" ? { completionCommand: raw.completionCommand } : {}),
+    completionRequiredMetadata: isStringArray(raw.completionRequiredMetadata)
+      ? raw.completionRequiredMetadata : [],
+    ...(typeof raw.completionMode === "string" ? { completionMode: raw.completionMode } : {}),
+    ...(typeof raw.completionAutomaticConfirmation === "boolean"
+      ? { completionAutomaticConfirmation: raw.completionAutomaticConfirmation } : {}),
+    ...(typeof raw.completionBlockReason === "string" ? { completionBlockReason: raw.completionBlockReason } : {}),
   };
 }
 

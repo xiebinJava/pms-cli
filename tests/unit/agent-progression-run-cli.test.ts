@@ -44,6 +44,15 @@ function storyClient() {
       details: { title: "测试故事", status: "IN_PROGRESS" },
     })),
     context: vi.fn(async () => context),
+    query: vi.fn(async () => ({
+      resourceType: "story",
+      items: [{ type: "story", id: 12, name: "测试故事", summary: {} }],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPage: 1,
+      queryScope: "current-user-readable",
+    })),
     capabilities: vi.fn(async () => ({
       version: "ai-v1",
       resources: [{
@@ -87,6 +96,78 @@ function storyClient() {
       warnings: [],
       refreshScopes: [],
       auditId: "audit-story-run",
+    })),
+  } as any;
+}
+
+function projectClient() {
+  const context = {
+    resource: { type: "project" as const, id: 42 },
+    version: 3,
+    entityVersion: 3,
+    currentNode: { id: 301, key: "design", label: "方案设计" },
+    workflow: { nodes: [{ id: 301, key: "design", label: "方案设计" }] },
+    allowedActions: ["node.field.update"],
+  };
+  return {
+    get: vi.fn(async () => ({
+      resourceType: "project" as const,
+      resourceId: 42,
+      entityVersion: 3,
+      details: { name: "PMS 项目", status: "ACTIVE" },
+    })),
+    context: vi.fn(async () => context),
+    query: vi.fn(async () => ({
+      resourceType: "project",
+      items: [{ type: "project", id: 42, name: "PMS 项目", summary: {} }],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPage: 1,
+      queryScope: "current-user-readable",
+    })),
+    capabilities: vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "project",
+        actions: [{
+          name: "node.field.update",
+          label: "更新项目节点",
+          description: "更新项目节点",
+          mode: "automatic" as const,
+          risk: "medium" as const,
+          scopes: [],
+          inputSchema: {
+            projectId: { type: "integer", label: "项目" },
+            nodeId: { type: "integer", label: "节点" },
+            workbench: { type: "string", label: "工作台" },
+            fields: { type: "object", label: "字段" },
+          },
+          requiresContext: true,
+          refreshScopes: [],
+        }],
+      }],
+      scopes: [],
+      workflowTypes: [],
+    })),
+    preview: vi.fn(async () => ({
+      operationId: "preview-project-run",
+      command: "node.field.update",
+      expiresAt: "2099-01-01T00:00:00Z",
+      contextVersion: "3",
+      warnings: [],
+      changes: [{ field: "solutionPackage", to: "草稿" }],
+      refreshScopes: [],
+      preconditions: [],
+    })),
+    executePreview: vi.fn(async () => ({
+      operationId: "operation-project-run",
+      command: "node.field.update",
+      status: "SUCCEEDED" as const,
+      data: { projectId: 42 },
+      warnings: [],
+      refreshScopes: [],
+      auditId: "audit-project-run",
     })),
   } as any;
 }
@@ -137,9 +218,28 @@ describe("scenario progression run CLI", () => {
       phase: "run",
       status: "CONTEXT_READY",
       resourceType: "story",
+      userFacing: {
+        resourceName: "测试故事",
+        resourceStatus: "IN_PROGRESS",
+        currentNode: "编写",
+        operationStatus: "CONTEXT_READY",
+      },
     });
     expect(client.preview).not.toHaveBeenCalled();
     expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("resolves a progression run by exact resource name", async () => {
+    const client = storyClient();
+    const output = cli(client);
+    await runCli([
+      "scenario", "progression", "run", "story", "--name", "测试故事", "--intent", "READ_CONTEXT",
+    ], output.deps);
+
+    expect(output.stderr).toEqual([]);
+    expect(JSON.parse(output.stdout[0] ?? "{}").data.userFacing.resourceName).toBe("测试故事");
+    expect(client.query).toHaveBeenCalledOnce();
+    expect(client.context).toHaveBeenCalledWith({ type: "story", id: 12 }, { view: "focused" });
   });
 
   it("allows plan mode without an idempotency key", async () => {
@@ -172,6 +272,11 @@ describe("scenario progression run CLI", () => {
       previewOperationId: "preview-story-run",
       operationId: "operation-story-run",
       auditId: "audit-story-run",
+      userFacing: {
+        resourceName: "测试故事",
+        operationStatus: "SUCCEEDED",
+        actualChange: "写入已完成并通过回读验证",
+      },
     });
     expect(client.executePreview).toHaveBeenCalledWith("preview-story-run", "story-run-1");
   });
@@ -187,13 +292,17 @@ describe("scenario progression run CLI", () => {
     expect(output.deps.createRuntime).not.toHaveBeenCalled();
   });
 
-  it("rejects project run writes and invalid resources before authentication", async () => {
-    const project = cli(storyClient());
+  it("allows project read runs and rejects invalid resources before authentication", async () => {
+    const project = cli(projectClient());
     await runCli([
-      "scenario", "progression", "run", "project", "12", "--intent", "READ_CONTEXT",
+      "scenario", "progression", "run", "project", "--name", "PMS 项目", "--intent", "READ_CONTEXT",
     ], project.deps);
-    expect(JSON.parse(project.stderr[0] ?? "{}").error.code).toBe("CLI_USAGE");
-    expect(project.deps.createRuntime).not.toHaveBeenCalled();
+    expect(project.stderr).toEqual([]);
+    expect(JSON.parse(project.stdout[0] ?? "{}").data).toMatchObject({
+      status: "CONTEXT_READY",
+      resourceType: "project",
+    });
+    expect(project.deps.createRuntime).toHaveBeenCalledOnce();
 
     const invalid = cli(storyClient());
     await runCli([
@@ -201,5 +310,42 @@ describe("scenario progression run CLI", () => {
     ], invalid.deps);
     expect(JSON.parse(invalid.stderr[0] ?? "{}").error.code).toBe("CLI_USAGE");
     expect(invalid.deps.createRuntime).not.toHaveBeenCalled();
+  });
+
+  it("keeps the topic resource on the same name-based read path", async () => {
+    const client = storyClient();
+    client.get.mockResolvedValue({
+      resourceType: "topic",
+      resourceId: 19,
+      entityVersion: 2,
+      details: { title: "研发流程专题", status: "IN_PROGRESS" },
+    });
+    client.context.mockResolvedValue({
+      resource: { type: "topic", id: 19 },
+      version: 2,
+      currentNode: { id: 301, key: "research", label: "专题调研" },
+      workflow: { nodes: [] },
+      allowedActions: [],
+    });
+    client.query.mockResolvedValue({
+      resourceType: "topic",
+      items: [{ type: "topic", id: 19, name: "研发流程专题", summary: {} }],
+      total: 1,
+      page: 1,
+      pageSize: 100,
+      totalPage: 1,
+      queryScope: "current-user-readable",
+    });
+    const output = cli(client);
+    await runCli([
+      "scenario", "progression", "run", "topic", "--name", "研发流程专题", "--intent", "READ_CONTEXT",
+    ], output.deps);
+
+    expect(output.stderr).toEqual([]);
+    expect(JSON.parse(output.stdout[0] ?? "{}").data).toMatchObject({
+      status: "CONTEXT_READY",
+      resourceType: "topic",
+      userFacing: { resourceName: "研发流程专题", currentNode: "专题调研" },
+    });
   });
 });

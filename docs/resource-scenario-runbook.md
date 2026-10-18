@@ -23,16 +23,21 @@ Claude/Codex 理解请求
 
 代理必须先读取上下文并把实体版本带入 plan。不要从默认流程模板推断节点、字段或版本。
 
-需求、专题和故事节点也可以使用统一的 `progression run`：
+需求、专题、故事和项目节点字段也可以使用统一的 `progression run`：
 
 ```bash
 pms scenario progression run requirement 33 --intent READ_CONTEXT --format json
 pms scenario progression run requirement 33 --intent UPDATE_NODE_FIELDS \
   --execute-mode plan --node-id <node-id> \
   --draft-json '<agent-progression/v1 draft>' --format json
+pms scenario progression run project --name "PMS 项目管理系统" --intent READ_CONTEXT --format json
+pms scenario progression run project --name "PMS 项目管理系统" --intent UPDATE_NODE_FIELDS \
+  --execute-mode plan --node-id <node-id> \
+  --draft-json '<agent-progression/v1 draft>' --format json
 ```
 
 这里由 Claude/Codex/DeepSeek 负责把自然语言整理成草稿，CLI 只读取 PMS、生成 preview、执行并回读。模型凭据留在外部工作台，不传入 CLI；写入字段必须引用本次 context 返回的 `saveContract`，不能猜测 nodeId 或字段 key。低/中风险且用户已明确要求时可使用 `--execute-mode auto`；高风险必须使用 `confirm`，并始终携带幂等键。
+项目节点支持读取、字段更新，以及在 PMS 能力目录和当前节点 `saveContract` 都声明时使用 `node.complete-with-data` 原子保存并完成。若任一侧未声明完成能力，`COMPLETE_NODE` 会返回 `CAPABILITY_UNAVAILABLE`，不会绕过能力合同或拆成多次写入。
 
 ## plan → 确认 → execute
 

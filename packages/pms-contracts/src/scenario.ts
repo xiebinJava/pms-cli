@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { operationResultSchema } from "./operation.js";
+import { userFacingDisplaySchema } from "./userFacing.js";
 
 export const scenarioContractVersion = "requirement-analysis/v1" as const;
 export const storyWorkbenchContractVersion = "story-workbench/v1" as const;
@@ -45,6 +46,7 @@ export const requirementAnalysisPlanSchema = z.object({
   contextVersion: z.string().trim().min(1),
   previewRequired: z.literal(true),
   proposedWrite: z.record(z.string(), z.unknown()),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export const verificationResultSchema = z.object({
@@ -58,6 +60,7 @@ export const requirementAnalysisResultSchema = z.object({
   operationId: z.string().trim().min(1).optional(),
   draft: analysisDraftSchema,
   verification: verificationResultSchema.optional(),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export type AnalysisItem = z.infer<typeof analysisItemSchema>;
@@ -145,6 +148,7 @@ export const storyWorkbenchResultSchema = z.object({
   readback: storyWorkbenchReadbackSchema.optional(),
   currentNode: storyWorkbenchCurrentNodeSchema.nullable().optional(),
   warnings: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export type StoryWorkbenchVariant = z.infer<typeof storyWorkbenchVariantSchema>;

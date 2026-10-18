@@ -73,6 +73,28 @@ describe("agent progression run contract", () => {
     expect(parsed.result).toBeNull();
   });
 
+  it("accepts a project run result for shared context and field-update flows", () => {
+    const parsed = agentProgressionRunResultSchema.parse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "CONTEXT_READY",
+      resourceType: "project",
+      resourceId: 42,
+      intent: "READ_CONTEXT",
+      writeDecision: "READY",
+      plan: null,
+      result: null,
+      previewOperationId: null,
+      operationId: null,
+      auditId: null,
+      readback: { resource: null, context: { resource: { type: "project", id: 42 } } },
+      verification: null,
+      warnings: [],
+    });
+
+    expect(parsed.resourceType).toBe("project");
+  });
+
   it("preserves preview, operation, audit, readback, and verification identifiers", () => {
     const parsed = agentProgressionRunResultSchema.parse({
       contractVersion: agentProgressionRunContractVersion,

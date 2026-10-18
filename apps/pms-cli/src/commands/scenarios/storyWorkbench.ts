@@ -12,6 +12,7 @@ import {
   storyWorkbenchContractVersion,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { operationExecutePreview, operationPreview } from "../core/operation.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 
 export type StoryWorkbenchScenarioClient = PmsClient;
 
@@ -28,6 +29,9 @@ interface SaveContract {
   completionCommand?: string;
   completionSupported?: boolean;
   completionRequiredMetadata?: string[];
+  completionMode?: string;
+  completionAutomaticConfirmation?: boolean;
+  completionBlockReason?: string;
 }
 
 interface PreparedStoryWorkbenchWrite {
@@ -54,6 +58,7 @@ export interface StoryWorkbenchScenarioPlan {
   endDate?: string;
   saveContract: SaveContract;
   preview: OperationPreview;
+  userFacing?: ReturnType<typeof buildUserFacingDisplay>;
 }
 
 export async function planStoryWorkbenchScenario(
@@ -81,6 +86,13 @@ export async function planStoryWorkbenchScenario(
     endDate: prepared.input.endDate,
     saveContract: prepared.saveContract,
     preview,
+    userFacing: buildUserFacingDisplay({
+      resourceType: "story",
+      context: prepared.context,
+      resourceDetails: prepared.context.resourceDetails,
+      operationStatus: "PREVIEWED",
+      actualChange: "已生成待执行预览",
+    }),
   };
 }
 
@@ -150,9 +162,6 @@ async function prepare(
     if (!saveContract.completionSupported || !saveContract.completionCommand) {
       throw new Error("当前故事节点没有可用的完成命令");
     }
-    if (parsed.variant !== "acceptance") {
-      throw new Error("当前版本只支持完成故事验收节点");
-    }
     if (parsed.ownerId !== undefined) argumentsValue.ownerId = parsed.ownerId;
     if (parsed.startDate !== undefined) argumentsValue.startDate = parsed.startDate;
     if (parsed.endDate !== undefined) argumentsValue.endDate = parsed.endDate;
@@ -209,6 +218,10 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
     ...(Array.isArray(raw.completionRequiredMetadata)
       && raw.completionRequiredMetadata.every((field) => typeof field === "string")
       ? { completionRequiredMetadata: raw.completionRequiredMetadata } : {}),
+    ...(typeof raw.completionMode === "string" ? { completionMode: raw.completionMode } : {}),
+    ...(typeof raw.completionAutomaticConfirmation === "boolean"
+      ? { completionAutomaticConfirmation: raw.completionAutomaticConfirmation } : {}),
+    ...(typeof raw.completionBlockReason === "string" ? { completionBlockReason: raw.completionBlockReason } : {}),
   };
 }
 
@@ -232,9 +245,6 @@ function validateSaveContract(
   }
   if (contract.variant !== input.variant) {
     throw new Error(`saveContract variant ${contract.variant} 与请求 ${input.variant} 不一致`);
-  }
-  if (input.complete === true && input.variant !== "acceptance") {
-    throw new Error("当前版本只支持完成故事验收节点");
   }
   if (input.complete === true && (!contract.completionSupported || !contract.completionCommand)) {
     throw new Error("saveContract 未声明故事节点完成能力");
@@ -309,6 +319,16 @@ async function executeAfterPreview(
       readback: { resource, context },
       currentNode: context.currentNode ?? null,
       verification,
+      userFacing: buildUserFacingDisplay({
+        resourceType: "story",
+        context,
+        resourceDetails: resource.details,
+        operationStatus: resultStatus,
+        actualChange: resultStatus === "SUCCEEDED"
+          ? "写入已完成并通过回读验证"
+          : "写入结果无法完全确认，需要回读核验",
+        blockers: warnings,
+      }),
       warnings,
     };
   } catch (error) {

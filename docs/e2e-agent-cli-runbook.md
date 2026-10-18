@@ -175,3 +175,34 @@ pnpm vitest run tests/e2e/agent-progression-run.e2e.test.ts --maxWorkers=1 --min
 ```
 
 也可以设置 `PMS_E2E_CREATE_AGENT_PROGRESSION_FIXTURE=true` 和 `PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`，让测试在一次性数据库中创建本轮需求夹具。创建夹具会推进真实流程节点，不能用于共享环境。
+
+## CLI 名称推进闭环 E2E
+
+`tests/e2e/cli-name-progression.e2e.test.ts` 使用构建后的 `dist/pms-cli.js`，验证 Claude/Codex 可使用的命令边界：
+
+```text
+pms scenario progression run requirement --name ... --intent READ_CONTEXT
+→ pms scenario progression run requirement --name ... --intent COMPLETE_NODE --execute-mode auto
+→ pms context requirement --name ... 回读
+```
+
+故事使用同样的名称解析和推进链路。测试会在一次性数据库中创建需求和故事夹具，并验证 `userFacing` 投影包含名称但不包含 `resourceId`。在隔离 PMS 启动并完成前端代理配置后运行：
+
+```bash
+export PMS_E2E_CLI_NAME_PROGRESSION=true
+export PMS_E2E_CREATE_REQUIREMENT_FIXTURE=true
+export PMS_E2E_CREATE_STORY_FIXTURE=true
+export PMS_E2E_WRITE=true
+export PMS_E2E_ISOLATED=true
+export PMS_E2E_BASE_URL=http://127.0.0.1:18080/api
+export PMS_E2E_ALLOWED_BASE_URL="$PMS_E2E_BASE_URL"
+export PMS_E2E_AUTH_ORIGIN=http://127.0.0.1:15173
+export PMS_E2E_DATABASE_NAME=pms_ai_e2e_cli_name_progression
+export PMS_E2E_ALLOWED_DATABASE_NAME="$PMS_E2E_DATABASE_NAME"
+export PMS_E2E_ACCOUNT_ID=1
+export PMS_E2E_RUN_ID=cli-name-progression-20261017
+
+pnpm run verify:real-pms:cli-name-progression
+```
+
+该测试只允许指向 `pms_ai_e2e_` 一次性数据库；需求和故事流程节点会被真实推进，必须在测试结束后删除隔离环境，不能指向共享开发库。

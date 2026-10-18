@@ -20,6 +20,31 @@ const response = (data: unknown, code = 200, status = 200, msg = "操作成功")
   });
 
 describe("PMS HTTP client", () => {
+  it("reads the organization tree without hardcoding a business-line ID", async () => {
+    let requestedUrl = "";
+    const client = new PmsHttpClient({
+      baseUrl: "https://pms.example.test/api",
+      auth: new StaticTokenProvider("token"),
+      clientId: "pms-cli",
+      fetchImpl: async (input) => {
+        requestedUrl = String(input);
+        return response([{
+          id: 2,
+          parentId: null,
+          typeCode: "HQ",
+          name: "示例业务线",
+          status: "ACTIVE",
+          children: [],
+        }]);
+      },
+    });
+
+    const tree = await client.organizationTree();
+
+    expect(requestedUrl).toBe("https://pms.example.test/api/org/tree");
+    expect(tree[0]).toMatchObject({ id: 2, status: "ACTIVE" });
+  });
+
   it("sends the user token and trace headers, then unwraps the PMS response", async () => {
     let captured: { input: RequestInfo | URL; init?: RequestInit } | undefined;
     const client = new PmsHttpClient({

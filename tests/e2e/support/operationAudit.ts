@@ -19,6 +19,27 @@ export async function auditOperations(
   windowStart: Date,
   windowEnd = new Date(),
 ): Promise<OperationAuditRecord[]> {
+  return queryAuditOperations(windowStart, windowEnd, `%${escapeLike(runId)}%`);
+}
+
+/**
+ * Reads all operation audit records in a bounded E2E window. Write commands
+ * do not repeat the fixture run ID in their arguments, so tests that need to
+ * verify the actual mutation must scope by time and then assert operation ID
+ * and command name explicitly.
+ */
+export async function auditOperationsInWindow(
+  windowStart: Date,
+  windowEnd = new Date(),
+): Promise<OperationAuditRecord[]> {
+  return queryAuditOperations(windowStart, windowEnd);
+}
+
+async function queryAuditOperations(
+  windowStart: Date,
+  windowEnd: Date,
+  runIdPattern?: string,
+): Promise<OperationAuditRecord[]> {
   const rawUrl = process.env.PMS_E2E_DB_URL?.trim();
   if (!rawUrl) throw new Error("真实故事编排器验收缺少 PMS_E2E_DB_URL");
   const url = parseDatabaseUrl(rawUrl);
@@ -27,18 +48,19 @@ export async function auditOperations(
   const windowMinutes = Number.isFinite(windowEnd.getTime()) && Number.isFinite(windowStart.getTime())
     ? Math.min(120, Math.max(2, Math.ceil((windowEnd.getTime() - windowStart.getTime()) / 60000) + 2))
     : 30;
-  const sql = [
+  const sqlParts = [
     "SELECT id, command_name, arguments_json, status, created_at, executed_at",
     "FROM pms_ai_operation",
     "WHERE created_at >= NOW() - INTERVAL ? MINUTE",
     "AND created_at <= NOW()",
-    "AND arguments_json LIKE ?",
-    "ORDER BY created_at ASC",
-  ].join(" ");
-  const output = await runMysql(url, sql, [
-    String(windowMinutes),
-    `%${escapeLike(runId)}%`,
-  ]);
+  ];
+  const parameters = [String(windowMinutes)];
+  if (runIdPattern !== undefined) {
+    sqlParts.push("AND arguments_json LIKE ?");
+    parameters.push(runIdPattern);
+  }
+  sqlParts.push("ORDER BY created_at ASC");
+  const output = await runMysql(url, sqlParts.join(" "), parameters);
   return output
     .split("\n")
     .map((line) => line.trim())

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { operationPreviewSchema, resourceRefSchema } from "./operation.js";
 import { analysisItemSchema } from "./scenario.js";
+import { userFacingDisplaySchema } from "./userFacing.js";
 
 export const agentContractVersion = "agent-contract/v1" as const;
 
@@ -29,6 +30,7 @@ export const contextSnapshotSchema = z.object({
   resource: agentResourceRefSchema,
   contextVersion: z.string().trim().min(1),
   capturedAt: z.string().trim().min(1),
+  resourceDetails: z.record(z.string(), z.unknown()).optional(),
   currentNode: agentNodeRefSchema.nullable(),
   workflowNodes: z.array(z.unknown()),
   relations: z.array(z.object({
@@ -62,6 +64,9 @@ export const nodeContractSchema = z.object({
   allowedActions: z.array(z.string().trim().min(1)),
   allowedTransitions: z.array(z.string().trim().min(1)),
   missingInputRules: z.array(z.string().trim().min(1)),
+  completionMode: z.enum(["AUTO_CONFIRM", "VALIDATE_ONLY", "REQUIRES_DOMAIN_CONFIRMATION"]).optional(),
+  completionAutomaticConfirmation: z.boolean().optional(),
+  completionBlockReason: z.string().trim().min(1).optional(),
   writeCapable: z.boolean(),
 }).strict().superRefine((value, ctx) => {
   if (value.writeCapable && value.writableFields.length === 0) {
@@ -211,6 +216,7 @@ export const agentWorkSessionSchema = z.object({
   confirmation: confirmationEnvelopeSchema.default({ status: "NOT_REQUIRED" }),
   operation: operationEnvelopeSchema.nullable().default(null),
   verification: verificationEnvelopeSchema.nullable().default(null),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict().superRefine((value, ctx) => {
   if (value.contextSnapshot.resource.type !== value.resource.type
       || value.contextSnapshot.resource.id !== value.resource.id) {

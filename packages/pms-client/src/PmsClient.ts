@@ -50,6 +50,7 @@ import type {
 
 export interface PmsClient {
   capabilities(): Promise<CapabilityCatalog>;
+  organizationTree?: () => Promise<OrgUnitTreeNode[]>;
   query(request: QueryRequest): Promise<QueryResult>;
   get(resource: ResourceRef): Promise<ResourceDetail>;
   context(resource: ResourceRef, options?: ContextReadOptions): Promise<WorkflowContext>;
@@ -63,6 +64,14 @@ export interface PmsClient {
   getConversation(conversationId: number): Promise<OrchestratorConversation>;
   listConversationEvents(conversationId: number, afterSequence?: number): Promise<OrchestratorEvent[]>;
   getOrchestratorSession(conversationId: number, afterSequence?: number): Promise<OrchestratorSession>;
+}
+
+export interface OrgUnitTreeNode {
+  id: number;
+  parentId?: number | null;
+  status: string;
+  children: OrgUnitTreeNode[];
+  [key: string]: unknown;
 }
 
 export interface PmsHttpClientOptions {
@@ -93,6 +102,13 @@ const operationWireResultSchema = z.object({
   auditId: z.string().optional(),
 });
 
+const orgUnitTreeNodeSchema: z.ZodType<OrgUnitTreeNode> = z.lazy(() => z.object({
+  id: z.number().int().positive(),
+  parentId: z.number().int().positive().nullable().optional(),
+  status: z.string().min(1),
+  children: z.array(orgUnitTreeNodeSchema).default([]),
+}).passthrough());
+
 export class PmsHttpClient implements PmsClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -119,6 +135,16 @@ export class PmsHttpClient implements PmsClient {
       true,
       undefined,
       (data, requestId) => parseCapabilityCatalogForClient(data, requestId),
+    );
+  }
+
+  async organizationTree(): Promise<OrgUnitTreeNode[]> {
+    return this.requestData(
+      "org/tree",
+      { method: "GET" },
+      true,
+      undefined,
+      (data) => z.array(orgUnitTreeNodeSchema).parse(data),
     );
   }
 

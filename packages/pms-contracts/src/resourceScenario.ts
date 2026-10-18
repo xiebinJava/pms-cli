@@ -6,6 +6,7 @@ import {
   type OperationResult,
 } from "./operation.js";
 import { resourceDetailSchema, type ResourceDetail, type WorkflowContext } from "./query.js";
+import { userFacingDisplaySchema } from "./userFacing.js";
 
 export const resourceScenarioContractVersion = "resource-scenario/v1" as const;
 
@@ -91,6 +92,7 @@ export const resourceScenarioPlanSchema = z.object({
   requiresConfirmation: z.boolean(),
   executionMode: z.enum(["read", "automatic", "confirmation"]).default("confirmation"),
   warnings: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export const resourceScenarioResultSchema = z.object({
@@ -109,6 +111,7 @@ export const resourceScenarioResultSchema = z.object({
   status: z.enum(["SUCCEEDED", "REJECTED", "CONFLICT", "WRITE_RESULT_UNKNOWN"]),
   warnings: z.array(z.string()).default([]),
   refreshScopes: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export type ResourceScenarioDraft = z.infer<typeof resourceScenarioDraftSchema>;

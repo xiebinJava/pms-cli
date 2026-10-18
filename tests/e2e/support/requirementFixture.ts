@@ -37,6 +37,8 @@ export async function createRequirementFixture(
   const templateVersionId = requirementAnalysisTemplateVersion(capabilities);
   const ownerId = capabilities.viewer?.id;
   if (!ownerId) throw new Error("需求夹具能力目录缺少当前用户 ID，无法分配节点负责人");
+  if (!client.organizationTree) throw new Error("PMS 客户端缺少组织树读取能力，无法准备需求夹具");
+  const orgUnitId = firstActiveOrgUnitId(await client.organizationTree());
   const argumentsValue = {
     title,
     description: `AI 隔离验收需求 ${runId}`,
@@ -107,7 +109,7 @@ export async function createRequirementFixture(
       itemId: requirementId,
       nodeId: initialNodeId,
       version: context.version,
-      fieldValues: { "requirement-business-line": 1 },
+      fieldValues: { "requirement-business-line": orgUnitId },
     },
     context: { id: `requirement:${requirementId}`, version: String(context.version) },
   });
@@ -137,6 +139,15 @@ export async function createRequirementFixture(
     version: context.version,
     title,
   };
+}
+
+function firstActiveOrgUnitId(nodes: readonly { id: number; status: string; children?: readonly any[] }[]): number {
+  for (const node of nodes) {
+    if (node.status === "ACTIVE") return node.id;
+    const nested = firstActiveOrgUnitId(node.children ?? []);
+    if (nested > 0) return nested;
+  }
+  throw new Error("隔离需求夹具缺少可用业务线");
 }
 
 function requirementAnalysisTemplateVersion(catalog: CapabilityCatalog): number {

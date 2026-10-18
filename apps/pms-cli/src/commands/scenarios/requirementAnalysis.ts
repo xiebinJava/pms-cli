@@ -18,6 +18,7 @@ import type {
 import { requirementAnalysisInputSchema as parseRequirementAnalysisInput } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import { operationExecutePreview, operationPreview, type OperationOptions } from "../core/operation.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import { AnalysisDraftValidator } from "./AnalysisDraftValidator.js";
 import { agentDraftContractVersion } from "./AgentDraftContract.js";
 import type { ScenarioTrace } from "./projectCreate.js";
@@ -117,6 +118,7 @@ export interface RequirementAnalysisScenarioPlan {
   assumptions: string[];
   preview: OperationPreview;
   trace: ScenarioTrace;
+  userFacing?: ReturnType<typeof buildUserFacingDisplay>;
 }
 
 export interface RequirementAnalysisScenarioResult {
@@ -134,6 +136,7 @@ export interface RequirementAnalysisScenarioResult {
   protectedFieldsUnchanged: Record<string, boolean>;
   warnings: string[];
   trace: ScenarioTrace;
+  userFacing?: ReturnType<typeof buildUserFacingDisplay>;
 }
 
 export async function planRequirementAnalysisScenario(
@@ -158,6 +161,13 @@ export async function planRequirementAnalysisScenario(
     assumptions: [],
     preview,
     trace: { requestId: options.requestId },
+    userFacing: buildUserFacingDisplay({
+      resourceType: "requirement",
+      context: base.context,
+      resourceDetails: base.resource.details,
+      operationStatus: "PREVIEWED",
+      actualChange: "已生成待执行预览",
+    }),
   };
 }
 
@@ -205,6 +215,19 @@ export async function executeRequirementAnalysisScenario(
     readback: { resource, context },
     protectedFieldsUnchanged: compareProtectedFields(before.resource, resource),
     warnings,
+    userFacing: buildUserFacingDisplay({
+      resourceType: "requirement",
+      context,
+      resourceDetails: resource?.details ?? before.resource.details,
+      operationStatus: effectiveResult.status,
+      actualChange: effectiveResult.status === "SUCCEEDED"
+        && resource !== null && context !== null
+        ? "写入已完成并通过回读验证"
+        : effectiveResult.status === "WRITE_RESULT_UNKNOWN"
+          ? "写入结果无法完全确认，需要回读核验"
+          : "写入未完成",
+      blockers: warnings,
+    }),
     trace: {
       requestId: options.requestId,
       operationId: effectiveResult.operationId,

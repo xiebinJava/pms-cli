@@ -5,7 +5,11 @@ import {
 } from "../../apps/pms-cli/src/commands/scenarios/agentProgression.js";
 import { agentProgressionContractVersion } from "../../packages/pms-contracts/src/index.js";
 
-function storyClient(overrides: { patch?: Record<string, unknown>; contextVersion?: number } = {}) {
+function storyClient(overrides: {
+  patch?: Record<string, unknown>;
+  contextVersion?: number;
+  completionMode?: "AUTO_CONFIRM" | "REQUIRES_DOMAIN_CONFIRMATION";
+} = {}) {
   const preview = vi.fn(async (request: { operation: string }) => ({
     operationId: "preview-node-detail",
     command: request.operation,
@@ -36,6 +40,10 @@ function storyClient(overrides: { patch?: Record<string, unknown>; contextVersio
             completionCommand: "development-item.node.complete-with-data",
             completionSupported: true,
             completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+            completionMode: overrides.completionMode ?? "AUTO_CONFIRM",
+            completionAutomaticConfirmation: overrides.completionMode !== "REQUIRES_DOMAIN_CONFIRMATION",
+            ...(overrides.completionMode === "REQUIRES_DOMAIN_CONFIRMATION"
+              ? { completionBlockReason: "需要产品、设计和技术评审完成" } : {}),
             itemType: "STORY",
             itemId: 34,
             nodeId: 387,
@@ -174,6 +182,24 @@ describe("agent progression plan", () => {
     })]);
     expect(result.operation).toBe("development-item.node.complete-with-data");
     expect(client.preview.mock.calls[0]?.[0].operation).toBe("development-item.node.complete-with-data");
+  });
+
+  it("stops before preview when PMS declares a domain confirmation requirement", async () => {
+    const client = storyClient({ completionMode: "REQUIRES_DOMAIN_CONFIRMATION" });
+    const result = await planAgentProgression(client, input("COMPLETE_NODE", {
+      facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+      patch: { acceptanceConclusion: "PASS" },
+      fieldSources: { acceptanceConclusion: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" } },
+      requestedCompletion: true,
+      ownerId: 2,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    }));
+
+    expect(result.writeDecision).toBe("WAITING_CONFIRMATION");
+    expect(result.preview).toBeNull();
+    expect(result.warnings).toContain("需要产品、设计和技术评审完成");
+    expect(client.preview).not.toHaveBeenCalled();
   });
 
   it("keeps UPDATE_NODE_FIELDS on the field update command", async () => {

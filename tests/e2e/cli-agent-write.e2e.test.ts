@@ -101,6 +101,13 @@ describe.skipIf(!enabled)("PMS CLI real agent boundary", () => {
       const getOutput = await run(["get", "project", String(projectId)]);
       expect(getOutput.ok).toBe(true);
       expect(getOutput.data.resourceId).toBe(projectId);
+      const resolveOutput = await run(["resolve", "project", "--name", argumentsValue.name]);
+      expect(resolveOutput.ok, resolveOutput.error?.message ?? JSON.stringify(resolveOutput)).toBe(true);
+      expect(resolveOutput.data).toEqual({
+        resourceType: "project",
+        resourceId: projectId,
+        resourceName: argumentsValue.name,
+      });
       // The built-in JSON context is available independently of the optional
       // agent-context feature flags. The latter are intentionally disabled in
       // some real PMS environments, so this E2E verifies the stable readback
@@ -108,6 +115,9 @@ describe.skipIf(!enabled)("PMS CLI real agent boundary", () => {
       const contextOutput = await run(["context", "project", String(projectId)]);
       expect(contextOutput.ok, contextOutput.error?.message ?? JSON.stringify(contextOutput)).toBe(true);
       expect(contextOutput.data.resource).toEqual({ type: "project", id: projectId });
+      const namedContextOutput = await run(["context", "project", "--name", argumentsValue.name]);
+      expect(namedContextOutput.ok, namedContextOutput.error?.message ?? JSON.stringify(namedContextOutput)).toBe(true);
+      expect(namedContextOutput.data.resource).toEqual({ type: "project", id: projectId });
       projectContextVersion = String(contextOutput.data.version ?? "");
       expect(projectContextVersion).not.toBe("");
 

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { AuthStore } from "../../apps/pms-cli/src/auth/AuthStore.js";
 import { BrowserAuth, type CliSession } from "../../apps/pms-cli/src/auth/BrowserAuth.js";
+import { executeAgentProgression } from "../../apps/pms-cli/src/commands/scenarios/agentProgression.js";
 import { runAgentProgression } from "../../apps/pms-cli/src/commands/scenarios/agentProgressionRun.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
 import { agentProgressionContractVersion, type WorkflowContext } from "../../packages/pms-contracts/src/index.js";
-import { auditOperations } from "./support/operationAudit.js";
+import { auditOperationsInWindow } from "./support/operationAudit.js";
 import {
   assertIsolatedE2EConfig,
   expectedViewerId,
@@ -27,7 +28,7 @@ const enabled = requested
  * explicitly configured isolated requirement/node pair.
  */
 describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
-  it("runs one external-agent draft through preview, execute, readback, audit, and replay", async () => {
+  it("runs one external-agent draft through preview, execute, readback, audit, and old-preview replay", async () => {
     const config = assertIsolatedE2EConfig(process.env);
     if (!process.env.PMS_E2E_DB_URL?.trim()) {
       throw new Error("真实 Agent progression E2E 缺少 PMS_E2E_DB_URL");
@@ -101,16 +102,17 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
         { nodeId, view: "focused" },
       );
       if (afterFirst.version === null) throw new Error("Agent progression replay 缺少最新上下文版本");
-      const replay = await runAgentProgression(client, {
+      const replay = await executeAgentProgression(client, {
         ...base,
         contextVersion: afterFirst.version,
+        previewOperationId: first.previewOperationId!,
       });
       expect(replay.status).toBe("SUCCEEDED");
-      expect(replay.operationId).toBe(first.operationId);
-      expect(replay.auditId).toBe(first.auditId);
+      expect(replay.operation?.operationId).toBe(first.operationId);
+      expect(replay.operation?.auditId).toBe(first.auditId);
 
-      const audit = await auditOperations(config.runId, startedAt);
-      expect(audit.some((record) => record.id === first.auditId)).toBe(true);
+      const audit = await auditOperationsInWindow(startedAt);
+      expect(audit.some((record) => record.id === first.operationId)).toBe(true);
       expect(audit.some((record) => record.commandName.includes("development-item.node.field.update"))).toBe(true);
     } finally {
       if (session) await auth.logout(session.account);

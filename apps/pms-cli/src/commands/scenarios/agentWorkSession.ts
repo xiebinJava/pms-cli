@@ -15,6 +15,7 @@ import {
   type StoryWorkbenchResult,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { buildAgentContext, nodeSourceRef } from "../core/agentContext.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import type {
   RequirementAnalysisScenarioPlan,
   RequirementAnalysisScenarioResult,
@@ -157,7 +158,30 @@ function finalizeSession(
     confirmation,
     operation,
     verification,
+    userFacing: buildUserFacingDisplay({
+      resourceType: base.resource.type,
+      context: base.contextSnapshot,
+      operationStatus: operation?.status ?? (preview ? "PREVIEWED" : base.userFacing?.operationStatus ?? null),
+      actualChange: actualChangeFor(operation?.status, verification?.status, preview !== null),
+      blockers: base.userFacing?.blockers,
+    }),
   });
+}
+
+function actualChangeFor(
+  operationStatus: string | undefined,
+  verificationStatus: string | undefined,
+  hasPreview: boolean,
+): string | null {
+  if (operationStatus === "SUCCEEDED" && verificationStatus === "SUCCEEDED") {
+    return "写入已完成并通过回读验证";
+  }
+  if (operationStatus === "WRITE_RESULT_UNKNOWN") {
+    return "写入结果无法完全确认，需要回读核验";
+  }
+  if (operationStatus) return "写入未完成，请查看当前状态和阻塞信息";
+  if (hasPreview) return "已生成待执行预览";
+  return null;
 }
 
 function analysisDraft(

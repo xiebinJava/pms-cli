@@ -59,6 +59,8 @@ export interface AgentProgressionPlanDetails extends AgentProgressionDraftDiagno
   }>;
   missingFields: Array<{ key: string; label: string; reason: string }>;
   preconditions: unknown[];
+  completionMode?: string;
+  completionBlockReason?: string;
   writeDecision: "READY" | "NEEDS_INPUT" | "WAITING_CONFIRMATION" | "CAPABILITY_UNAVAILABLE";
 }
 
@@ -156,12 +158,16 @@ export function planAgentProgressionDraft(
     writeDecision = "NEEDS_INPUT";
   } else if (diagnostics.unresolvedDecisions.length > 0 || executionMode === "confirmation") {
     writeDecision = "WAITING_CONFIRMATION";
+  } else if (intent === "COMPLETE_NODE" && contract.completionMode === "REQUIRES_DOMAIN_CONFIRMATION") {
+    writeDecision = "WAITING_CONFIRMATION";
   }
   return {
     ...diagnostics,
     fieldChanges,
     missingFields: allMissing,
     preconditions: [],
+    ...(contract.completionMode === undefined ? {} : { completionMode: contract.completionMode }),
+    ...(contract.completionBlockReason === undefined ? {} : { completionBlockReason: contract.completionBlockReason }),
     writeDecision,
   };
 }
@@ -264,6 +270,9 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
   labels: Map<string, string>;
   currentValues: Map<string, unknown>;
   completionRequiredMetadata: string[];
+  completionMode?: string;
+  completionAutomaticConfirmation?: boolean;
+  completionBlockReason?: string;
   command?: string;
 } {
   const selectedNodeId = nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id;
@@ -309,6 +318,12 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
     labels,
     currentValues,
     completionRequiredMetadata: stringArray(saveContract?.completionRequiredMetadata),
+    ...(typeof saveContract?.completionMode === "string"
+      ? { completionMode: saveContract.completionMode } : {}),
+    ...(typeof saveContract?.completionAutomaticConfirmation === "boolean"
+      ? { completionAutomaticConfirmation: saveContract.completionAutomaticConfirmation } : {}),
+    ...(typeof saveContract?.completionBlockReason === "string"
+      ? { completionBlockReason: saveContract.completionBlockReason } : {}),
     command: typeof saveContract?.command === "string" ? saveContract.command : undefined,
   };
 }

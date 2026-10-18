@@ -27,6 +27,7 @@ import {
   mayExecuteProgression,
 } from "./progressionPolicy.js";
 import { executeStoryProgression, planStoryProgression } from "./storyProgressionAdapter.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import "./requirementScenarioAdapter.js";
 import "./topicScenarioAdapter.js";
 import "./projectScenarioAdapter.js";
@@ -73,6 +74,13 @@ export async function planAgentProgression(
       requiresConfirmation: draftPlan.writeDecision === "WAITING_CONFIRMATION",
       executionMode: draftPlan.writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
       warnings: progressionWarnings(draftPlan),
+      userFacing: buildUserFacingDisplay({
+        resourceType: parsed.resourceType,
+        context: preflightContext,
+        operationStatus: draftPlan.writeDecision,
+        actualChange: "缺少必填信息，尚未生成写入预览",
+        blockers: progressionWarnings(draftPlan),
+      }),
     };
   }
   const resourcePlan = await planResourceScenario(client, {
@@ -113,6 +121,13 @@ export async function planAgentProgression(
     requiresConfirmation: writeDecision === "WAITING_CONFIRMATION" || executionMode === "confirmation",
     executionMode: writeDecision === "WAITING_CONFIRMATION" ? "confirmation" : executionMode,
     warnings: [...resourcePlan.warnings, ...(blockedByPrecondition ? ["PMS preview 返回阻塞前置条件"] : [])],
+    userFacing: buildUserFacingDisplay({
+      resourceType: parsed.resourceType,
+      context: resourcePlan.context?.snapshot,
+      operationStatus: "PREVIEWED",
+      actualChange: "已生成待执行预览",
+      blockers: [...resourcePlan.warnings, ...(blockedByPrecondition ? ["PMS preview 返回阻塞前置条件"] : [])],
+    }),
   };
 }
 
@@ -189,6 +204,7 @@ export async function executeAgentProgression(
     readback: result.readback,
     verification: result.verification,
     warnings: result.warnings,
+    ...(result.userFacing ? { userFacing: result.userFacing } : {}),
   });
 }
 
@@ -238,6 +254,7 @@ function progressionWarnings(details: ReturnType<typeof planAgentProgressionDraf
     ...details.protectedFields.map((key) => `草稿字段 ${key} 是受保护字段`),
     ...details.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
     ...details.unresolvedDecisions,
+    ...(details.completionBlockReason ? [details.completionBlockReason] : []),
   ];
 }
 
@@ -272,6 +289,12 @@ async function readContext(
     readback,
     verification: null,
     warnings: [],
+    userFacing: buildUserFacingDisplay({
+      resourceType: input.resourceType,
+      context: readback.context,
+      resourceDetails: readback.resource.details,
+      operationStatus: "CONTEXT_READY",
+    }),
   });
 }
 
@@ -292,12 +315,7 @@ function resourceOperation(
   intent: ParsedAgentProgressionInput["intent"],
 ): string {
   if (intent === "COMPLETE_NODE") {
-    if (resourceType === "project") {
-      throw new ResourceScenarioError(
-        "CAPABILITY_UNAVAILABLE",
-        "project 当前没有注册 COMPLETE_NODE 能力；项目节点完成将在第二期开放",
-      );
-    }
+    if (resourceType === "project") return "node.complete-with-data";
     return "development-item.node.complete-with-data";
   }
   if (intent !== "UPDATE_NODE_FIELDS") {

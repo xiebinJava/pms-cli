@@ -32,6 +32,9 @@ type SaveContract = {
   protectedFields: string[];
   completionCommand?: string;
   completionSupported?: boolean;
+  completionMode?: string;
+  completionAutomaticConfirmation?: boolean;
+  completionBlockReason?: string;
 };
 
 type ContextBundle = {
@@ -301,6 +304,10 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
       ? { completionCommand: raw.completionCommand } : {}),
     ...(typeof raw.completionSupported === "boolean"
       ? { completionSupported: raw.completionSupported } : {}),
+    ...(typeof raw.completionMode === "string" ? { completionMode: raw.completionMode } : {}),
+    ...(typeof raw.completionAutomaticConfirmation === "boolean"
+      ? { completionAutomaticConfirmation: raw.completionAutomaticConfirmation } : {}),
+    ...(typeof raw.completionBlockReason === "string" ? { completionBlockReason: raw.completionBlockReason } : {}),
   };
 }
 

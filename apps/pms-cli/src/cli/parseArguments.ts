@@ -1,6 +1,7 @@
 const VALUE_OPTIONS = new Set([
   "scope",
   "keyword",
+  "name",
   "filter",
   "page",
   "page-size",
@@ -44,7 +45,15 @@ export interface CliInvocation {
 export class CliArgumentError extends Error {
   readonly name = "CliArgumentError";
 
-  constructor(message: string, readonly code: "CLI_USAGE" | "PREVIEW_REQUIRED" | "IDEMPOTENCY_REQUIRED" = "CLI_USAGE") {
+  constructor(
+    message: string,
+    readonly code:
+      | "CLI_USAGE"
+      | "PREVIEW_REQUIRED"
+      | "IDEMPOTENCY_REQUIRED"
+      | "RESOURCE_NOT_FOUND"
+      | "RESOURCE_AMBIGUOUS" = "CLI_USAGE",
+  ) {
     super(message);
   }
 }

@@ -24,6 +24,7 @@ function projectContext(options: {
   version?: number;
   selectedNodeId?: number;
   withSaveContract?: boolean;
+  withCompletion?: boolean;
 } = {}): WorkflowContext {
   const version = options.version ?? 9;
   const selectedNodeId = options.selectedNodeId ?? 301;
@@ -46,6 +47,11 @@ function projectContext(options: {
         writableFields: ["solutionPackage", "architecture"],
         dynamicFields: false,
         protectedFields: ["projectId", "nodeId", "workbench", "status"],
+        ...(options.withCompletion ? {
+          completionSupported: true,
+          completionCommand: "node.complete-with-data",
+          completionRequiredMetadata: [],
+        } : {}),
       },
     }),
   };
@@ -106,6 +112,15 @@ const catalog = {
         nodeId: { type: "integer", label: "节点 ID", required: true },
         workbench: { type: "string", label: "工作台", required: true },
         fields: { type: "object", label: "字段", required: true },
+      }),
+      action("node.complete-with-data", {
+        projectId: { type: "integer", label: "项目 ID", required: true },
+        nodeId: { type: "integer", label: "节点 ID", required: true },
+        workbench: { type: "string", label: "工作台", required: true },
+        fields: { type: "object", label: "字段", required: true },
+        ownerId: { type: "integer", label: "负责人", required: false },
+        startDate: { type: "string", label: "开始日期", required: false },
+        endDate: { type: "string", label: "结束日期", required: false },
       }),
     ],
   }],
@@ -207,6 +222,35 @@ describe("project resource scenario contract", () => {
     }));
   });
 
+  it("selects the only component contract that declares the drafted fields", async () => {
+    const context = projectContext();
+    const node = context.workflow?.nodes[0] as any;
+    node.components.push({
+      key: "solution-decision",
+      label: "方案决策",
+      saveContract: {
+        command: "node.field.update",
+        projectId: 42,
+        nodeId: 301,
+        nodeVersion: 4,
+        workbench: "solution-decision",
+        writableFields: ["decision"],
+        dynamicFields: false,
+      },
+    });
+    const client = fakeClient({ context });
+    const plan = await planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      operation: "node.field.update",
+      nodeId: 301,
+      arguments: { fields: { architecture: "模块化" } },
+    }, createResourceScenarioRegistry([projectScenarioAdapter]));
+
+    expect(plan.normalizedArguments.workbench).toBe("solution-design");
+  });
+
   it("rejects a field outside the persisted workbench contract before preview", async () => {
     const client = fakeClient();
     await expect(planResourceScenario(client, {
@@ -218,6 +262,37 @@ describe("project resource scenario contract", () => {
       arguments: { fields: { guessedField: "不应写入" } },
     }, createResourceScenarioRegistry([projectScenarioAdapter]))).rejects.toThrow(/saveContract/);
     expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("plans project node completion through the atomic save-and-complete contract", async () => {
+    const client = fakeClient({ context: projectContext({ withCompletion: true }) });
+    const plan = await planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      operation: "node.complete-with-data",
+      nodeId: 301,
+      contextVersion: 9,
+      arguments: {
+        fields: { solutionPackage: "新方案" },
+        ownerId: 7,
+        startDate: "2026-10-10",
+        endDate: "2026-10-20",
+      },
+    }, createResourceScenarioRegistry([projectScenarioAdapter]));
+
+    expect(plan.normalizedArguments).toEqual({
+      projectId: 42,
+      nodeId: 301,
+      workbench: "solution-design",
+      fields: { solutionPackage: "新方案" },
+      ownerId: 7,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    });
+    expect(client.preview).toHaveBeenCalledWith(expect.objectContaining({
+      operation: "node.complete-with-data",
+    }));
   });
 
   it("reports unknown when project readback fails after a successful operation", async () => {

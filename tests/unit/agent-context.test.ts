@@ -36,6 +36,8 @@ function context(overrides: Partial<WorkflowContext> = {}): WorkflowContext {
             version: 2,
             componentKey: "story-node-workbench",
             writableFields: ["summary"],
+            completionMode: "AUTO_CONFIRM",
+            completionAutomaticConfirmation: true,
           },
         }],
         fieldValues: { summary: "已有事实" },
@@ -88,6 +90,8 @@ describe("Agent context mapping", () => {
       nodeId: 383,
       key: "writing",
       writableFields: ["summary"],
+      completionMode: "AUTO_CONFIRM",
+      completionAutomaticConfirmation: true,
       writeCapable: true,
     });
     expect(session.draft).toBeNull();

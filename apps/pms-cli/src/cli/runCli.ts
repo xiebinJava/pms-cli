@@ -18,6 +18,11 @@ import { getAgentContext, getContext } from "../commands/core/context.js";
 import { getResource } from "../commands/core/get.js";
 import { operationAuto, operationExecutePreview, operationPreview, type OperationOptions } from "../commands/core/operation.js";
 import { search } from "../commands/core/search.js";
+import {
+  resolveResourceId,
+  resolveResourceReference,
+  type ResolvableResourceType,
+} from "../commands/core/resolve.js";
 import { workflowAction } from "../commands/core/workflow.js";
 import { dashboardSummary } from "../commands/shortcuts/dashboard.js";
 import { createProjectWithReadback } from "../commands/shortcuts/project.js";
@@ -95,8 +100,9 @@ const HELP = [
   "  pms auth login|status|logout",
   "  pms capabilities [--scope <scope>]",
   "  pms search <resourceType> [--keyword <text>] [--filter key=value]",
+  "  pms resolve <project|requirement|topic|story> --name <exact-name>",
   "  pms get <resourceType> <id>",
-  "  pms context <resourceType> <id> [--format json|agent] [--view legacy|focused] [--node-id <id>] [--component <key>]",
+  "  pms context <resourceType> [<id>|--name <exact-name>] [--format json|agent] [--view legacy|focused] [--node-id <id>] [--component <key>]",
   "  pms operation preview <operation> --arguments-json <json>",
   "  pms operation auto <operation> --arguments-json <json> --idempotency-key <key>",
   "  pms operation execute --preview-operation-id <id> --idempotency-key <key>",
@@ -109,7 +115,7 @@ const HELP = [
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
   "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario progression draft|plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
-  "  pms scenario progression run <requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--idempotency-key <key>]",
+  "  pms scenario progression run <project|requirement|topic|story> [<id>|--name <exact-name>] --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--idempotency-key <key>]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -250,6 +256,12 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       pageSize,
     });
   }
+  if (invocation.group === "resolve") {
+    const resourceType = requireResolvableResourceType(invocation.command);
+    const name = requiredOption(invocation.options, "name");
+    const runtime = await deps.createRuntime(requestId);
+    return resolveResourceReference(runtime.client, resourceType, name);
+  }
   if (invocation.group === "get") {
     const resourceType = requireResourceType(invocation.command);
     const resourceId = requireId(invocation.positionals[0]);
@@ -258,13 +270,16 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
   }
   if (invocation.group === "context") {
     const resourceType = requireContextResourceType(invocation.command);
-    const resourceId = requireId(invocation.positionals[0]);
     const options = contextOptions(invocation.options);
     const format = invocation.options.format ?? "json";
     if (format !== "json" && format !== "agent") {
       throw new CliArgumentError("context --format 仅支持 json 或 agent");
     }
     const runtime = await deps.createRuntime(requestId);
+    const resourceId = await resolveResourceId(runtime.client, resourceType, {
+      ...(invocation.positionals[0] === undefined ? {} : { id: requireId(invocation.positionals[0]) }),
+      ...(invocation.options.name === undefined ? {} : { name: invocation.options.name }),
+    });
     if (format === "agent") return getAgentContext(runtime.client, resourceType, resourceId, options);
     return getContext(runtime.client, resourceType, resourceId, options);
   }
@@ -878,7 +893,6 @@ async function dispatchAgentProgressionRun(
   rawResourceId: string | undefined,
 ): Promise<unknown> {
   const resourceType = parseAgentProgressionRunResourceType(rawResourceType);
-  const resourceId = requireId(rawResourceId);
   if (invocation.options["preview-operation-id"] !== undefined) {
     throw new CliArgumentError("progression run 不接受 --preview-operation-id；它会在本次运行中生成 fresh preview");
   }
@@ -892,6 +906,10 @@ async function dispatchAgentProgressionRun(
     requiredResourceScenarioOption(invocation.options, "idempotency-key");
   }
   const runtime = await deps.createRuntime(requestId);
+  const resourceId = await resolveResourceId(runtime.client, resourceType, {
+    ...(rawResourceId === undefined ? {} : { id: requireId(rawResourceId) }),
+    ...(invocation.options.name === undefined ? {} : { name: invocation.options.name }),
+  });
   return runAgentProgression(runtime.client, {
     contractVersion: agentProgressionContractVersion,
     resourceType,
@@ -925,11 +943,18 @@ function parseAgentProgressionResourceType(raw: string | undefined): AgentProgre
   return raw;
 }
 
+function requireResolvableResourceType(raw: string | undefined): ResolvableResourceType {
+  if (raw !== "project" && raw !== "requirement" && raw !== "topic" && raw !== "story") {
+    throw new CliArgumentError("resolve 仅支持 project、requirement、topic、story");
+  }
+  return raw;
+}
+
 function parseAgentProgressionRunResourceType(
   raw: string | undefined,
-): Exclude<AgentProgressionResourceType, "project"> {
-  if (raw !== "requirement" && raw !== "topic" && raw !== "story") {
-    throw new CliArgumentError("progression run 仅支持 requirement、topic、story；项目节点写入将在第二期开放");
+): AgentProgressionResourceType {
+  if (raw !== "project" && raw !== "requirement" && raw !== "topic" && raw !== "story") {
+    throw new CliArgumentError("progression run 仅支持 project、requirement、topic、story");
   }
   return raw;
 }

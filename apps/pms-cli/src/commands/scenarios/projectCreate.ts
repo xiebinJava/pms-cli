@@ -15,6 +15,7 @@ import {
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import { operationPreview, type OperationOptions } from "../core/operation.js";
 import { createProjectWithReadback, type ProjectCreateReadback } from "../shortcuts/project.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 
 export interface ProjectCreateScenarioOptions extends OperationOptions {
   idempotencyKey?: string;
@@ -38,6 +39,7 @@ export interface ProjectCreateScenarioPlan {
   };
   preview: OperationPreview;
   trace: ScenarioTrace;
+  userFacing?: ReturnType<typeof buildUserFacingDisplay>;
 }
 
 export interface ProjectCreateScenarioResult {
@@ -53,6 +55,7 @@ export interface ProjectCreateScenarioResult {
   };
   warnings: string[];
   trace: ScenarioTrace;
+  userFacing?: ReturnType<typeof buildUserFacingDisplay>;
 }
 
 export async function planProjectCreateScenario(
@@ -77,6 +80,12 @@ export async function planProjectCreateScenario(
     capabilitiesSummary: { action, workflowTypes: catalog.workflowTypes },
     preview,
     trace: { requestId: options.requestId },
+    userFacing: buildUserFacingDisplay({
+      resourceType: "project",
+      resourceDetails: { name: typeof argumentsValue.name === "string" ? argumentsValue.name : undefined },
+      operationStatus: "PREVIEWED",
+      actualChange: "已生成待执行预览",
+    }),
   };
 }
 
@@ -94,6 +103,17 @@ export async function executeProjectCreateScenario(
     result: readback.result,
     readback: { resource: readback.resource, context: readback.context },
     warnings: readback.warnings,
+    userFacing: buildUserFacingDisplay({
+      resourceType: "project",
+      context: readback.context,
+      resourceDetails: readback.resource?.details ?? { name: options.arguments?.name },
+      operationStatus: readback.result.status,
+      actualChange: readback.result.status === "SUCCEEDED"
+        && readback.resource !== null && readback.context !== null
+        ? "项目已创建并通过回读验证"
+        : "项目创建未完成",
+      blockers: readback.warnings,
+    }),
     trace: {
       requestId: options.requestId,
       operationId: readback.result.operationId,
@@ -137,6 +157,7 @@ export function toResourceScenarioResult(result: ProjectCreateScenarioResult): R
     status,
     warnings: [...result.warnings, ...result.result.warnings],
     refreshScopes: result.result.refreshScopes,
+    userFacing: result.userFacing,
   });
 }
 

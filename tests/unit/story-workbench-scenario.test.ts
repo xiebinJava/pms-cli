@@ -90,11 +90,9 @@ function makeContext(content: Record<string, unknown>, version = 1, variant: "it
             writableFields: acceptance
               ? ["acceptanceConclusion", "acceptanceNote"]
               : ["dependencies", "developerIds", "iterationName", "iterationPlanId", "meetingNote", "testerIds"],
-            ...(acceptance ? {
-              completionCommand: "development-item.node.complete-with-data",
-              completionSupported: true,
-              completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
-            } : {}),
+            completionCommand: "development-item.node.complete-with-data",
+            completionSupported: true,
+            completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
           },
         }],
       }],
@@ -107,6 +105,7 @@ function makeContext(content: Record<string, unknown>, version = 1, variant: "it
 function fakeClient(
   readbackContent: Record<string, unknown> = { meetingNote: "已确认进入本周迭代" },
   variant: "iteration" | "acceptance" = "iteration",
+  completion = false,
 ) {
   const calls: string[] = [];
   let saved = false;
@@ -128,7 +127,9 @@ function fakeClient(
     preview: vi.fn(async (request: { operation: string; arguments: Record<string, unknown> }) => {
       calls.push("preview");
       expect(request.operation).toBe(
-        variant === "acceptance" ? "development-item.node.complete-with-data" : "development-item.node.field.update",
+        completion || variant === "acceptance"
+          ? "development-item.node.complete-with-data"
+          : "development-item.node.field.update",
       );
       expect(request.arguments).toMatchObject({
         itemType: "STORY",
@@ -326,17 +327,31 @@ describe("story workbench write scenario", () => {
     expect(calls).toEqual(["context", "preview", "execute-preview", "get", "context"]);
   });
 
-  it("rejects completion for a non-acceptance variant before preview", async () => {
-    const { client, calls } = fakeClient();
-    await expect(executeStoryWorkbenchScenario(client, {
+  it("uses the server completion command for a non-acceptance variant", async () => {
+    const { client, calls } = fakeClient(
+      { meetingNote: "已确认进入本周迭代" },
+      "iteration",
+      true,
+    );
+    const result = await executeStoryWorkbenchScenario(client, {
       ...input,
       complete: true,
       ownerId: 2,
       startDate: "2026-10-10",
       endDate: "2026-10-20",
-    })).rejects.toThrow(/只支持完成故事验收节点/);
-    expect(calls).toEqual(["context"]);
-    expect(client.preview).not.toHaveBeenCalled();
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.complete).toBe(true);
+    expect((client.preview as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]).toMatchObject({
+      operation: "development-item.node.complete-with-data",
+      arguments: {
+        ownerId: 2,
+        startDate: "2026-10-10",
+        endDate: "2026-10-20",
+      },
+    });
+    expect(calls).toEqual(["context", "preview", "execute-preview", "get", "context"]);
   });
 
   it("rejects protected or unknown acceptance fields before preview", async () => {

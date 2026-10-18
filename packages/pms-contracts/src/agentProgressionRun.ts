@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   agentProgressionIntentSchema,
   agentProgressionPlanSchema,
+  agentProgressionResourceTypeSchema,
   agentProgressionResultSchema,
   agentProgressionWriteDecisionSchema,
   type AgentProgressionIntent,
@@ -11,14 +12,11 @@ import {
 } from "./agentProgression.js";
 import { resourceDetailSchema, type ResourceDetail } from "./query.js";
 import { resourceScenarioVerificationSchema, type ResourceScenarioVerification } from "./resourceScenario.js";
+import { userFacingDisplaySchema } from "./userFacing.js";
 
 export const agentProgressionRunContractVersion = "agent-progression-run/v1" as const;
 
-export const agentProgressionRunResourceTypeSchema = z.enum([
-  "requirement",
-  "topic",
-  "story",
-]);
+export const agentProgressionRunResourceTypeSchema = agentProgressionResourceTypeSchema;
 export type AgentProgressionRunResourceType = z.infer<typeof agentProgressionRunResourceTypeSchema>;
 
 export const agentProgressionRunStatusSchema = z.enum([
@@ -53,6 +51,7 @@ export const agentProgressionRunResultSchema = z.object({
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
   warnings: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export type AgentProgressionRunResult = z.infer<typeof agentProgressionRunResultSchema>;

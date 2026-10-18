@@ -1,6 +1,6 @@
 # Agent Progression Run 手册
 
-`pms scenario progression run` 是 Claude、Codex 或 DeepSeek 操作 PMS 需求、专题和故事节点的统一交接入口。外部模型负责理解自然语言和生成草稿；PMS 后端仍是权限、流程模板、字段合同、版本、幂等和审计的唯一真源。
+`pms scenario progression run` 是 Claude、Codex 或 DeepSeek 操作 PMS 需求、专题、故事和项目节点字段、完成项目节点的统一交接入口。外部模型负责理解自然语言和生成草稿；PMS 后端仍是权限、流程模板、字段合同、版本、幂等和审计的唯一真源。
 
 ## 一次自然语言请求如何落地
 
@@ -106,4 +106,15 @@ pms scenario progression run requirement 33 \
 
 ## 当前边界
 
-统一 `run` 入口当前支持 `requirement`、`topic`、`story`。项目节点写入仍沿用现有 progression/resource 场景，待下一期统一；不要把项目写入伪装成当前 `run` 能力。
+统一 `run` 入口支持 `requirement`、`topic`、`story` 和 `project`。项目支持只读上下文、基于当前 `saveContract` 的节点字段更新，以及在 PMS 能力目录声明 `node.complete-with-data` 且当前 `saveContract.completionCommand` 匹配时原子保存并完成节点；未声明时会返回 `CAPABILITY_UNAVAILABLE`，不会自动拆分成多次写入。
+
+项目节点字段更新示例：
+
+```bash
+pms scenario progression run project --name "PMS 项目管理系统" \
+  --intent UPDATE_NODE_FIELDS \
+  --execute-mode plan \
+  --node-id <context.currentNode.id> \
+  --draft-json '<agent-progression/v1 draft>' \
+  --format json
+```

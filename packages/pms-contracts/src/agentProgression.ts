@@ -6,6 +6,7 @@ import {
 } from "./resourceScenario.js";
 import { resourceDetailSchema } from "./query.js";
 import { analysisItemSchema } from "./scenario.js";
+import { userFacingDisplaySchema } from "./userFacing.js";
 
 export const agentProgressionContractVersion = "agent-progression/v1" as const;
 
@@ -106,6 +107,7 @@ export const agentProgressionPlanSchema = z.object({
   requiresConfirmation: z.boolean(),
   executionMode: agentProgressionExecutionModeSchema,
   warnings: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export const agentProgressionResultSchema = z.object({
@@ -132,6 +134,7 @@ export const agentProgressionResultSchema = z.object({
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
   warnings: z.array(z.string()).default([]),
+  userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
 export const agentProgressionDraftResultSchema = z.object({

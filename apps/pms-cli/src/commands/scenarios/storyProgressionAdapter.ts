@@ -63,6 +63,7 @@ export async function planStoryProgression(
         ...draftPlan.protectedFields.map((key) => `草稿字段 ${key} 是受保护字段`),
         ...draftPlan.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
         ...draftPlan.unresolvedDecisions,
+        ...(draftPlan.completionBlockReason ? [draftPlan.completionBlockReason] : []),
       ],
     };
   }

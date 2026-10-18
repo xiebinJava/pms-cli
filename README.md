@@ -48,7 +48,7 @@ pms dashboard summary --format json
 
 CLI-Anything 用于生成和核验 CLI harness 的命令、Skill 和测试形态；运行时不依赖 CLI-Anything，不使用浏览器点击自动化，也不复制 PMS 业务规则。
 
-自然语言推进由外部 Claude/Codex/DeepSeek 负责理解，`pms-cli` 负责读取 PMS 上下文、生成预览、执行和回读。模型凭据留在外部工作台，不配置在 CLI 中。需求、专题和故事可通过统一的 `pms scenario progression run` 入口推进；项目节点写入仍沿用现有入口，待后续阶段统一。
+自然语言推进由外部 Claude/Codex/DeepSeek 负责理解，`pms-cli` 负责读取 PMS 上下文、生成预览、执行和回读。模型凭据留在外部工作台，不配置在 CLI 中。需求、专题、故事和项目节点字段、项目节点原子完成可通过统一的 `pms scenario progression run` 入口推进；项目完成能力仍以 PMS 能力目录和当前节点 `saveContract` 声明为准。
 
 ## 工作台 Skill
 

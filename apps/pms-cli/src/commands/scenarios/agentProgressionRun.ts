@@ -11,7 +11,7 @@ import {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import { executeAgentProgression, planAgentProgression } from "./agentProgression.js";
-import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 
 /**
  * Composes the external-agent progression lifecycle without owning any PMS
@@ -23,7 +23,6 @@ export async function runAgentProgression(
   input: unknown,
 ): Promise<AgentProgressionRunResult> {
   const parsed = agentProgressionInputSchema.parse(input);
-  assertSupportedResource(parsed);
 
   if (parsed.intent === "READ_CONTEXT") {
     const result = await executeAgentProgression(client, parsed);
@@ -70,15 +69,6 @@ export async function runAgentProgression(
   });
 }
 
-function assertSupportedResource(input: ParsedAgentProgressionInput): void {
-  if (input.resourceType === "project") {
-    throw new ResourceScenarioError(
-      "CAPABILITY_UNAVAILABLE",
-      "统一 Agent 推进 run 当前支持需求、专题、故事；项目节点写入将在第二期开放",
-    );
-  }
-}
-
 function resultForRead(
   input: ParsedAgentProgressionInput,
   result: AgentProgressionResult,
@@ -113,8 +103,25 @@ function baseResult(
     readback: null,
     verification: null,
     warnings: [],
+    userFacing: buildUserFacingDisplay({
+      resourceType: input.resourceType,
+      context: result?.readback?.context ?? plan?.context,
+      resourceDetails: result?.readback?.resource?.details,
+      operationStatus: result?.status ?? status,
+      actualChange: actualChangeFor(status),
+      blockers: overrides.warnings,
+    }),
     ...overrides,
   });
+}
+
+function actualChangeFor(status: AgentProgressionRunResult["status"]): string {
+  if (status === "CONTEXT_READY") return "已读取当前流程上下文";
+  if (status === "PLAN_READY") return "已生成待执行预览";
+  if (status === "SUCCEEDED") return "写入已完成并通过回读验证";
+  if (status === "WRITE_RESULT_UNKNOWN") return "写入结果无法完全确认，需要回读核验";
+  if (status === "NEEDS_INPUT") return "缺少必填信息，尚未执行写入";
+  return "当前操作尚未完成";
 }
 
 function statusForDecision(

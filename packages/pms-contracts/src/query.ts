@@ -168,6 +168,9 @@ export const workflowContextSaveContractSchema = z.object({
   completionSupported: z.boolean().optional(),
   completionCommand: z.string().trim().min(1).optional(),
   completionRequiredMetadata: z.array(z.string().trim().min(1)).optional(),
+  completionMode: z.enum(["AUTO_CONFIRM", "VALIDATE_ONLY", "REQUIRES_DOMAIN_CONFIRMATION"]).optional(),
+  completionAutomaticConfirmation: z.boolean().optional(),
+  completionBlockReason: z.string().trim().min(1).optional(),
 }).catchall(z.unknown());
 
 export const workflowContextComponentSchema = z.object({

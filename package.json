@@ -17,6 +17,7 @@
     "verify:real-pms:resource-scenario": "PMS_E2E_RESOURCE_SCENARIO=true vitest run tests/e2e/resource-scenario-real-pms.test.ts --maxWorkers=1 --minWorkers=1",
     "verify:real-pms:node-autofill": "PMS_E2E_NODE_AUTOFILL_REQUIREMENT=true PMS_E2E_NODE_AUTOFILL_STORY=true PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/requirement-node-autofill.e2e.test.ts tests/e2e/story-node-autofill.e2e.test.ts --maxWorkers=1 --minWorkers=1",
     "verify:real-pms:cli": "PMS_E2E_CLI=true PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/cli-agent-write.e2e.test.ts --maxWorkers=1 --minWorkers=1",
+    "verify:real-pms:cli-name-progression": "PMS_E2E_CLI_NAME_PROGRESSION=true PMS_E2E_CREATE_REQUIREMENT_FIXTURE=true PMS_E2E_CREATE_STORY_FIXTURE=true PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true vitest run tests/e2e/cli-name-progression.e2e.test.ts --maxWorkers=1 --minWorkers=1",
     "verify:real-pms:orchestrator": "PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true PMS_E2E_CREATE_FIXTURE=true PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true vitest run tests/e2e/orchestrator-requirement-analysis.e2e.test.ts --maxWorkers=1 --minWorkers=1",
     "verify:real-pms:story-orchestrator": "PMS_E2E_STORY_ORCHESTRATOR=true PMS_E2E_WRITE=true PMS_E2E_ISOLATED=true PMS_E2E_CREATE_STORY_FIXTURE=true PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true vitest run tests/e2e/orchestrator-story-node.e2e.test.ts --maxWorkers=1 --minWorkers=1"
   },

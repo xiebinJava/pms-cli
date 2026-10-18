@@ -14,6 +14,7 @@ import {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import { operationExecutePreview, operationPreview } from "../core/operation.js";
+import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import {
   resourceScenarioRegistry,
   type ResourceScenarioAdapter,
@@ -55,6 +56,16 @@ export async function planResourceScenario(
     requiresConfirmation: executionMode === "confirmation",
     executionMode,
     warnings: [...preview.warnings],
+    userFacing: buildUserFacingDisplay({
+      resourceType: parsed.resourceType,
+      context: context?.snapshot,
+      resourceDetails: parsed.arguments,
+      operationStatus: "PREVIEWED",
+      actualChange: "已生成待执行预览",
+      blockers: preview.preconditions
+        .filter((precondition) => precondition.blocking)
+        .map((precondition) => precondition.message),
+    }),
   } as ResourceScenarioPlan;
 }
 
@@ -144,6 +155,21 @@ function resultFor(
     status,
     warnings,
     refreshScopes: operation.refreshScopes,
+    userFacing: buildUserFacingDisplay({
+      resourceType: input.resourceType,
+      context: readback?.context,
+      resourceDetails: readback?.resource?.details,
+      operationStatus: status,
+      actualChange: actualChangeFor(status),
+      blockers: warnings,
+    }),
   };
   return resourceScenarioResultSchema.parse(result);
+}
+
+function actualChangeFor(status: ResourceScenarioResult["status"]): string {
+  if (status === "SUCCEEDED") return "写入已完成并通过回读验证";
+  if (status === "WRITE_RESULT_UNKNOWN") return "写入结果无法完全确认，需要回读核验";
+  if (status === "CONFLICT") return "写入未完成，发生上下文冲突";
+  return "写入未完成";
 }

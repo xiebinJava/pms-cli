@@ -65,7 +65,7 @@ pms scenario progression run story 34 --intent UPDATE_NODE_FIELDS \
   --draft-json '<same draft>' --idempotency-key story-34-node-<node>-1 --format json
 ```
 
-返回的 `status`、`operationId`、`auditId`、`readback` 和 `verification` 是机器可读交接结果。当前统一入口支持需求、专题、故事；项目节点写入仍使用现有命令。
+返回的 `status`、`operationId`、`auditId`、`readback` 和 `verification` 是机器可读交接结果。当前统一入口支持需求、专题、故事以及项目节点字段更新和原子完成；项目节点完成要同时满足 PMS 能力目录与当前节点 `saveContract` 的声明。
 
 ## 场景级自然语言演示
 
