@@ -13,7 +13,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 1. 先执行 `pms capabilities --format json`，读取当前用户可见资源、操作、流程类型、模板版本、节点、组件和字段。
 2. 涉及具体事项时，优先执行 `pms context <resourceType> <resourceId> --format agent`，获取外部 Agent 可消费的 `ContextSnapshot`、`NodeContract`、权限投影和上下文版本；需要排查原始字段时，再执行 `pms context <resourceType> <resourceId> --format json`。
 3. 查询列表使用 `pms search <resourceType> --format json`，单项读取使用 `pms get <resourceType> <resourceId> --format json`。
-4. 按 **读取 → 草稿 → 校验 → 执行 → 回读验证** 分阶段工作。默认仍可使用 `pms operation preview` 或场景 plan 生成可审阅变更；对于用户在当前对话中已经明确提出的低/中风险写入，可以使用 `pms operation auto <operation>`，它会在服务端内部完成预览校验、权限、版本、幂等和审计，不再重复弹出确认。高风险操作（删除、归档、回滚、批量写入、权限或成员变更）使用预览确认链路并携带 `--preview-operation-id` 和 `--idempotency-key`；统一 `progression run` 会在本次调用内部生成 fresh preview，因此不接受该参数。
+4. 按 **读取 → 草稿 → 校验 → 执行 → 回读验证** 分阶段工作。节点字段更新和节点完成默认使用统一的 `pms scenario progression run`，由它生成 fresh preview、校验 Agent Draft、执行并回读验证。`pms operation preview` 仍可用于通用非节点操作；`pms operation auto`、`resource-write` 和旧快捷命令只作为兼容入口，结果会标记 `PROVENANCE_NOT_AUDITED`，不作为 Agent 节点写入的默认路径。高风险操作（删除、归档、回滚、批量写入、权限或成员变更）使用预览确认链路并携带 `--preview-operation-id` 和 `--idempotency-key`；统一 `progression run` 会在本次调用内部生成 fresh preview，因此不接受该参数。
 
 ## 名称优先的资源解析
 
@@ -26,8 +26,8 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 - 子 Agent 只接收父 Agent 提供的 `ContextSnapshot` 和任务目标；子 Agent 不接收 PMS 登录凭据、Token、auth store 路径或写入回调，也不直接调用 `pms-cli`。
 - 父 Agent 负责读取能力和上下文、创建只读子 Agent、合并事实与草稿、选择风险等级，并独自调用 PMS 写入命令。低/中风险自动写入也必须来自当前对话的明确用户意图，不能由子 Agent 自行扩大范围。
 - 草稿必须区分事实、推断、假设、未决问题、建议字段和证据引用；子 Agent 的证据只能来自父快照中可读的 `sourceRefs`。
-- 高风险预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。低/中风险使用 `operation auto` 时，仍要在执行结果中说明实际写入内容和状态；机器可读结果保留操作 ID，用户没有明确写入意图时只能返回草稿或预览。
-- 若使用兼容旧入口 `pms requirement analysis save`，也必须遵守同样的上下文版本、字段白名单、幂等键和当前对话明确确认规则；新流程优先使用 scenario 的 plan/execute 分离入口。
+- 高风险预览返回后要向用户说明目标资源、节点、字段、版本、变更内容和风险，等待当前对话的明确确认后才能 execute。低/中风险使用 `progression run --execute-mode auto` 时，仍要在执行结果中说明实际写入内容和状态；机器可读结果保留操作 ID，用户没有明确写入意图时只能返回草稿或预览。
+- 若必须使用兼容旧入口 `pms requirement analysis save`，也必须遵守同样的上下文版本、字段白名单、幂等键和当前对话明确确认规则，并把它视为 legacy；新流程优先使用 `scenario progression run`，不要用旧入口承载 Agent 节点写入。
 
 ## 统一 Agent 推进入口
 
@@ -140,7 +140,7 @@ pms scenario progression run requirement <requirement-id> \
 
 ## 写操作要求
 
-- 写操作必须经过 PMS 后端的预览校验、权限、业务规则、版本校验、幂等和审计。低/中风险且用户已明确要求的写入可通过 `pms operation auto` 执行；这只是去掉重复确认，不是绕过后端校验。高风险写入不能使用 auto，必须先 preview，再在当前对话确认后 execute。
+- 写操作必须经过 PMS 后端的预览校验、权限、业务规则、版本校验、幂等和审计。节点字段更新和节点完成使用 `pms scenario progression run`；低/中风险且用户已明确要求时使用 `--execute-mode auto`，高风险或领域确认节点使用 `--execute-mode confirm`。`pms operation auto` 只保留给非节点兼容场景，不能替代 progression 的草稿、来源审计和回读验证。
 - 每次写操作必须提供新的、可追踪的 `idempotencyKey`；重试同一业务请求时复用同一个幂等键，不要为同一次意图生成多个幂等键。
 - 不要自动重试写操作。遇到权限不足、业务冲突或版本冲突时，返回错误并先重新读取能力/上下文。
 - 如果执行返回 `WRITE_RESULT_UNKNOWN`，说明写入可能已经发生但回读无法确认；在机器可读结果中保留操作 ID、警告和当前上下文，面向用户只说明不确定状态和下一步核验，不要盲目重试或覆盖数据。

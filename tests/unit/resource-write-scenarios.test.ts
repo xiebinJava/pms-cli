@@ -120,6 +120,8 @@ describe("resource write scenarios", () => {
     expect(result.status).toBe("SUCCEEDED");
     expect(result.previewOperationId).toBe("preview-1");
     expect(result.verification).toEqual({ resourceReadback: true, contextReadback: true });
+    expect(result.warnings).toContain("PROVENANCE_NOT_AUDITED");
+    expect(result.operation.warnings).toContain("PROVENANCE_NOT_AUDITED");
   });
 
   it("rejects an execute request without a persisted preview", async () => {

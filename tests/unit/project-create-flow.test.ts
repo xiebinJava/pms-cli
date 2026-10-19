@@ -81,7 +81,7 @@ describe("project creation readback", () => {
     expect(readback.result.data.workflow).toEqual({ templateVersionId: 12, templateVersionNo: 2, nodeIds: [101] });
     expect(readback.resource?.details).toMatchObject({ id: 42, workflowTemplateVersionId: 12 });
     expect(readback.context?.workflow?.templateVersionNo).toBe(2);
-    expect(readback.warnings).toEqual([]);
+    expect(readback.warnings).toContain("PROVENANCE_NOT_AUDITED");
   });
 
   it("keeps a successful create result when exact readback fails", async () => {
@@ -117,6 +117,7 @@ describe("project creation readback", () => {
     expect(readback.result.data.workflow).toEqual({ templateVersionId: null, templateVersionNo: null, nodeIds: [] });
     expect(readback.resource).toBeNull();
     expect(readback.context).toBeNull();
-    expect(readback.warnings[0]).toContain("回读失败");
+    expect(readback.warnings).toContain("PROVENANCE_NOT_AUDITED");
+    expect(readback.warnings.some((warning) => warning.includes("回读失败"))).toBe(true);
   });
 });

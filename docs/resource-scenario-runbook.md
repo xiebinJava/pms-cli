@@ -1,6 +1,6 @@
 # Resource Scenario CLI 验收手册
 
-这套接口把自然语言代理的写入动作固定成：
+这套兼容接口把通用资源写入固定成：
 
 ```text
 Claude/Codex 理解请求
@@ -11,6 +11,11 @@ Claude/Codex 理解请求
 → PMS 回读 resource/context，并返回 operationId/auditId
 → 根据 verification 汇报结果
 ```
+
+需求、专题、故事和项目节点字段的 Agent 写入应优先使用
+`pms scenario progression run`。本手册中的 `resource plan/execute` 保留给
+非节点资源操作和旧脚本兼容；其执行结果会带有
+`PROVENANCE_NOT_AUDITED`，不能替代 progression 的草稿来源审计和节点回读验证。
 
 ## 自然语言到 CLI
 

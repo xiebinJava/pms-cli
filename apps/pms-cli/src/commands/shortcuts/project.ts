@@ -1,7 +1,12 @@
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import type { OperationPreview, OperationResult, ResourceDetail, WorkflowContext } from "../../../../../packages/pms-contracts/src/index.js";
 import { getResourceById, listResource, writeResource, type ListOptions, type WriteOptions } from "./resourceCommands.js";
-import { operationExecute, operationExecutePreview, operationPreview } from "../core/operation.js";
+import {
+  LEGACY_PROVENANCE_WARNING,
+  operationExecute,
+  operationExecutePreview,
+  operationPreview,
+} from "../core/operation.js";
 
 export const projectList = (client: PmsClient, options: ListOptions = {}) => listResource(client, "project", options);
 export const projectGet = (client: PmsClient, id: number) => getResourceById(client, "project", id);
@@ -62,8 +67,12 @@ export async function createProjectWithAutomaticWrite(
     ...options,
     context: options.context ?? { id: "global:pms", version: "v1" },
   });
-  const result = await operationExecute(client, "project.create", options.idempotencyKey, options);
-  const warnings = [...preview.warnings];
+  const rawResult = await operationExecute(client, "project.create", options.idempotencyKey, options);
+  const result = {
+    ...rawResult,
+    warnings: appendWarning(rawResult.warnings, LEGACY_PROVENANCE_WARNING),
+  };
+  const warnings = appendWarning(preview.warnings, LEGACY_PROVENANCE_WARNING);
   const projectId = readProjectId(result);
   if (result.status !== "SUCCEEDED" || projectId === null) {
     return { preview, previewOperationId: preview.operationId, result, resource: null, context: null, warnings };
@@ -86,6 +95,10 @@ export async function createProjectWithAutomaticWrite(
     };
   }
   return { preview, previewOperationId: preview.operationId, result, resource, context, warnings };
+}
+
+function appendWarning(warnings: readonly string[], warning: string): string[] {
+  return warnings.includes(warning) ? [...warnings] : [...warnings, warning];
 }
 
 function readProjectId(result: OperationResult): number | null {

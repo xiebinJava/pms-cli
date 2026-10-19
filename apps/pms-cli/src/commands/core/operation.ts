@@ -12,6 +12,8 @@ export interface OperationOptions {
   requestId?: string;
 }
 
+export const LEGACY_PROVENANCE_WARNING = "PROVENANCE_NOT_AUDITED";
+
 function requestFor(operation: string, options: OperationOptions, idempotencyKey: string): AutomaticOperationRequest {
   return {
     operation,
@@ -74,7 +76,15 @@ export async function operationAuto(
     throw new Error("高风险操作必须先 preview 再 execute");
   }
   const argumentsValue = resolver.validateArguments(operation, options.arguments ?? {});
-  return client.execute(requestFor(operation, { ...options, arguments: argumentsValue }, idempotencyKey));
+  const result = await client.execute(requestFor(operation, { ...options, arguments: argumentsValue }, idempotencyKey));
+  return {
+    ...result,
+    warnings: appendWarning(result.warnings, LEGACY_PROVENANCE_WARNING),
+  };
+}
+
+function appendWarning(warnings: readonly string[], warning: string): string[] {
+  return warnings.includes(warning) ? [...warnings] : [...warnings, warning];
 }
 
 export async function operationExecutePreview(

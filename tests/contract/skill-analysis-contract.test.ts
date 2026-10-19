@@ -43,5 +43,8 @@ describe("requirement analysis Skill contract", () => {
     expect(skill).toContain("`NEEDS_INPUT` 只询问缺失字段");
     expect(skill).toContain("每个写入字段都必须有 `fieldSources`");
     expect(skill).toContain("一次自然语言请求只生成一个幂等键");
+    expect(skill).toContain("PROVENANCE_NOT_AUDITED");
+    expect(skill).toContain("只作为兼容入口");
+    expect(skill).toContain("不要用旧入口承载 Agent 节点写入");
   });
 });

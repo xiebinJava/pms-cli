@@ -112,6 +112,7 @@ describe("safe write lifecycle CLI contract", () => {
       context: { id: "story:34", version: "4" },
     }));
     expect(JSON.parse(stdout[0] ?? "{}").data.operationId).toBe("operation-auto-1");
+    expect(JSON.parse(stdout[0] ?? "{}").data.warnings).toContain("PROVENANCE_NOT_AUDITED");
   });
 
   it("keeps high-risk operations on the preview confirmation path", async () => {

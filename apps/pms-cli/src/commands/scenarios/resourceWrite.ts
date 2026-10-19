@@ -8,7 +8,12 @@ import type {
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
-import { operationExecutePreview, operationPreview, type OperationOptions } from "../core/operation.js";
+import {
+  LEGACY_PROVENANCE_WARNING,
+  operationExecutePreview,
+  operationPreview,
+  type OperationOptions,
+} from "../core/operation.js";
 
 export const resourceWriteScenarioContractVersion = "resource-write/v1" as const;
 export type ResourceWriteResourceType = Extract<QueryResourceType, "project" | "topic" | "story">;
@@ -103,8 +108,12 @@ export async function executeResourceWriteScenario(
 
   const operation = await operationExecutePreview(client, options.previewOperationId, options.idempotencyKey);
   const resultResourceId = readResourceId(options.resourceType, operation.data);
-  const operationWithPreview = { ...operation, previewOperationId: options.previewOperationId };
-  const warnings = [...operation.warnings];
+  const warnings = appendWarning(operation.warnings, LEGACY_PROVENANCE_WARNING);
+  const operationWithPreview = {
+    ...operation,
+    warnings,
+    previewOperationId: options.previewOperationId,
+  };
   if (operation.status !== "SUCCEEDED") {
     return {
       scenario: "resource-write",
@@ -174,6 +183,10 @@ export async function executeResourceWriteScenario(
       status: "WRITE_RESULT_UNKNOWN",
     };
   }
+}
+
+function appendWarning(warnings: readonly string[], warning: string): string[] {
+  return warnings.includes(warning) ? [...warnings] : [...warnings, warning];
 }
 
 async function readOperationContext(
