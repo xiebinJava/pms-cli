@@ -98,7 +98,15 @@ export const agentProgressionInputSchema = z.object({
   previewOperationId: z.string().trim().min(1).max(160).optional(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
   requestId: z.string().trim().min(1).max(160).optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.executeMode !== "plan" && value.provenance !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["provenance"],
+      message: "execute 只能引用原 preview 的 provenance，不能提交新的 provenance",
+    });
+  }
+});
 
 export const agentProgressionPlanSchema = z.object({
   contractVersion: z.literal(agentProgressionContractVersion),

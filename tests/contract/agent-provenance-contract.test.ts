@@ -53,6 +53,14 @@ describe("draft provenance contract", () => {
       idempotencyKey: "idem-1",
       provenance,
     })).toThrow();
+    expect(() => agentProgressionInputSchema.parse({
+      contractVersion: "agent-progression/v2",
+      resourceType: "requirement",
+      resourceId: 12,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "auto",
+      provenance,
+    })).toThrow(/不能提交新的 provenance/);
   });
 
   it("rejects conversation and pms namespace refs from persisted provenance", () => {

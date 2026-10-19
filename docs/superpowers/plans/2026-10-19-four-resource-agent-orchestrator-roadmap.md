@@ -255,7 +255,7 @@
 - [x] 明确 `provenanceRef = "operation:<previewOperationId>"`，execute 不接受新 provenance。
 - [x] 在 `docs/agent-provenance-contract.md` 记录规范化算法、限制、脱敏规则和 rollout 顺序（backend first）。
 - [x] Review：确认契约没有保存完整对话、Token 或自由文本。
-- [ ] 提交：`git commit -m "docs(contract): freeze draft provenance v1"`。
+- [x] 提交：`git commit -m "docs(contract): freeze draft provenance v1"`。
 
 ### Task 3.1：跨仓库增加 draft provenance
 
