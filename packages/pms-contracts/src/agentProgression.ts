@@ -99,7 +99,10 @@ export const agentProgressionInputSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
   requestId: z.string().trim().min(1).max(160).optional(),
 }).strict().superRefine((value, ctx) => {
-  if (value.executeMode !== "plan" && value.provenance !== undefined) {
+  // A run request may carry provenance into its fresh preview. Once a
+  // previewOperationId is present, the request is an execute-bound payload and
+  // must reference the persisted preview instead of submitting provenance again.
+  if (value.executeMode !== "plan" && value.previewOperationId !== undefined && value.provenance !== undefined) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["provenance"],

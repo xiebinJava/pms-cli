@@ -395,16 +395,22 @@ describe("agent progression run", () => {
       draftDigest: provenance.draftDigest,
     }));
 
-    const result = await runAgentProgression(client, input("plan", {
+    const result = await runAgentProgression(client, input("auto", {
       componentKey: "requirement-node-workbench",
+      idempotencyKey: "run-requirement-provenance-1",
       provenance,
     }));
 
-    expect(result.status).toBe("PLAN_READY");
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.operationId).toBe("operation-requirement-complete");
     expect(result.provenanceRef).toBe("operation:preview-requirement-complete-with-provenance");
     expect(result.draftDigest).toBe(provenance.draftDigest);
     expect(result.plan?.provenanceRef).toBe(result.provenanceRef);
     expect(result.plan?.preview?.draftDigest).toBe(provenance.draftDigest);
+    expect(client.executePreview).toHaveBeenCalledWith(
+      "preview-requirement-complete-with-provenance",
+      "run-requirement-provenance-1",
+    );
   });
 
   it("requires provenance when the PMS advertises the v1 contract", async () => {

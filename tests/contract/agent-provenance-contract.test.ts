@@ -53,12 +53,21 @@ describe("draft provenance contract", () => {
       idempotencyKey: "idem-1",
       provenance,
     })).toThrow();
+    expect(agentProgressionInputSchema.parse({
+      contractVersion: "agent-progression/v2",
+      resourceType: "requirement",
+      resourceId: 12,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "auto",
+      provenance,
+    }).provenance?.contractVersion).toBe(draftProvenanceContractVersion);
     expect(() => agentProgressionInputSchema.parse({
       contractVersion: "agent-progression/v2",
       resourceType: "requirement",
       resourceId: 12,
       intent: "UPDATE_NODE_FIELDS",
       executeMode: "auto",
+      previewOperationId: "preview-1",
       provenance,
     })).toThrow(/不能提交新的 provenance/);
   });

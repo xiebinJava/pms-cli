@@ -150,8 +150,9 @@ async function runParsedAgentProgression(
     });
   }
 
+  const { provenance: _provenance, ...executeInput } = parsed;
   const result = await executeAgentProgression(client, {
-    ...parsed,
+    ...executeInput,
     ...(parsed.componentKey === undefined && plan.componentKey !== undefined
       ? { componentKey: plan.componentKey } : {}),
     previewOperationId: plan.preview.operationId,
