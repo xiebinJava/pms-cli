@@ -90,6 +90,10 @@ function client() {
               fieldValuesPath: type === "topic" ? "__components.topic-intake" : "fields",
               writableFields: ["summary"],
               protectedFields: ["status"],
+              completionSupported: true,
+              completionCommand: type === "project" ? "node.complete-with-data" : "development-item.node.complete-with-data",
+              completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+              completionMode: "AUTO_CONFIRM",
               fieldContracts: [{ key: "summary", type: "string" }],
             },
           }],
@@ -129,6 +133,8 @@ describe("isolated resource fixtures", () => {
         componentKey: "project-intake",
         fieldKey: "summary",
         contextVersion: 1,
+        completionSupported: true,
+        completionMode: "AUTO_CONFIRM",
       },
     });
     expect(pms.preview).toHaveBeenCalledWith(expect.objectContaining({
@@ -155,6 +161,8 @@ describe("isolated resource fixtures", () => {
         componentKey: "topic-intake",
         fieldKey: "summary",
         contextVersion: 4,
+        completionSupported: true,
+        completionMode: "AUTO_CONFIRM",
       },
     });
     expect(pms.preview).toHaveBeenCalledWith(expect.objectContaining({

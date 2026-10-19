@@ -10,6 +10,10 @@ export interface WritableNodeFixture {
   componentKey: string;
   fieldKey: string;
   fieldValue: unknown;
+  ownerId: number;
+  completionSupported: boolean;
+  completionMode: string | null;
+  completionRequiredMetadata: string[];
 }
 
 export interface ProjectFixture {
@@ -45,11 +49,13 @@ export async function createProjectFixture(
   if (projectId === null) throw new Error("项目夹具创建成功响应缺少项目 ID");
   const readback = await client.get({ type: "project", id: projectId });
   if (readback.resourceId !== projectId) throw new Error("项目夹具回读资源 ID 不一致");
-  const node = await findWritableNode(client, projectId);
+  const ownerId = capabilities.viewer?.id;
+  if (!ownerId) throw new Error("项目夹具能力目录缺少当前用户 ID，无法完成节点验收");
+  const node = await findWritableNode(client, projectId, ownerId);
   return { projectId, name, created: true, node };
 }
 
-async function findWritableNode(client: PmsClient, projectId: number): Promise<WritableNodeFixture> {
+async function findWritableNode(client: PmsClient, projectId: number, ownerId: number): Promise<WritableNodeFixture> {
   const legacy = await client.context({ type: "project", id: projectId });
   const nodeId = positiveNodeId(legacy.currentNode?.id, "项目夹具创建后没有当前节点，无法进行节点场景验收");
   const focused = await client.context(
@@ -77,6 +83,11 @@ async function findWritableNode(client: PmsClient, projectId: number): Promise<W
     componentKey: resolution.componentKey,
     fieldKey,
     fieldValue: fixtureValue(contract?.fieldContracts, fieldKey),
+    ownerId,
+    completionSupported: contract?.completionSupported === true
+      && contract?.completionCommand === "node.complete-with-data",
+    completionMode: typeof contract?.completionMode === "string" ? contract.completionMode : null,
+    completionRequiredMetadata: stringArray(contract?.completionRequiredMetadata),
   };
 }
 

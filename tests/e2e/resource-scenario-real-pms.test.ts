@@ -82,10 +82,18 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
         await runNodeUpdateScenario(client, "project", projectId, project.node,
           "node.field.update", `resource-project-node-${config.runId}`);
       }
+      const projectCompletionExecuted = project?.node
+        ? await runNodeCompletionScenario(client, "project", projectId, project.node,
+          "node.complete-with-data", `resource-project-complete-${config.runId}`)
+        : false;
       if (topic?.node) {
         await runNodeUpdateScenario(client, "topic", topicId, topic.node,
           "development-item.node.field.update", `resource-topic-node-${config.runId}`);
       }
+      const topicCompletionExecuted = topic?.node
+        ? await runNodeCompletionScenario(client, "topic", topicId, topic.node,
+          "development-item.node.complete-with-data", `resource-topic-complete-${config.runId}`)
+        : false;
 
       const audit = await auditOperations(config.runId, startedAt);
       const commands = audit.map((record) => record.commandName.toLowerCase());
@@ -95,6 +103,8 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
       if (createFixtures) {
         expect(commands.some((command) => command.includes("development-item.node.field.update"))).toBe(true);
         expect(commands).toContain("node.field.update");
+        if (projectCompletionExecuted) expect(commands).toContain("node.complete-with-data");
+        if (topicCompletionExecuted) expect(commands).toContain("development-item.node.complete-with-data");
       }
     } finally {
       if (session) await auth.logout(session.account);
@@ -230,6 +240,96 @@ async function runNodeUpdateScenario(
   });
   expect(replay.status).toBe("SUCCEEDED");
   expect(replay.operation.operationId).toBe(first.operation.operationId);
+}
+
+async function runNodeCompletionScenario(
+  client: PmsHttpClient,
+  resourceType: "project" | "topic",
+  resourceId: number,
+  node: ProjectFixture["node"] | TopicFixture["node"],
+  operation: "node.complete-with-data" | "development-item.node.complete-with-data",
+  idempotencyKey: string,
+): Promise<boolean> {
+  const argumentsValue = resourceType === "project"
+    ? {
+      fields: { [node.fieldKey]: node.fieldValue },
+      ownerId: node.ownerId,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    }
+    : {
+      fieldValues: { [node.fieldKey]: node.fieldValue },
+      ownerId: node.ownerId,
+      startDate: "2026-10-10",
+      endDate: "2026-10-20",
+    };
+  const context = await client.context(
+    { type: resourceType, id: resourceId },
+    { nodeId: node.nodeId, view: "focused", component: node.componentKey },
+  );
+  const contextVersion = resourceType === "project"
+    ? context.entityVersion ?? context.version
+    : context.version;
+  if (contextVersion === null || contextVersion === undefined) {
+    throw new Error(`${resourceType} 节点夹具缺少完成操作所需的并发版本`);
+  }
+  if (!node.completionSupported) {
+    await expect(planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType,
+      resourceId,
+      operation,
+      nodeId: node.nodeId,
+      componentKey: node.componentKey,
+      contextVersion,
+      arguments: argumentsValue,
+    })).rejects.toMatchObject({ code: "CAPABILITY_UNAVAILABLE" });
+    return false;
+  }
+  if (node.completionMode === null) {
+    throw new Error(`${resourceType} 节点完成能力缺少 completionMode，无法判断执行风险`);
+  }
+  const missingMetadata = node.completionRequiredMetadata.filter((key) =>
+    !Object.prototype.hasOwnProperty.call(argumentsValue, key));
+  if (missingMetadata.length > 0) {
+    throw new Error(`${resourceType} 节点完成夹具缺少后端声明的元数据：${missingMetadata.join(", ")}`);
+  }
+  const plan = await planResourceScenario(client, {
+    contractVersion: resourceScenarioContractVersion,
+    resourceType,
+    resourceId,
+    operation,
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    contextVersion,
+    arguments: argumentsValue,
+  });
+  expect(plan.phase).toBe("plan");
+  expect(plan.preview.command).toBe(operation);
+
+  const blocked = plan.preview.preconditions.some((precondition) =>
+    typeof precondition === "object" && precondition !== null && "blocking" in precondition
+      && (precondition as { blocking?: unknown }).blocking === true);
+  if (node.completionMode !== "AUTO_CONFIRM" || blocked) return false;
+
+  const first = await executeResourceScenario(client, {
+    resourceType,
+    resourceId,
+    operation,
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    expectedPatch: { [node.fieldKey]: node.fieldValue },
+    previewOperationId: plan.preview.operationId,
+    idempotencyKey,
+  });
+  expect(first.status).toBe("SUCCEEDED");
+  expect(first.verification).toEqual({
+    resourceReadback: true,
+    contextReadback: true,
+    patchApplied: true,
+    protectedFieldsUnchanged: true,
+  });
+  return true;
 }
 
 function scenarioContextVersion(

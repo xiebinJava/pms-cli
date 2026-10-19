@@ -31,11 +31,13 @@ export async function createTopicFixture(
   if (topicId === null) throw new Error("专题夹具创建成功响应缺少专题 ID");
   const readback = await client.get({ type: "topic", id: topicId });
   if (readback.resourceId !== topicId) throw new Error("专题夹具回读资源 ID 不一致");
-  const node = await findWritableNode(client, topicId);
+  const ownerId = viewer?.id;
+  if (!ownerId) throw new Error("专题夹具能力目录缺少当前用户 ID，无法完成节点验收");
+  const node = await findWritableNode(client, topicId, ownerId);
   return { topicId, title, created: true, node };
 }
 
-async function findWritableNode(client: PmsClient, topicId: number): Promise<WritableNodeFixture> {
+async function findWritableNode(client: PmsClient, topicId: number, ownerId: number): Promise<WritableNodeFixture> {
   const legacy = await client.context({ type: "topic", id: topicId });
   const nodeId = positiveNodeId(legacy.currentNode?.id, "专题夹具创建后没有当前节点，无法进行节点场景验收");
   const focused = await client.context(
@@ -63,6 +65,11 @@ async function findWritableNode(client: PmsClient, topicId: number): Promise<Wri
     componentKey: resolution.componentKey,
     fieldKey,
     fieldValue: fixtureValue(contract?.fieldContracts, fieldKey),
+    ownerId,
+    completionSupported: contract?.completionSupported === true
+      && contract?.completionCommand === "development-item.node.complete-with-data",
+    completionMode: typeof contract?.completionMode === "string" ? contract.completionMode : null,
+    completionRequiredMetadata: stringArray(contract?.completionRequiredMetadata),
   };
 }
 
