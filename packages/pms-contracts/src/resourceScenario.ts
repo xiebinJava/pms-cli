@@ -38,6 +38,7 @@ export const resourceScenarioInputSchema = z.object({
   resourceId: z.number().int().positive().optional(),
   operation: z.string().trim().min(1).max(160),
   nodeId: z.number().int().positive().optional(),
+  componentKey: z.string().trim().min(1).max(160).optional(),
   contextVersion: contextVersionSchema.optional(),
   arguments: z.record(z.string(), z.unknown()).default({}),
   draft: resourceScenarioDraftSchema.optional(),

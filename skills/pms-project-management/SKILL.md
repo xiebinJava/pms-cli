@@ -36,7 +36,7 @@ PMS 后端是唯一业务真源。所有数据、权限、流程模板、流程�
 ```text
 Claude/Codex/DeepSeek 理解自然语言
 → pms capabilities / pms context 读取 PMS 真源
-→ 外部模型生成 agent-progression/v1 草稿和 sourceRefs
+→ 外部模型生成 agent-progression/v2 草稿和 sourceRefs
 → pms scenario progression run 生成 preview
 → auto（低/中风险且用户已明确要求）或 confirm（高风险明确授权）
 → PMS 执行、回读、验证并返回 operationId/auditId
@@ -52,7 +52,7 @@ pms scenario progression run requirement <requirement-id> \
 
 pms scenario progression run requirement <requirement-id> \
   --intent UPDATE_NODE_FIELDS --execute-mode plan \
-  --node-id <node-id> --draft-json '<agent-progression/v1 draft>' \
+  --node-id <node-id> --draft-json '<agent-progression/v2 draft>' \
   --format json
 
 pms scenario progression run requirement <requirement-id> \

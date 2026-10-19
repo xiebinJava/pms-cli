@@ -10,10 +10,10 @@
 | --- | --- | --- |
 | Agent context | `agent-contract/v1`，先检查 capabilities 的 `agentContractVersion` 和 feature flag | 继续沿用 Agent context 合约，和 progression v2 独立演进 |
 | Resource scenario | `resource-scenario/v1` | 暂不升级，作为底层兼容适配边界 |
-| Agent progression input/plan/result | `agent-progression/v1` | 升级为 `agent-progression/v2` |
-| Agent progression run envelope | `agent-progression-run/v1` | 升级为 `agent-progression-run/v2` |
+| Agent progression input/plan/result | `agent-progression/v2` | v2 已冻结，后续只做兼容性增量 |
+| Agent progression run envelope | `agent-progression-run/v2` | v2 已冻结，后续只做兼容性增量 |
 | Draft provenance | 当前只在 CLI 本地校验 | `draft-provenance/v1`，由后端 preview 持久化和回显 |
-| 版本参数 | progression 当前仍可解析旧 `--version` | progression v2 使用 `--node-version` 和 `--context-version`；其他 CLI 命令的 `--version` 不受影响 |
+| 版本参数 | progression v2 拒绝旧 `--version` 并返回迁移错误 | progression 使用 `--node-version` 和 `--context-version`；其他 CLI 命令的 `--version` 不受影响 |
 
 ## 共同执行事实
 
@@ -21,14 +21,14 @@
 2. `pms capabilities` 是操作、风险、scope、输入字段和 refresh scope 的服务端目录。CLI 的 `CapabilityResolver` 不猜测未声明的操作。
 3. `planResourceScenario()` 的共同路径是：adapter 读取 context → normalize arguments → capabilities 校验 → adapter 校验 → PMS preview。
 4. `executeResourceScenario()` 要求 `previewOperationId` 和 `idempotencyKey`，执行后读取 resource/context 并生成 verification。当前 executor 仍需要 Milestone 2 才会把本次 expected patch 传给 verifier，当前 `patchApplied` 不能视为完整字段级证明。
-5. `progression run` 是四类资源的统一 Agent 入口，但当前代码仍是 v1；它复用 resource adapter，story 另外复用 story workbench adapter。
+5. `progression run` 是四类资源的统一 Agent 入口，当前协议为 v2；它复用 resource adapter，story 另外复用 story workbench adapter。
 
 ## 资源矩阵
 
 | 资源 | 当前支持的 adapter 操作 | context 读取事实 | saveContract / 节点边界 | preview / execute / readback | 当前测试与门禁 | 当前限制 |
 | --- | --- | --- | --- | --- | --- | --- |
 | project | `project.create`、`project.update`、`node.field.update`、`node.complete-with-data` | `project.create` 不读资源 context；资源级 update 读 project context；节点操作使用 focused context | 节点组件中的 project saveContract 是字段来源；`project-basic-info` 资源级路径不要求 current-node；节点写入必须校验当前节点和 workbench | 复用 resource-scenario preview/execute；回读 project detail + context，并检查资源/上下文身份、工作流稳定性和保护字段 | `tests/contract/project-resource-scenario.test.ts`、`tests/e2e/project-create.e2e.test.ts`、`tests/e2e/resource-scenario-real-pms.test.ts` | `project_node`、`project-basic-info`、`solution-decision`、`custom-fields` 的真实能力仍需以隔离 PMS capabilities/context 矩阵确认；字段级 patch 验证留到 Milestone 2 |
-| requirement | `requirement.update`、`requirement.analysis.save`、`requirement.execution-target.link/change/unlink`、`development-item.node.field.update`、`development-item.node.complete-with-data` | 资源级操作读普通 context；analysis save 和节点 update/complete 读 focused context | 节点 saveContract 提供 itemType、itemId、nodeId、version、fieldValuesPath、writable/protected fields；节点写入要求请求 nodeId 等于 currentNode.id | resource-scenario executor 回读 requirement detail + context；analysis 和节点 adapter 都做资源/节点/字段保护校验 | `tests/contract/requirement-resource-scenario.test.ts`、`tests/e2e/resource-scenario-real-pms.test.ts`、`tests/e2e/requirement-node-autofill.e2e.test.ts`、`tests/e2e/agent-progression-run.e2e.test.ts` | 当前 progression/progression-run 仍是 v1；真实节点能否写入取决于 PMS 当前节点 saveContract 和 capability |
+| requirement | `requirement.update`、`requirement.analysis.save`、`requirement.execution-target.link/change/unlink`、`development-item.node.field.update`、`development-item.node.complete-with-data` | 资源级操作读普通 context；analysis save 和节点 update/complete 读 focused context | 节点 saveContract 提供 itemType、itemId、nodeId、version、fieldValuesPath、writable/protected fields；节点写入要求请求 nodeId 等于 currentNode.id | resource-scenario executor 回读 requirement detail + context；analysis 和节点 adapter 都做资源/节点/字段保护校验 | `tests/contract/requirement-resource-scenario.test.ts`、`tests/e2e/resource-scenario-real-pms.test.ts`、`tests/e2e/requirement-node-autofill.e2e.test.ts`、`tests/e2e/agent-progression-run.e2e.test.ts` | 真实节点能否写入取决于 PMS 当前节点 saveContract 和 capability；v2 只冻结协议，不替代后端能力声明 |
 | topic | `topic.create`、`topic.update`、`topic.project.link`、`development-item.node.field.update`、`development-item.node.complete-with-data` | create 不读 context；资源级操作读 topic context，并按关联项目再读 project context；节点操作读 focused topic context | topic projection 与 target project context 合并；节点 saveContract 提供组件、字段路径、版本和关联项目节点约束；无 saveContract 只能读 | 回读 topic detail + topic context，额外检查 relation consistency 和 workflow stability | `tests/contract/topic-resource-scenario.test.ts`、`tests/e2e/resource-scenario-real-pms.test.ts` | topic 节点可写组件、关联项目节点和完成能力需要真实 capabilities/context 确认；不能从默认模板猜字段 |
 | story | progression 通过 story workbench adapter；底层命令是 `development-item.node.field.update`，完成时使用 saveContract 的 completion command | story progression 总是读取 focused context，并绑定后端声明的 `story-node-workbench` 组件；story workbench 独立路径也读取 focused component | story 当前组件 key、variant、fieldValuesPath、writableFields 和 completion metadata 均由 saveContract 提供；外部 componentKey 不能绕过后端 policy | story workbench 自己执行 preview/execute，并回读 story detail、focused context 和组件内容；统一 progression 结果再投影为 Agent envelope | `tests/contract/story-workbench-contract.test.ts`、`tests/contract/story-workbench-cli.test.ts`、`tests/e2e/story-acceptance-real-pms.test.ts`、`tests/e2e/orchestrator-story-node.e2e.test.ts` | 当前 story adapter 仍有固定组件实现，Task 1.1 才统一 resolver；story 专属异常仍需并入统一 in-band 映射 |
 
@@ -53,5 +53,5 @@ Task 0.1 运行时必须记录以下代码事实，不把“适配器支持”�
 ## Milestone 0 结论
 
 - 当前四类资源均已有 adapter 或 workbench 路径，但只有 requirement/topic/story 的部分场景已有稳定节点写入事实；project 节点能力需要用真实 catalog 再确认。
-- 统一 progression v2、sourceRef 实体校验、provenance 持久化和 expectedVersions 绑定都是后续任务，不能从本矩阵推断为当前已实现。
+- 统一 progression v2 已完成协议冻结；sourceRef 实体校验、provenance 持久化和 expectedVersions 绑定仍是后续任务，不能从本矩阵推断为当前已实现。
 - Orchestrator 现有会话与 PlanView 只作为后续复用目标，本矩阵不把四资源会话映射写成现状。

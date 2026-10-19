@@ -257,6 +257,35 @@ describe("scenario progression run CLI", () => {
     });
   });
 
+  it("defaults progression run to plan mode and never writes implicitly", async () => {
+    const client = storyClient();
+    const output = cli(client);
+    await runCli([
+      "scenario", "progression", "run", "story", "12", "--intent", "UPDATE_NODE_FIELDS",
+      "--draft-json", draftJson(),
+    ], output.deps);
+
+    expect(output.stderr).toEqual([]);
+    expect(JSON.parse(output.stdout[0] ?? "{}").data).toMatchObject({
+      contractVersion: agentProgressionRunContractVersion,
+      status: "PLAN_READY",
+    });
+    expect(client.preview).toHaveBeenCalledOnce();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("returns a migration error when progression still receives the retired --version value", async () => {
+    const output = cli(storyClient());
+    await runCli([
+      "scenario", "progression", "plan", "story", "12", "--intent", "READ_CONTEXT", "--version", "1",
+    ], output.deps);
+
+    expect(JSON.parse(output.stderr[0] ?? "{}").error).toMatchObject({
+      code: "MIGRATION_REQUIRED",
+    });
+    expect(output.deps.createRuntime).not.toHaveBeenCalled();
+  });
+
   it("passes an automatic write draft through preview and execute", async () => {
     const client = storyClient();
     const output = cli(client);

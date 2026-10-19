@@ -262,6 +262,14 @@ describe("agent progression plan", () => {
       executeMode: "auto",
       previewOperationId: "preview-requirement-complete",
       idempotencyKey: "requirement-complete-1",
+      draft: {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: { testResult: "PASS" },
+        requestedCompletion: true,
+        ownerId: 2,
+        startDate: "2026-10-10",
+        endDate: "2026-10-20",
+      },
     });
 
     expect(result.status).toBe("SUCCEEDED");

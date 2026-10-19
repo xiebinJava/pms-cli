@@ -116,6 +116,11 @@ export async function executeStoryProgression(
     resourceType: "story",
     resourceId: input.resourceId,
     intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    nodeVersion: binding.version,
+    entityVersion: typeof binding.context.entityVersion === "number" ? binding.context.entityVersion : null,
+    workflowInstanceVersion: typeof binding.context.meta?.workflowInstanceVersion === "number"
+      ? binding.context.meta.workflowInstanceVersion : null,
     plan: null,
     operation: result.operation ?? null,
     readback: result.readback ?? null,
@@ -145,6 +150,7 @@ function waitingForConfirmation(
     resourceType: "story",
     resourceId: input.resourceId,
     intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
     plan: null,
     operation: null,
     readback: null,
@@ -187,9 +193,6 @@ async function readStoryBinding(client: PmsClient, input: ParsedAgentProgression
   if (!isNonNegativeInteger(version) || !isStoryVariant(variant)
     || raw.command !== "development-item.node.field.update") {
     throw new Error("故事当前节点 saveContract 不完整");
-  }
-  if (input.contextVersion !== undefined && String(context.version) !== input.contextVersion) {
-    throw new Error(`故事上下文版本 ${context.version ?? "无"} 与请求版本 ${input.contextVersion} 不一致`);
   }
   return {
     context,

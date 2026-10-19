@@ -71,11 +71,11 @@ npm run verify:real-pms:cli
 
 ## 节点详情自动补全 E2E
 
-需求和故事节点使用同一条 Agent progression 链。当前仓库基线仍是 v1；Task 0.2 完成后会整体切换到 `agent-progression/v2` / `agent-progression-run/v2`，progression 命令的 `--version` 改为 `--node-version`，上下文关联使用 `--context-version`。本 runbook 的真实 E2E 示例必须和对应构建产物同批次升级，不能用 v1 CLI 调 v2 后端。
+需求和故事节点使用同一条 Agent progression 链。当前仓库已切换到 `agent-progression/v2` / `agent-progression-run/v2`；progression 命令使用 `--node-version` 传递节点版本，使用 `--context-version` 传递会话/审计关联信息，旧的 `--version` 参数会返回迁移错误。真实 E2E 示例必须和对应构建产物同批次升级，不能用 v1 CLI 调 v2 后端。
 
 ```text
 pms context --view focused
-  → Agent draft（目标 v2；fieldSources + requestedCompletion）
+  → Agent draft（v2；fieldSources + requestedCompletion）
   → scenario progression plan
   → development-item.node.complete-with-data preview
   → scenario progression execute

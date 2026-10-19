@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentProgressionContractVersion,
   agentProgressionRunContractVersion,
   agentProgressionRunResultSchema,
 } from "../../packages/pms-contracts/src/index.js";
 
 function plan(writeDecision: "READY" | "NEEDS_INPUT" | "WAITING_CONFIRMATION" = "READY") {
   return {
-    contractVersion: "agent-progression/v1" as const,
+    contractVersion: agentProgressionContractVersion,
     phase: "plan" as const,
     resourceType: "requirement" as const,
     resourceId: 33,
@@ -46,15 +47,15 @@ describe("agent progression run contract", () => {
       warnings: [],
     });
 
-    expect(parsed.contractVersion).toBe("agent-progression-run/v1");
+    expect(parsed.contractVersion).toBe("agent-progression-run/v2");
     expect(parsed.status).toBe("CONTEXT_READY");
   });
 
-  it("accepts a preview-only missing-input result", () => {
+  it("accepts a rejected completion request with an explicit reason", () => {
     const parsed = agentProgressionRunResultSchema.parse({
       contractVersion: agentProgressionRunContractVersion,
       phase: "run",
-      status: "NEEDS_INPUT",
+      status: "REJECTED",
       resourceType: "story",
       resourceId: 34,
       intent: "COMPLETE_NODE",
@@ -67,9 +68,11 @@ describe("agent progression run contract", () => {
       readback: null,
       verification: null,
       warnings: ["缺少验收结论"],
+      rejectionReason: "COMPLETION_NOT_REQUESTED",
     });
 
     expect(parsed.plan?.writeDecision).toBe("NEEDS_INPUT");
+    expect(parsed.rejectionReason).toBe("COMPLETION_NOT_REQUESTED");
     expect(parsed.result).toBeNull();
   });
 
@@ -106,7 +109,7 @@ describe("agent progression run contract", () => {
       writeDecision: "READY",
       plan: { ...plan(), resourceType: "topic", resourceId: 12 },
       result: {
-        contractVersion: "agent-progression/v1",
+        contractVersion: agentProgressionContractVersion,
         phase: "execute",
         status: "SUCCEEDED",
         resourceType: "topic",

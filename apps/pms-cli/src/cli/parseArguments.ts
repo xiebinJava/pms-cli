@@ -10,6 +10,7 @@ const VALUE_OPTIONS = new Set([
   "idempotency-key",
   "preview-operation-id",
   "node-id",
+  "node-version",
   "view",
   "component",
   "version",

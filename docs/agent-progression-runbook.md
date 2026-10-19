@@ -9,7 +9,7 @@
   ↓
 外部 Agent：读取能力和 focused context，识别当前节点与 saveContract
   ↓
-外部 Agent：生成 agent-progression/v1 draft，附 fieldSources.sourceRefs
+外部 Agent：生成 agent-progression/v2 draft，附 fieldSources.sourceRefs
   ↓
 pms-cli：progression run ... --execute-mode plan
   ↓
@@ -49,7 +49,7 @@ pms scenario progression run requirement 33 \
   --intent UPDATE_NODE_FIELDS \
   --execute-mode plan \
   --node-id <context.currentNode.id> \
-  --draft-json '<agent-progression/v1 draft>' \
+  --draft-json '<agent-progression/v2 draft>' \
   --format json
 ```
 
@@ -91,7 +91,7 @@ pms scenario progression run requirement 33 \
 
 ## 结果处理
 
-`agent-progression-run/v1` 返回一个稳定 JSON：
+`agent-progression-run/v2` 返回一个稳定 JSON。progression 命令使用 `--node-version` 传递节点版本，使用 `--context-version` 传递会话/审计关联信息；旧的 `--version` 参数会返回迁移错误：
 
 - `CONTEXT_READY`：只读上下文完成。
 - `PLAN_READY`：已生成计划和 preview，没有写入。
@@ -115,6 +115,6 @@ pms scenario progression run project --name "PMS 项目管理系统" \
   --intent UPDATE_NODE_FIELDS \
   --execute-mode plan \
   --node-id <context.currentNode.id> \
-  --draft-json '<agent-progression/v1 draft>' \
+  --draft-json '<agent-progression/v2 draft>' \
   --format json
 ```

@@ -293,6 +293,20 @@ describe("agent progression run", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("rejects COMPLETE_NODE when the Agent did not explicitly request completion", async () => {
+    const client = requirementClient();
+    const result = await runAgentProgression(client, input("auto", {
+      draft: { ...draft(), requestedCompletion: false },
+    }));
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.rejectionReason).toBe("COMPLETION_NOT_REQUESTED");
+    expect(result.plan?.preview).toBeNull();
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
   it("does not execute a high-risk draft in auto mode", async () => {
     const client = requirementClient("high");
     const result = await runAgentProgression(client, input("auto", {
@@ -388,7 +402,7 @@ describe("agent progression run", () => {
 
   it("reports project node completion as unavailable without preview or execute", async () => {
     const client = projectClient();
-    await expect(runAgentProgression(client, {
+    const result = await runAgentProgression(client, {
       contractVersion: agentProgressionContractVersion,
       resourceType: "project",
       resourceId: 42,
@@ -402,8 +416,11 @@ describe("agent progression run", () => {
         assumptions: [],
         unresolvedDecisions: [],
         patch: { solutionPackage: "新方案" },
+        requestedCompletion: true,
       },
-    })).rejects.toMatchObject({ code: "CAPABILITY_UNAVAILABLE" });
+    });
+    expect(result.status).toBe("CAPABILITY_UNAVAILABLE");
+    expect(result.warnings.join(" ")).toMatch(/CAPABILITY_UNAVAILABLE/);
     expect(client.preview).not.toHaveBeenCalled();
     expect(client.executePreview).not.toHaveBeenCalled();
   });
@@ -424,6 +441,7 @@ describe("agent progression run", () => {
         assumptions: [],
         unresolvedDecisions: [],
         patch: { solutionPackage: "新方案" },
+        requestedCompletion: true,
       },
     });
 

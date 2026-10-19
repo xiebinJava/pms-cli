@@ -29,11 +29,11 @@ Claude/Codex 理解请求
 pms scenario progression run requirement 33 --intent READ_CONTEXT --format json
 pms scenario progression run requirement 33 --intent UPDATE_NODE_FIELDS \
   --execute-mode plan --node-id <node-id> \
-  --draft-json '<agent-progression/v1 draft>' --format json
+  --draft-json '<agent-progression/v2 draft>' --format json
 pms scenario progression run project --name "PMS 项目管理系统" --intent READ_CONTEXT --format json
 pms scenario progression run project --name "PMS 项目管理系统" --intent UPDATE_NODE_FIELDS \
   --execute-mode plan --node-id <node-id> \
-  --draft-json '<agent-progression/v1 draft>' --format json
+  --draft-json '<agent-progression/v2 draft>' --format json
 ```
 
 这里由 Claude/Codex/DeepSeek 负责把自然语言整理成草稿，CLI 只读取 PMS、生成 preview、执行并回读。模型凭据留在外部工作台，不传入 CLI；写入字段必须引用本次 context 返回的 `saveContract`，不能猜测 nodeId 或字段 key。低/中风险且用户已明确要求时可使用 `--execute-mode auto`；高风险必须使用 `confirm`，并始终携带幂等键。

@@ -5,12 +5,17 @@ import type {
   ParsedAgentProgressionInput,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import {
-  agentProgressionInputSchema,
   agentProgressionRunContractVersion,
   agentProgressionRunResultSchema,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
-import { executeAgentProgression, planAgentProgression } from "./agentProgression.js";
+import {
+  AgentProgressionMigrationError,
+  executeAgentProgression,
+  parseAgentProgressionInput,
+  planAgentProgression,
+} from "./agentProgression.js";
+import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
 
 /**
@@ -22,11 +27,43 @@ export async function runAgentProgression(
   client: PmsClient,
   input: unknown,
 ): Promise<AgentProgressionRunResult> {
-  const parsed = agentProgressionInputSchema.parse(input);
+  const parsed = parseAgentProgressionInput(input);
+
+  try {
+    return await runParsedAgentProgression(client, parsed);
+  } catch (error) {
+    if (error instanceof AgentProgressionMigrationError) throw error;
+    if (!(error instanceof ResourceScenarioError)) throw error;
+    const status = error.code === "CONTEXT_CONFLICT"
+      ? "CONFLICT"
+      : error.code === "WRITE_RESULT_UNKNOWN"
+        ? "WRITE_RESULT_UNKNOWN"
+        : "CAPABILITY_UNAVAILABLE";
+    return baseResult(parsed, status, null, null, {
+      warnings: [error.message],
+    });
+  }
+}
+
+async function runParsedAgentProgression(
+  client: PmsClient,
+  parsed: ParsedAgentProgressionInput,
+): Promise<AgentProgressionRunResult> {
 
   if (parsed.intent === "READ_CONTEXT") {
     const result = await executeAgentProgression(client, parsed);
     return resultForRead(parsed, result);
+  }
+
+  // Completion intent is rejected before idempotency validation when the
+  // Agent did not explicitly request a completion. This keeps the safety
+  // decision deterministic and guarantees no preview or write is created.
+  if (parsed.intent === "COMPLETE_NODE" && parsed.draft?.requestedCompletion !== true) {
+    const plan = await planAgentProgression(client, parsed);
+    return baseResult(parsed, "REJECTED", plan, null, {
+      rejectionReason: plan.rejectionReason,
+      warnings: plan.warnings,
+    });
   }
 
   if (parsed.executeMode !== "plan" && !parsed.idempotencyKey) {
@@ -36,6 +73,13 @@ export async function runAgentProgression(
   }
 
   const plan = await planAgentProgression(client, parsed);
+  if (plan.rejectionReason) {
+    return baseResult(parsed, "REJECTED", plan, null, {
+      previewOperationId: null,
+      rejectionReason: plan.rejectionReason,
+      warnings: plan.warnings,
+    });
+  }
   const blockedStatus = statusForDecision(plan.writeDecision);
   if (blockedStatus) {
     return baseResult(parsed, blockedStatus, plan, null, {
@@ -97,12 +141,21 @@ function baseResult(
     writeDecision: plan?.writeDecision ?? "READY",
     plan,
     result,
+    ...((input.componentKey ?? result?.componentKey) === undefined
+      ? {} : { componentKey: input.componentKey ?? result?.componentKey }),
+    ...((plan?.nodeVersion ?? result?.nodeVersion) === undefined
+      ? {} : { nodeVersion: plan?.nodeVersion ?? result?.nodeVersion }),
+    ...((plan?.entityVersion ?? result?.entityVersion) === undefined
+      ? {} : { entityVersion: plan?.entityVersion ?? result?.entityVersion }),
+    ...((plan?.workflowInstanceVersion ?? result?.workflowInstanceVersion) === undefined
+      ? {} : { workflowInstanceVersion: plan?.workflowInstanceVersion ?? result?.workflowInstanceVersion }),
     previewOperationId: null,
     operationId: null,
     auditId: null,
     readback: null,
     verification: null,
     warnings: [],
+    ...(overrides.rejectionReason === undefined ? {} : { rejectionReason: overrides.rejectionReason }),
     userFacing: buildUserFacingDisplay({
       resourceType: input.resourceType,
       context: result?.readback?.context ?? plan?.context,

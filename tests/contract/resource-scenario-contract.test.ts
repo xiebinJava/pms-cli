@@ -12,6 +12,7 @@ const baseInput = {
   resourceType: "topic" as const,
   resourceId: 12,
   operation: "topic.update",
+      componentKey: "topic-node-workbench",
   arguments: { topicId: 12, title: "新的专题名称" },
 };
 

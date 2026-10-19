@@ -8,7 +8,7 @@ import { resourceDetailSchema } from "./query.js";
 import { analysisItemSchema } from "./scenario.js";
 import { userFacingDisplaySchema } from "./userFacing.js";
 
-export const agentProgressionContractVersion = "agent-progression/v1" as const;
+export const agentProgressionContractVersion = "agent-progression/v2" as const;
 
 export const agentProgressionResourceTypeSchema = z.enum([
   "project",
@@ -38,6 +38,13 @@ export const agentProgressionWriteDecisionSchema = z.enum([
   "CAPABILITY_UNAVAILABLE",
 ]);
 export type AgentProgressionWriteDecision = z.infer<typeof agentProgressionWriteDecisionSchema>;
+
+export const agentProgressionRejectionReasonSchema = z.enum([
+  "COMPLETION_NOT_REQUESTED",
+  "PROVENANCE_INVALID",
+  "PROVENANCE_TOO_LARGE",
+]);
+export type AgentProgressionRejectionReason = z.infer<typeof agentProgressionRejectionReasonSchema>;
 
 export const agentProgressionFieldChangeSchema = z.object({
   key: z.string().trim().min(1),
@@ -80,7 +87,9 @@ export const agentProgressionInputSchema = z.object({
   resourceType: agentProgressionResourceTypeSchema,
   resourceId: z.number().int().positive(),
   nodeId: z.number().int().positive().optional(),
+  nodeVersion: z.number().int().nonnegative().optional(),
   contextVersion: contextVersionSchema.optional(),
+  componentKey: z.string().trim().min(1).max(160).optional(),
   intent: agentProgressionIntentSchema,
   draft: agentProgressionDraftSchema.optional(),
   executeMode: agentProgressionExecuteModeSchema.default("plan"),
@@ -95,6 +104,10 @@ export const agentProgressionPlanSchema = z.object({
   resourceType: agentProgressionResourceTypeSchema,
   resourceId: z.number().int().positive(),
   intent: agentProgressionIntentSchema,
+  componentKey: z.string().trim().min(1).max(160).optional(),
+  nodeVersion: z.number().int().nonnegative().nullable().optional(),
+  entityVersion: z.number().int().nonnegative().nullable().optional(),
+  workflowInstanceVersion: z.number().int().nonnegative().nullable().optional(),
   operation: z.string().trim().min(1).nullable(),
   context: z.unknown().nullable(),
   normalizedArguments: z.record(z.string(), z.unknown()).default({}),
@@ -107,6 +120,7 @@ export const agentProgressionPlanSchema = z.object({
   requiresConfirmation: z.boolean(),
   executionMode: agentProgressionExecutionModeSchema,
   warnings: z.array(z.string()).default([]),
+  rejectionReason: agentProgressionRejectionReasonSchema.optional(),
   userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
@@ -126,6 +140,10 @@ export const agentProgressionResultSchema = z.object({
   resourceType: agentProgressionResourceTypeSchema,
   resourceId: z.number().int().positive(),
   intent: agentProgressionIntentSchema,
+  componentKey: z.string().trim().min(1).max(160).optional(),
+  nodeVersion: z.number().int().nonnegative().nullable().optional(),
+  entityVersion: z.number().int().nonnegative().nullable().optional(),
+  workflowInstanceVersion: z.number().int().nonnegative().nullable().optional(),
   plan: agentProgressionPlanSchema.nullable(),
   operation: operationResultSchema.nullable(),
   readback: z.object({
@@ -134,6 +152,7 @@ export const agentProgressionResultSchema = z.object({
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
   warnings: z.array(z.string()).default([]),
+  rejectionReason: agentProgressionRejectionReasonSchema.optional(),
   userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 
@@ -143,6 +162,7 @@ export const agentProgressionDraftResultSchema = z.object({
   resourceType: agentProgressionResourceTypeSchema,
   resourceId: z.number().int().positive(),
   intent: z.enum(["UPDATE_NODE_FIELDS", "COMPLETE_NODE"]),
+  componentKey: z.string().trim().min(1).max(160).optional(),
   contextVersion: z.string().trim().min(1),
   draft: agentProgressionDraftSchema,
   diagnostics: z.object({

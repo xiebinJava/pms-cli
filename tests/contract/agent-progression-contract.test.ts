@@ -27,12 +27,39 @@ describe("agent progression contract", () => {
           contractVersion: agentProgressionContractVersion,
           resourceType,
           resourceId: 12,
+          componentKey: "story-node-workbench",
+          nodeVersion: 4,
           intent,
           draft,
           executeMode: "auto",
         })).toMatchObject({ resourceType, intent, executeMode: "auto" });
       }
     }
+  });
+
+  it("rejects the retired v1 input contract and exposes the v2 version axes", () => {
+    expect(agentProgressionContractVersion).toBe("agent-progression/v2");
+    expect(agentProgressionInputSchema.safeParse({
+      contractVersion: "agent-progression/v1",
+      resourceType: "story",
+      resourceId: 12,
+      intent: "READ_CONTEXT",
+    }).success).toBe(false);
+
+    const parsed = agentProgressionInputSchema.parse({
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 12,
+      nodeVersion: 4,
+      contextVersion: "conversation:42",
+      componentKey: "story-node-workbench",
+      intent: "READ_CONTEXT",
+    });
+    expect(parsed).toMatchObject({
+      nodeVersion: 4,
+      contextVersion: "conversation:42",
+      componentKey: "story-node-workbench",
+    });
   });
 
   it("keeps plan policy machine-readable", () => {
@@ -42,6 +69,11 @@ describe("agent progression contract", () => {
       resourceType: "story",
       resourceId: 12,
       intent: "COMPLETE_NODE",
+      componentKey: "story-node-workbench",
+      nodeVersion: 4,
+      entityVersion: 7,
+      workflowInstanceVersion: 2,
+      rejectionReason: "COMPLETION_NOT_REQUESTED",
       operation: "development-item.node.complete-with-data",
       context: {},
       normalizedArguments: {},

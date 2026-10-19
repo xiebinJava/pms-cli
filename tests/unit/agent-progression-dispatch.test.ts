@@ -65,7 +65,9 @@ describe("agent progression dispatch", () => {
       resourceType: "requirement",
       resourceId: 12,
       intent: "COMPLETE_NODE",
-      draft: { facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: {} },
+      draft: {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: {}, requestedCompletion: true,
+      },
     })).rejects.toMatchObject({ code: "CAPABILITY_UNAVAILABLE" });
   });
 

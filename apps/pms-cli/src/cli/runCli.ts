@@ -74,6 +74,7 @@ import {
   planResourceScenario,
 } from "../commands/scenarios/resourceScenarioExecutor.js";
 import {
+  AgentProgressionMigrationError,
   executeAgentProgression,
   planAgentProgression,
   validateAgentProgressionDraft,
@@ -114,8 +115,8 @@ const HELP = [
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
   "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
-  "  pms scenario progression draft|plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
-  "  pms scenario progression run <project|requirement|topic|story> [<id>|--name <exact-name>] --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--execute-mode plan|auto|confirm] [--idempotency-key <key>]",
+  "  pms scenario progression draft|plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--node-version <version>] [--context-version <version>] [--component <key>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
+  "  pms scenario progression run <project|requirement|topic|story> [<id>|--name <exact-name>] --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--node-version <version>] [--context-version <version>] [--component <key>] [--execute-mode plan|auto|confirm] [--idempotency-key <key>]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update execute --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --arguments-json <patch-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
@@ -179,6 +180,8 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
     const pmsError = error instanceof PmsClientError ? error : undefined;
     const code = error instanceof ResourceScenarioError
       ? error.code
+      : error instanceof AgentProgressionMigrationError
+      ? error.code
       : error instanceof CliArgumentError
       ? error.code
       : pmsError
@@ -192,6 +195,7 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
         code,
         message,
         requestId: effectiveRequestId,
+        ...(error instanceof AgentProgressionMigrationError ? { details: error.details } : {}),
         ...(pmsError?.details ? { details: pmsError.details } : {}),
       },
       meta: { clientId: "pms-cli", refreshScopes: [], requestId: effectiveRequestId },
@@ -808,6 +812,12 @@ async function dispatchAgentProgression(
     throw new CliArgumentError("scenario progression 需要 draft、plan、execute、run 或 shadow");
   }
   if (phase === "run") return dispatchAgentProgressionRun(invocation, deps, requestId, rawResourceType, rawResourceId);
+  if (invocation.options.version !== undefined) {
+    throw new AgentProgressionMigrationError(
+      "progression 命令的 --version 已删除，请使用 --node-version；上下文关联请使用 --context-version",
+      { retiredOption: "--version", replacement: ["--node-version", "--context-version"] },
+    );
+  }
   const resourceType = parseAgentProgressionResourceType(rawResourceType);
   const resourceId = requireId(rawResourceId);
   if (phase === "shadow") {
@@ -841,8 +851,11 @@ async function dispatchAgentProgression(
       ...(draft === undefined ? {} : { draft }),
       ...(invocation.options["node-id"] === undefined
         ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
-      ...(invocation.options.version === undefined
-        ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+      ...(invocation.options["node-version"] === undefined
+        ? {} : { nodeVersion: nonNegativeInteger(invocation.options["node-version"], "node-version") }),
+      ...(invocation.options["context-version"] === undefined
+        ? {} : { contextVersion: invocation.options["context-version"] }),
+      ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
       requestId,
     });
   }
@@ -860,8 +873,11 @@ async function dispatchAgentProgression(
       ...(draft === undefined ? {} : { draft }),
       ...(invocation.options["node-id"] === undefined
         ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
-      ...(invocation.options.version === undefined
-        ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+      ...(invocation.options["node-version"] === undefined
+        ? {} : { nodeVersion: nonNegativeInteger(invocation.options["node-version"], "node-version") }),
+      ...(invocation.options["context-version"] === undefined
+        ? {} : { contextVersion: invocation.options["context-version"] }),
+      ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
       requestId,
     });
   }
@@ -879,8 +895,11 @@ async function dispatchAgentProgression(
     ...(draft === undefined ? {} : { draft }),
     ...(invocation.options["node-id"] === undefined
       ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
-    ...(invocation.options.version === undefined
-      ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+      ...(invocation.options["node-version"] === undefined
+      ? {} : { nodeVersion: nonNegativeInteger(invocation.options["node-version"], "node-version") }),
+      ...(invocation.options["context-version"] === undefined
+      ? {} : { contextVersion: invocation.options["context-version"] }),
+      ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
     requestId,
   });
 }
@@ -892,12 +911,18 @@ async function dispatchAgentProgressionRun(
   rawResourceType: string | undefined,
   rawResourceId: string | undefined,
 ): Promise<unknown> {
+  if (invocation.options.version !== undefined) {
+    throw new AgentProgressionMigrationError(
+      "progression run 的 --version 已删除，请使用 --node-version；上下文关联请使用 --context-version",
+      { retiredOption: "--version", replacement: ["--node-version", "--context-version"] },
+    );
+  }
   const resourceType = parseAgentProgressionRunResourceType(rawResourceType);
   if (invocation.options["preview-operation-id"] !== undefined) {
     throw new CliArgumentError("progression run 不接受 --preview-operation-id；它会在本次运行中生成 fresh preview");
   }
   const intent = parseAgentProgressionIntent(requiredOption(invocation.options, "intent"));
-  const executeMode = parseAgentProgressionExecuteMode(invocation.options["execute-mode"] ?? "auto");
+  const executeMode = parseAgentProgressionExecuteMode(invocation.options["execute-mode"] ?? "plan");
   const draft = parseProgressionDraft(invocation.options["draft-json"]);
   if (intent !== "READ_CONTEXT" && draft === undefined) {
     throw new CliArgumentError("progression run 的写入意图必须提供 --draft-json");
@@ -919,8 +944,11 @@ async function dispatchAgentProgressionRun(
     ...(draft === undefined ? {} : { draft }),
     ...(invocation.options["node-id"] === undefined
       ? {} : { nodeId: positiveInteger(invocation.options["node-id"], "node-id") }),
-    ...(invocation.options.version === undefined
-      ? {} : { contextVersion: nonNegativeInteger(invocation.options.version, "version") }),
+    ...(invocation.options["node-version"] === undefined
+      ? {} : { nodeVersion: nonNegativeInteger(invocation.options["node-version"], "node-version") }),
+    ...(invocation.options["context-version"] === undefined
+      ? {} : { contextVersion: invocation.options["context-version"] }),
+    ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
     ...(invocation.options["idempotency-key"] === undefined
       ? {} : { idempotencyKey: invocation.options["idempotency-key"] }),
     requestId,

@@ -32,14 +32,44 @@ import "./requirementScenarioAdapter.js";
 import "./topicScenarioAdapter.js";
 import "./projectScenarioAdapter.js";
 
+export class AgentProgressionMigrationError extends Error {
+  readonly code = "MIGRATION_REQUIRED" as const;
+
+  constructor(message: string, readonly details: Record<string, unknown> = {}) {
+    super(message);
+    this.name = "AgentProgressionMigrationError";
+  }
+}
+
+export function parseAgentProgressionInput(input: unknown) {
+  if (isRecord(input) && typeof input.contractVersion === "string"
+    && input.contractVersion !== agentProgressionContractVersion) {
+    throw new AgentProgressionMigrationError(
+      `Agent progression 合约 ${input.contractVersion} 已停止服务，请升级到 ${agentProgressionContractVersion}`,
+      { receivedContractVersion: input.contractVersion, requiredContractVersion: agentProgressionContractVersion },
+    );
+  }
+  return agentProgressionInputSchema.parse(input);
+}
+
 export async function planAgentProgression(
   client: PmsClient,
   input: unknown,
 ): Promise<AgentProgressionPlan> {
-  const parsed = agentProgressionInputSchema.parse(input);
+  const parsed = parseAgentProgressionInput(input);
   if (parsed.draft) assertSafeAgentPayload(parsed.draft);
   if (parsed.intent === "READ_CONTEXT") return planReadContext(client, parsed);
-  if (parsed.resourceType === "story") return planStoryProgression(client, parsed);
+  if (parsed.intent === "COMPLETE_NODE" && parsed.draft?.requestedCompletion !== true) {
+    return planRejectedCompletion(parsed);
+  }
+  if (parsed.resourceType === "story") {
+    const storyPlan = await planStoryProgression(client, parsed);
+    return {
+      ...storyPlan,
+      ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+      ...versionFields(storyPlan.context, parsed.nodeId),
+    };
+  }
 
   const operation = resourceOperation(parsed.resourceType, parsed.intent);
   const declaredCapability = await actionFor(client, operation);
@@ -62,6 +92,8 @@ export async function planAgentProgression(
       resourceType: parsed.resourceType,
       resourceId: parsed.resourceId,
       intent: parsed.intent,
+      ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+      ...versionFields(preflightContext, parsed.nodeId),
       operation,
       context: preflightContext,
       normalizedArguments: {},
@@ -89,8 +121,8 @@ export async function planAgentProgression(
     resourceId: parsed.resourceId,
     operation,
     ...(parsed.nodeId === undefined ? {} : { nodeId: parsed.nodeId }),
-    ...(parsed.contextVersion === undefined ? {} : { contextVersion: parsed.contextVersion }),
     arguments: progressionArguments(parsed),
+    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
     ...(parsed.draft === undefined ? {} : { draft: toResourceDraft(parsed) }),
     requestId: parsed.requestId,
   });
@@ -109,6 +141,8 @@ export async function planAgentProgression(
     resourceType: parsed.resourceType,
     resourceId: parsed.resourceId,
     intent: parsed.intent,
+    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+    ...versionFields(preflightContext, parsed.nodeId),
     operation,
     context: resourcePlan.context,
     normalizedArguments: resourcePlan.normalizedArguments,
@@ -140,7 +174,7 @@ export async function validateAgentProgressionDraft(
   client: PmsClient,
   input: unknown,
 ) {
-  const parsed = agentProgressionInputSchema.parse(input);
+  const parsed = parseAgentProgressionInput(input);
   if (parsed.intent === "READ_CONTEXT") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "READ_CONTEXT 不需要 draft 校验");
   }
@@ -160,6 +194,7 @@ export async function validateAgentProgressionDraft(
     resourceType: parsed.resourceType,
     resourceId: parsed.resourceId,
     intent: parsed.intent,
+    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
     contextVersion: String(readback.context.version),
     draft: parsed.draft,
     diagnostics,
@@ -171,9 +206,12 @@ export async function executeAgentProgression(
   client: PmsClient,
   input: unknown,
 ): Promise<AgentProgressionResult> {
-  const parsed = agentProgressionInputSchema.parse(input);
+  const parsed = parseAgentProgressionInput(input);
   if (parsed.draft) assertSafeAgentPayload(parsed.draft);
   if (parsed.intent === "READ_CONTEXT") return readContext(client, parsed);
+  if (parsed.intent === "COMPLETE_NODE" && parsed.draft?.requestedCompletion !== true) {
+    return rejectedCompletionResult(parsed);
+  }
   if (!parsed.previewOperationId || !parsed.idempotencyKey) {
     throw new Error("Agent Progression execute 必须提供 previewOperationId 和 idempotencyKey");
   }
@@ -199,6 +237,7 @@ export async function executeAgentProgression(
     resourceType: parsed.resourceType,
     resourceId: parsed.resourceId,
     intent: parsed.intent,
+    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
     plan: null,
     operation: result.operation,
     readback: result.readback,
@@ -219,6 +258,8 @@ async function planReadContext(
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    ...versionFields(readback.context, input.nodeId),
     operation: null,
     context: readback.context,
     normalizedArguments: {},
@@ -240,11 +281,12 @@ async function readFocusedProgressionContext(
 ) {
   const context = await client.context(
     { type: input.resourceType, id: input.resourceId },
-    input.nodeId === undefined ? { view: "focused" } : { nodeId: input.nodeId, view: "focused" },
+    {
+      view: "focused",
+      ...(input.nodeId === undefined ? {} : { nodeId: input.nodeId }),
+      ...(input.componentKey === undefined ? {} : { component: input.componentKey }),
+    },
   );
-  if (input.contextVersion !== undefined && String(context.version) !== input.contextVersion) {
-    throw new ResourceScenarioError("CONTEXT_CONFLICT", "请求的上下文版本已过期");
-  }
   return context;
 }
 
@@ -284,6 +326,8 @@ async function readContext(
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    ...versionFields(readback.context, input.nodeId),
     plan: null,
     operation: null,
     readback,
@@ -302,12 +346,83 @@ async function readContextSnapshot(client: PmsClient, input: ParsedAgentProgress
   const resource = await client.get({ type: input.resourceType, id: input.resourceId });
   const context = await client.context(
     { type: input.resourceType, id: input.resourceId },
-    input.nodeId === undefined ? { view: "focused" } : { nodeId: input.nodeId, view: "focused" },
+    {
+      view: "focused",
+      ...(input.nodeId === undefined ? {} : { nodeId: input.nodeId }),
+      ...(input.componentKey === undefined ? {} : { component: input.componentKey }),
+    },
   );
-  if (input.contextVersion !== undefined && String(context.version) !== input.contextVersion) {
-    throw new ResourceScenarioError("CONTEXT_CONFLICT", "请求的上下文版本已过期");
-  }
   return { resource, context };
+}
+
+function planRejectedCompletion(
+  input: ParsedAgentProgressionInput,
+): AgentProgressionPlan {
+  return {
+    contractVersion: agentProgressionContractVersion,
+    phase: "plan",
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    nodeVersion: null,
+    entityVersion: null,
+    workflowInstanceVersion: null,
+    operation: completionOperation(input.resourceType),
+    context: null,
+    normalizedArguments: {},
+    capability: null,
+    preview: null,
+    fieldChanges: [],
+    missingFields: [],
+    preconditions: [],
+    writeDecision: "NEEDS_INPUT",
+    requiresConfirmation: false,
+    executionMode: "automatic",
+    rejectionReason: "COMPLETION_NOT_REQUESTED",
+    warnings: ["COMPLETE_NODE 必须显式提供 requestedCompletion=true，当前未生成写入预览"],
+  };
+}
+
+function rejectedCompletionResult(
+  input: ParsedAgentProgressionInput,
+): AgentProgressionResult {
+  return agentProgressionResultSchema.parse({
+    contractVersion: agentProgressionContractVersion,
+    phase: "execute",
+    status: "REJECTED",
+    resourceType: input.resourceType,
+    resourceId: input.resourceId,
+    intent: input.intent,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    plan: null,
+    operation: null,
+    readback: null,
+    verification: null,
+    rejectionReason: "COMPLETION_NOT_REQUESTED",
+    warnings: ["COMPLETE_NODE 必须显式提供 requestedCompletion=true，当前未执行写入"],
+  });
+}
+
+function completionOperation(resourceType: ParsedAgentProgressionInput["resourceType"]): string {
+  if (resourceType === "project") return "node.complete-with-data";
+  return "development-item.node.complete-with-data";
+}
+
+function versionFields(context: any, nodeId?: number): {
+  nodeVersion?: number | null;
+  entityVersion?: number | null;
+  workflowInstanceVersion?: number | null;
+} {
+  const nodes = Array.isArray(context?.workflow?.nodes) ? context.workflow.nodes : [];
+  const selectedNodeId = nodeId ?? context?.meta?.selectedNodeId ?? context?.currentNode?.id;
+  const node = nodes.find((candidate: any) => isRecord(candidate) && candidate.id === selectedNodeId);
+  return {
+    nodeVersion: typeof node?.version === "number" ? node.version : null,
+    entityVersion: typeof context?.entityVersion === "number" ? context.entityVersion : null,
+    workflowInstanceVersion: typeof context?.meta?.workflowInstanceVersion === "number"
+      ? context.meta.workflowInstanceVersion : null,
+  };
 }
 
 function resourceOperation(

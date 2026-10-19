@@ -5,6 +5,7 @@ import {
   agentProgressionResourceTypeSchema,
   agentProgressionResultSchema,
   agentProgressionWriteDecisionSchema,
+  agentProgressionRejectionReasonSchema,
   type AgentProgressionIntent,
   type AgentProgressionPlan,
   type AgentProgressionResult,
@@ -14,7 +15,7 @@ import { resourceDetailSchema, type ResourceDetail } from "./query.js";
 import { resourceScenarioVerificationSchema, type ResourceScenarioVerification } from "./resourceScenario.js";
 import { userFacingDisplaySchema } from "./userFacing.js";
 
-export const agentProgressionRunContractVersion = "agent-progression-run/v1" as const;
+export const agentProgressionRunContractVersion = "agent-progression-run/v2" as const;
 
 export const agentProgressionRunResourceTypeSchema = agentProgressionResourceTypeSchema;
 export type AgentProgressionRunResourceType = z.infer<typeof agentProgressionRunResourceTypeSchema>;
@@ -39,6 +40,10 @@ export const agentProgressionRunResultSchema = z.object({
   resourceType: agentProgressionRunResourceTypeSchema,
   resourceId: z.number().int().positive(),
   intent: agentProgressionIntentSchema,
+  componentKey: z.string().trim().min(1).max(160).optional(),
+  nodeVersion: z.number().int().nonnegative().nullable().optional(),
+  entityVersion: z.number().int().nonnegative().nullable().optional(),
+  workflowInstanceVersion: z.number().int().nonnegative().nullable().optional(),
   writeDecision: agentProgressionWriteDecisionSchema,
   plan: agentProgressionPlanSchema.nullable(),
   result: agentProgressionResultSchema.nullable(),
@@ -51,6 +56,7 @@ export const agentProgressionRunResultSchema = z.object({
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
   warnings: z.array(z.string()).default([]),
+  rejectionReason: agentProgressionRejectionReasonSchema.optional(),
   userFacing: userFacingDisplaySchema.optional(),
 }).strict();
 

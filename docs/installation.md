@@ -67,7 +67,7 @@ pms requirement analysis save 23 \
 pms scenario progression run story 34 --intent READ_CONTEXT --format json
 pms scenario progression run story 34 --intent UPDATE_NODE_FIELDS \
   --execute-mode plan --node-id <node-id> \
-  --draft-json '<agent-progression/v1 draft>' --format json
+  --draft-json '<agent-progression/v2 draft>' --format json
 ```
 
 计划确认后，低/中风险写入可由当前已明确的用户意图直接使用 `auto`；高风险使用 `confirm`。两者都必须由调用方提供幂等键，CLI 不会猜测节点、字段或幂等键：
