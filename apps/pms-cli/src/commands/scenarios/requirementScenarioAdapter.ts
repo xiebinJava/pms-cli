@@ -1,8 +1,8 @@
 import type {
   ActionCapability,
   AnalysisDraft,
-  ResourceDetail,
   ResourceScenarioContext,
+  ResourceScenarioSnapshot,
   ParsedResourceScenarioInput,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
@@ -179,7 +179,7 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
       && (expectedId === undefined || after.resource.resourceId === Number(expectedId));
     const contextReadback = after.context?.resource.type === "requirement"
       && (expectedId === undefined || after.context.resource.id === Number(expectedId));
-    const protectedFieldsUnchanged = compareProtectedFields(before?.resource, after.resource);
+    const protectedFieldsUnchanged = compareProtectedFields(before, after);
     const patchApplied = resourceReadback && contextReadback && operation.status === "SUCCEEDED";
     return {
       resourceReadback,
@@ -381,11 +381,23 @@ function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record
   return result;
 }
 
-function compareProtectedFields(before: ResourceDetail | null | undefined, after: ResourceDetail | null): boolean {
+function compareProtectedFields(
+  before: ResourceScenarioSnapshot | null | undefined,
+  after: ResourceScenarioSnapshot | null,
+): boolean {
   if (!before || !after) return false;
+  const beforeDetails = {
+    ...(before.resource?.details ?? {}),
+    ...(before.context?.resourceDetails ?? {}),
+  };
+  const afterDetails = {
+    ...(after.resource?.details ?? {}),
+    ...(after.context?.resourceDetails ?? {}),
+  };
   return ["systemId", "targetType", "targetId", "ownerId", "status", "startDate", "endDate"]
-    .every((key) => !Object.prototype.hasOwnProperty.call(before.details, key)
-      || JSON.stringify(before.details[key]) === JSON.stringify(after.details[key]));
+    .every((key) => !Object.prototype.hasOwnProperty.call(beforeDetails, key)
+      || Object.prototype.hasOwnProperty.call(afterDetails, key)
+      && JSON.stringify(beforeDetails[key]) === JSON.stringify(afterDetails[key]));
 }
 
 function validateDeclaredArguments(

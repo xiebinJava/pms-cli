@@ -4,6 +4,7 @@ import type { CliDependencies } from "../../apps/pms-cli/src/cli/runCli.js";
 import { runCli } from "../../apps/pms-cli/src/cli/runCli.js";
 import {
   resourceScenarioContractVersion,
+  type ResourceScenarioSnapshot,
   type WorkflowContext,
 } from "../../packages/pms-contracts/src/index.js";
 import {
@@ -337,6 +338,55 @@ describe("requirement resource scenario contract", () => {
       idempotencyKey: "requirement-42-update-v2",
     }, registry);
     expect(failed.status).toBe("WRITE_RESULT_UNKNOWN");
+  });
+
+  it("uses the workflow context projection when the resource readback omits protected fields", () => {
+    const beforeContext = makeContext();
+    beforeContext.resourceDetails = {
+      ...requirementDetail.details,
+      startDate: "2026-10-15",
+      endDate: "2026-10-22",
+    };
+    const afterContext = makeContext({ version: 4 });
+    afterContext.resourceDetails = {
+      ...beforeContext.resourceDetails,
+    };
+    const before: ResourceScenarioSnapshot = {
+      resource: {
+        ...requirementDetail,
+        details: {
+          ...beforeContext.resourceDetails,
+        },
+      },
+      context: beforeContext,
+    };
+    const after: ResourceScenarioSnapshot = {
+      resource: {
+        ...requirementDetail,
+        details: {
+          id: 42,
+          title: "统一项目管理标准",
+          status: "IN_PROGRESS",
+          ownerId: 7,
+        },
+      },
+      context: afterContext,
+    };
+
+    const verification = requirementScenarioAdapter.verifyReadback(
+      before,
+      after,
+      { requirementId: 42 },
+      {
+        operationId: "operation-requirement-1",
+        status: "SUCCEEDED",
+        data: { requirementId: 42 },
+        warnings: [],
+        refreshScopes: [],
+      },
+    );
+
+    expect(verification.protectedFieldsUnchanged).toBe(true);
   });
 
   it("replays with the same idempotency key through the same preview operation", async () => {
