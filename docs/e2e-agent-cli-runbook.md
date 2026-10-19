@@ -71,18 +71,18 @@ npm run verify:real-pms:cli
 
 ## 节点详情自动补全 E2E
 
-需求和故事节点使用同一条 Agent progression 链：
+需求和故事节点使用同一条 Agent progression 链。当前仓库基线仍是 v1；Task 0.2 完成后会整体切换到 `agent-progression/v2` / `agent-progression-run/v2`，progression 命令的 `--version` 改为 `--node-version`，上下文关联使用 `--context-version`。本 runbook 的真实 E2E 示例必须和对应构建产物同批次升级，不能用 v1 CLI 调 v2 后端。
 
 ```text
 pms context --view focused
-  → Agent draft（fieldSources + requestedCompletion）
+  → Agent draft（目标 v2；fieldSources + requestedCompletion）
   → scenario progression plan
   → development-item.node.complete-with-data preview
   → scenario progression execute
   → get/context 回读与 verification
 ```
 
-真实写入只允许在隔离数据库中执行。需求场景需要指定一个已经处于可完成测试节点的需求和节点；故事场景可以使用已有故事，也可以在隔离库中创建夹具并推进到验收节点：
+真实写入只允许在隔离数据库中执行。需求场景需要指定一个已经处于可完成测试节点的需求和节点；故事场景可以使用已有故事，也可以在隔离库中创建夹具并推进到验收节点。旧 v1 示例在协议升级前不得用于真实写入：
 
 ```bash
 export PMS_E2E_REQUIREMENT_ID=24
@@ -147,7 +147,7 @@ PMS_E2E_RUN_ID=codex20261015d ./scripts/stop-ai-e2e.sh
 
 ## 统一 Agent progression run E2E
 
-新增的 `tests/e2e/agent-progression-run.e2e.test.ts` 验证需求节点的统一运行入口：外部 Agent 草稿 → fresh preview → 低/中风险 auto 执行 → PMS 回读与 verification → 同一幂等键 replay → 只读审计查询。测试不调用模型，默认跳过。
+新增的 `tests/e2e/agent-progression-run.e2e.test.ts` 验证需求节点的统一运行入口：外部 Agent 草稿 → fresh preview → 低/中风险 auto 执行 → PMS 回读与 verification → 同一 conversation、preview、draftDigest 下的幂等键 replay。测试不调用模型，默认跳过；unknown write 第一阶段不依赖 operation GET 或审计查询收敛。
 
 在上面的隔离 PMS 启动完成后，额外设置：
 
