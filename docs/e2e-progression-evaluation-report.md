@@ -24,12 +24,14 @@ pms scenario progression draft story 34 \
 | --- | --- |
 | 用例文件 | `tests/fixtures/progression-shadow-cases.json` |
 | Draft source | `mock`（CLI 链路验证）/ 外部 Agent（Claude、Codex、DeepSeek） |
-| PMS 版本 | 待填写 |
-| pms-cli commit | 待填写 |
-| PMS context contract | 待填写 |
+| PMS 版本 | 未连接真实 PMS（本轮只运行只读 Mock 影子链路） |
+| pms-cli commit | `23df8a5` |
+| PMS context contract | `agent-progression/v1` |
 | 模型与版本 | 由外部 Agent 运行时在其会话中填写 |
 | Prompt 版本 | 待填写 |
-| 运行时间 | 待填写 |
+| 运行时间 | 2026-10-19（Asia/Shanghai） |
+
+本轮固定 Mock 结果：`progression-shadow-cases.json` 共 12 条，12 条均生成成功，程序校验 12/12 通过，未调用 PMS `preview`、`execute` 或任何写命令。模型输出和人工验收仍保持 `NOT_EVALUATED` / `PENDING`，不能据此宣称 Claude、Codex 或 DeepSeek 的自然语言收益。
 
 ## 人工对照字段
 

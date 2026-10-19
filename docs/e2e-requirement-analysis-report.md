@@ -38,7 +38,7 @@ node dist/pms-cli.js scenario requirement-analysis plan 33 \
 ## Automated evidence
 
 - `tests/unit/e2e-safety.test.ts`: 8 passed。
-- `tests/unit/requirement-fixture.test.ts`: 4 passed。
+- `tests/unit/requirement-fixture.test.ts`: 5 passed。
 - `tests/unit/auth.test.ts`: 5 passed。
 - `tests/unit/analysis-draft-provider.test.ts`: 1 passed。
 - `tests/unit/analysis-shadow.test.ts`: 2 passed。
