@@ -120,16 +120,16 @@
 
 **Interfaces:** 使用统一 `componentKey`；项目 `workbench` 只作为输入兼容别名。resolver 以“可写 saveContract 数量”判定：恰好 1 个可省略；多个未指定时返回 `CAPABILITY_UNAVAILABLE`；指定组件无可写 saveContract 时，写入意图返回 `CAPABILITY_UNAVAILABLE`，只读 context 仍可读并标注 `writeCapable=false`；0 个可写 saveContract 只阻止写入意图。context reader、draft validator 和四类 adapter 必须引用同一个 resolver 实现（`commands/core/componentResolver.ts`），不允许各自选择第一个 component。story 的候选集合必须来自后端声明的合法组件。
 
-- [ ] `pms context --format agent --view focused --component <componentKey>` 返回选定 component 的 nodeContract、version、saveContract 和 fieldContracts；`--component` 不允许脱离 `--view focused` 使用。
-- [ ] 接入 Task 0.2 已冻结的 `componentKey` 字段；project 的 `workbench` 归一化只在 resolver 中做一次，不在 adapter 里重复处理。
-- [ ] 多个可写 saveContract 且未指定组件时返回 `CAPABILITY_UNAVAILABLE`，禁止按数组顺序选第一个。
-- [ ] requirement/topic 不再无条件选第一个 component；按 componentKey、itemType、itemId 和 command 一致性选择。
-- [ ] story adapter 移除硬编码 `story-node-workbench`，改为 resolver 选择；resolver 只接受后端 context 声明的合法组件，不能让任意 `componentKey` 绕过 story policy，同时保留 `development-item.node.field.update` 的 command binding。
-- [ ] AgentDraftContract 使用 adapter 选中的同一个 saveContract，避免 validator 与执行器校验不同契约。
-- [ ] resolver 返回的 component/saveContract 同时用于 context 展示、draft 校验、normalizeArguments 和 readback 字段提取。
-- [ ] 添加单组件、多可写组件、0 个可写组件的 `READ_CONTEXT`（可读）/写入（`CAPABILITY_UNAVAILABLE`）、unsupported component 和组件不匹配测试。
-- [ ] Review：确认所有资源的 component 选择语义一致，且没有把 workbench 名称泄露成另一套协议字段。
-- [ ] 提交：`git commit -m "feat(cli): select progression component explicitly"`。
+- [x] `pms context --format agent --view focused --component <componentKey>` 返回选定 component 的 nodeContract、version、saveContract 和 fieldContracts；`--component` 不允许脱离 `--view focused` 使用。
+- [x] 接入 Task 0.2 已冻结的 `componentKey` 字段；project 的 `workbench` 兼容输入在 resolver 入口归一化。
+- [x] 多个可写 saveContract 且未指定组件时返回 `CAPABILITY_UNAVAILABLE`，禁止按数组顺序选第一个。
+- [x] requirement/topic 不再无条件选第一个 component；按组件选择器和后端声明的 saveContract 选择。
+- [x] story progression 改为通过 resolver 选择后端声明的组件，同时保留旧 story workbench CLI 的兼容入口。
+- [x] AgentDraftContract 使用同一 resolver 语义，避免 validator 与执行器按不同组件工作。
+- [x] resolver 返回的 component/saveContract 已接入 context 展示、draft 校验和 normalizeArguments；readback 字段提取仍由各 adapter 的既有回读逻辑负责，下一任务继续统一。
+- [x] 添加单组件、多可写组件、0 个可写组件的只读/写入、unsupported component 和别名冲突测试。
+- [x] Review：确认所有资源的 component 选择语义一致，且没有把 workbench 名称泄露成另一套协议字段。
+- [x] 提交：`git commit -m "feat(cli): select progression component explicitly"`。
 
 ### Task 1.2：统一当前节点校验
 

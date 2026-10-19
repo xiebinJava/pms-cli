@@ -28,7 +28,7 @@
 
 ## 组件和完成规则
 
-- v2 输入可携带 `componentKey`；组件选择、`workbench` 兼容别名和多 saveContract 选择由后续共享 resolver 冻结。
+- v2 输入可携带 `componentKey`；组件选择、`workbench` 兼容别名和多 saveContract 选择由 `commands/core/componentResolver.ts` 统一冻结。只有一个可写 saveContract 时可以省略选择；多个可写组件必须显式选择；没有可写契约时仍允许只读上下文，但写入返回 `CAPABILITY_UNAVAILABLE`。
 - `COMPLETE_NODE` 必须显式提供 `requestedCompletion=true`。缺失或为 `false` 时不生成 preview、不执行写入，run 信封返回 `status=REJECTED`、`writeDecision=NEEDS_INPUT`、`rejectionReason=COMPLETION_NOT_REQUESTED`。
 - `REJECTED` 是业务状态，不扩展 `writeDecision` 枚举；`writeDecision` 继续使用 `READY`、`NEEDS_INPUT`、`WAITING_CONFIRMATION` 和 `CAPABILITY_UNAVAILABLE`。
 

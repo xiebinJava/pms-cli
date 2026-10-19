@@ -222,7 +222,7 @@ describe("project resource scenario contract", () => {
     }));
   });
 
-  it("selects the only component contract that declares the drafted fields", async () => {
+  it("requires an explicit component when multiple writable contracts exist", async () => {
     const context = projectContext();
     const node = context.workflow?.nodes[0] as any;
     node.components.push({
@@ -239,12 +239,22 @@ describe("project resource scenario contract", () => {
       },
     });
     const client = fakeClient({ context });
+    await expect(planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      operation: "node.field.update",
+      nodeId: 301,
+      arguments: { fields: { architecture: "模块化" } },
+    }, createResourceScenarioRegistry([projectScenarioAdapter]))).rejects.toThrow(/componentKey/);
+
     const plan = await planResourceScenario(client, {
       contractVersion: resourceScenarioContractVersion,
       resourceType: "project",
       resourceId: 42,
       operation: "node.field.update",
       nodeId: 301,
+      componentKey: "solution-design",
       arguments: { fields: { architecture: "模块化" } },
     }, createResourceScenarioRegistry([projectScenarioAdapter]));
 

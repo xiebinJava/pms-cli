@@ -18,6 +18,7 @@ import {
   scenarioContractVersion,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { AnalysisDraftValidator } from "./AnalysisDraftValidator.js";
+import { resolveWorkflowComponent } from "../core/componentResolver.js";
 
 export const agentDraftContractVersion = scenarioContractVersion;
 
@@ -87,10 +88,11 @@ export function validateAgentProgressionDraftFields(
   draft: AgentProgressionDraft,
   context: WorkflowContext,
   nodeId?: number,
+  componentKey?: string,
 ): AgentProgressionDraftDiagnostics {
   const patch = draft.patch ?? {};
   const patchKeys = Object.keys(patch);
-  const contract = readNodeDetailContract(context, nodeId);
+  const contract = readNodeDetailContract(context, nodeId, componentKey);
   const writable = new Set(contract.writableFields);
   const protectedFields = new Set(contract.protectedFields);
   const fieldSources = draft.fieldSources ?? {};
@@ -125,9 +127,10 @@ export function planAgentProgressionDraft(
   nodeId: number | undefined,
   intent: AgentProgressionIntent,
   executionMode: "read" | "automatic" | "confirmation",
+  componentKey?: string,
 ): AgentProgressionPlanDetails {
-  const contract = readNodeDetailContract(context, nodeId);
-  const diagnostics = validateAgentProgressionDraftFields(draft, context, nodeId);
+  const contract = readNodeDetailContract(context, nodeId, componentKey);
+  const diagnostics = validateAgentProgressionDraftFields(draft, context, nodeId, componentKey);
   const fieldChanges = Object.keys(draft.patch ?? {})
     .filter((key) => contract.writableFields.includes(key))
     .map((key) => {
@@ -263,7 +266,7 @@ export function assertSafeAgentPayload(value: unknown, path = "$", seen = new We
   }
 }
 
-function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
+function readNodeDetailContract(context: WorkflowContext, nodeId?: number, componentKey?: string): {
   writableFields: string[];
   protectedFields: string[];
   requiredFields: Set<string>;
@@ -285,10 +288,15 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
       currentValues: new Map(), completionRequiredMetadata: [],
     };
   }
-  const components = Array.isArray(node.components) ? node.components : [];
-  const component = components.find((candidate) => isRecord(candidate)
-    && isRecord(candidate.saveContract))
-    ?? components.find((candidate) => isRecord(candidate));
+  let component: Record<string, any> | undefined;
+  try {
+    component = resolveWorkflowComponent(node as any, {
+      componentKey,
+      mode: "read",
+    }).component as Record<string, any> | undefined;
+  } catch {
+    component = undefined;
+  }
   const saveContract = component && isRecord(component.saveContract) ? component.saveContract : undefined;
   const labels = new Map<string, string>();
   const currentValues = new Map<string, unknown>();
@@ -298,7 +306,7 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
       labels.set(raw.key, typeof raw.label === "string" && raw.label.trim() !== "" ? raw.label : raw.key);
     }
   }
-  for (const key of stringArray(saveContract?.writableFields)) {
+  for (const key of stringArray(saveContract?.effectiveWritableFields ?? saveContract?.writableFields)) {
     if (!labels.has(key)) labels.set(key, key);
     if (component && isRecord(component.content)
       && Object.prototype.hasOwnProperty.call(component.content, key)) {
@@ -312,7 +320,7 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number): {
     }
   }
   return {
-    writableFields: stringArray(saveContract?.writableFields),
+    writableFields: stringArray(saveContract?.effectiveWritableFields ?? saveContract?.writableFields),
     protectedFields: stringArray(saveContract?.protectedFields),
     requiredFields,
     labels,

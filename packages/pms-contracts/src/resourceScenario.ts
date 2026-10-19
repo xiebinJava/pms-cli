@@ -59,6 +59,8 @@ export const resourceScenarioContextSchema = z.object({
   version: z.string().trim().min(1),
   entityVersion: z.number().int().nonnegative().nullable().optional(),
   selectedNodeId: z.number().int().positive().nullable().optional(),
+  selectedComponentKey: z.string().trim().min(1).nullable().optional(),
+  writeCapable: z.boolean().optional(),
   snapshot: z.unknown().optional(),
 }).strict();
 

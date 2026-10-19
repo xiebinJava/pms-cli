@@ -13,6 +13,8 @@ import {
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { operationExecutePreview, operationPreview } from "../core/operation.js";
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
+import { ComponentResolutionError, resolveWorkflowComponent } from "../core/componentResolver.js";
+import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
 
 export type StoryWorkbenchScenarioClient = PmsClient;
 
@@ -50,6 +52,7 @@ export interface StoryWorkbenchScenarioPlan {
   resourceId: number;
   nodeId: number;
   version: number;
+  componentKey?: string;
   variant: StoryWorkbenchInput["variant"];
   patch: Record<string, unknown>;
   complete?: boolean;
@@ -78,6 +81,7 @@ export async function planStoryWorkbenchScenario(
     resourceId: prepared.input.resourceId,
     nodeId: prepared.input.nodeId,
     version: prepared.input.version,
+    componentKey: prepared.saveContract.componentKey,
     variant: prepared.input.variant,
     patch: prepared.input.patch,
     complete: prepared.input.complete,
@@ -136,13 +140,17 @@ async function prepare(
   const parsed = storyWorkbenchInputSchema.parse(input);
   const context = await client.context(
     { type: "story", id: parsed.resourceId },
-    { nodeId: parsed.nodeId, view: "focused", component: "story-node-workbench" },
+    {
+      nodeId: parsed.nodeId,
+      view: "focused",
+      component: parsed.componentKey ?? "story-node-workbench",
+    },
   );
   const allowIdempotentReplay = parsed.save && Boolean(parsed.idempotencyKey);
   if (context.version !== parsed.version && !allowIdempotentReplay) {
     throw new Error(`故事上下文版本 ${context.version ?? "无"} 与请求版本 ${parsed.version} 不一致`);
   }
-  const saveContract = readSaveContract(context, parsed.nodeId);
+  const saveContract = readSaveContract(context, parsed.nodeId, parsed.componentKey);
   validateSaveContract(saveContract, parsed, allowIdempotentReplay);
   const unknownField = Object.keys(parsed.patch).find(
     (key) => !saveContract.writableFields.includes(key),
@@ -179,14 +187,26 @@ async function prepare(
   };
 }
 
-function readSaveContract(context: WorkflowContext, nodeId: number): SaveContract {
+function readSaveContract(
+  context: WorkflowContext,
+  nodeId: number,
+  componentKey?: string,
+): SaveContract {
   const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.id === nodeId);
   if (!isRecord(node)) throw new Error(`故事上下文中不存在节点 ${nodeId}`);
-  const components = Array.isArray(node.components) ? node.components : [];
-  const component = components.find(
-    (candidate) => isRecord(candidate) && candidate.key === "story-node-workbench",
-  );
+  let component: Record<string, any> | undefined;
+  try {
+    component = resolveWorkflowComponent(node as any, {
+      componentKey: componentKey ?? "story-node-workbench",
+      mode: "write",
+    }).component as Record<string, any> | undefined;
+  } catch (error) {
+    if (error instanceof ComponentResolutionError) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
+    }
+    throw error;
+  }
   if (!isRecord(component) || !isRecord(component.saveContract)) {
     throw new Error("所选故事节点没有可写的 story-node-workbench saveContract");
   }
@@ -239,8 +259,10 @@ function validateSaveContract(
   if (contract.nodeId !== input.nodeId || (!allowIdempotentReplay && contract.version !== input.version)) {
     throw new Error("saveContract 的节点或版本与请求不一致");
   }
-  if (contract.componentKey !== "story-node-workbench"
-    || contract.fieldValuesPath !== "__components.story-node-workbench") {
+  if (input.componentKey !== undefined && contract.componentKey !== input.componentKey) {
+    throw new Error(`saveContract componentKey ${contract.componentKey} 与请求 ${input.componentKey} 不一致`);
+  }
+  if (contract.fieldValuesPath.trim() === "") {
     throw new Error("saveContract 的组件路径不受支持");
   }
   if (contract.variant !== input.variant) {
@@ -289,9 +311,17 @@ async function executeAfterPreview(
     const resource = await client.get({ type: "story", id: prepared.input.resourceId });
     const context = await client.context(
       { type: "story", id: prepared.input.resourceId },
-      { nodeId: prepared.input.nodeId, view: "focused", component: "story-node-workbench" },
+      {
+        nodeId: prepared.input.nodeId,
+        view: "focused",
+        component: prepared.saveContract.componentKey,
+      },
     );
-    const content = readComponentContent(context, prepared.input.nodeId);
+    const content = readComponentContent(
+      context,
+      prepared.input.nodeId,
+      prepared.saveContract.componentKey,
+    );
     const verification = {
       resourceReadback: true,
       contextReadback: true,
@@ -388,6 +418,7 @@ function baseResult(input: StoryWorkbenchInput, status: StoryWorkbenchResult["st
     resourceId: input.resourceId,
     nodeId: input.nodeId,
     version: input.version,
+    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
     variant: input.variant,
     patch: input.patch,
     ...(input.complete === undefined ? {} : { complete: input.complete }),
@@ -395,13 +426,21 @@ function baseResult(input: StoryWorkbenchInput, status: StoryWorkbenchResult["st
   };
 }
 
-function readComponentContent(context: WorkflowContext, nodeId: number): Record<string, unknown> | null {
+function readComponentContent(
+  context: WorkflowContext,
+  nodeId: number,
+  componentKey: string,
+): Record<string, unknown> | null {
   const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.id === nodeId);
   if (!isRecord(node) || !Array.isArray(node.components)) return null;
-  const component = node.components.find(
-    (candidate) => isRecord(candidate) && candidate.key === "story-node-workbench",
-  );
+  let component: Record<string, any> | undefined;
+  try {
+    component = resolveWorkflowComponent(node as any, { componentKey, mode: "read" })
+      .component as Record<string, any> | undefined;
+  } catch {
+    return null;
+  }
   if (!isRecord(component) || !isRecord(component.content)) return null;
   return component.content;
 }

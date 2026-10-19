@@ -11,6 +11,10 @@ import {
   ResourceScenarioError,
   type ResourceScenarioAdapter,
 } from "./resourceScenarioRegistry.js";
+import {
+  ComponentResolutionError,
+  resolveWorkflowComponent,
+} from "../core/componentResolver.js";
 
 const TOPIC_OPERATIONS = new Set([
   "topic.create",
@@ -55,19 +59,32 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
     const topicId = requireTopicId(input);
     const focused = input.operation === "development-item.node.field.update"
       || input.operation === "development-item.node.complete-with-data";
+    const requestedComponent = input.componentKey;
     const topic = await client.context(
       { type: "topic", id: topicId },
-      focused ? { nodeId: requireNodeId(input), view: "focused" } : undefined,
+      focused
+        ? {
+          nodeId: requireNodeId(input),
+          view: "focused",
+          ...(requestedComponent === undefined ? {} : { component: requestedComponent }),
+        }
+        : undefined,
     );
     const projectId = targetProjectId(input, topic);
     const targetProject = projectId === null
       ? null
       : await client.context({ type: "project", id: projectId });
+    const selectedNodeId = topic.meta?.selectedNodeId ?? topic.currentNode?.id ?? null;
+    const resolution = selectedNodeId === null
+      ? undefined
+      : resolveReadComponent(topic, selectedNodeId, requestedComponent);
     return {
       id: `topic:${topicId}`,
       version: String(topic.version ?? "unknown"),
       entityVersion: topic.entityVersion ?? null,
-      selectedNodeId: topic.meta?.selectedNodeId ?? topic.currentNode?.id ?? null,
+      selectedNodeId,
+      selectedComponentKey: resolution?.componentKey ?? topic.meta?.selectedComponentKey ?? null,
+      writeCapable: resolution?.writeCapable ?? false,
       snapshot: { topic, targetProject },
     };
   },
@@ -81,7 +98,7 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
   if (input.operation === "development-item.node.field.update"
       || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
-      const saveContract = readSaveContract(topic, nodeId);
+      const saveContract = readSaveContract(topic, nodeId, input.componentKey);
       const normalized = {
         itemType: saveContract.itemType,
         itemId: saveContract.itemId,
@@ -139,7 +156,7 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
       if (topic.currentNode?.id !== nodeId) {
         throw new ResourceScenarioError("CONTEXT_CONFLICT", "专题节点不是当前 focused 节点");
       }
-      validateNodeFieldArguments(topic, nodeId, normalizedArguments);
+      validateNodeFieldArguments(topic, nodeId, normalizedArguments, input.componentKey);
     }
     if (input.operation === "topic.update" || input.operation === "topic.project.link") {
       validateTargetProject(readTargetProject(context), normalizedArguments.projectId);
@@ -249,8 +266,9 @@ function validateNodeFieldArguments(
   context: WorkflowContext,
   nodeId: number,
   normalizedArguments: Record<string, unknown>,
+  componentKey?: string,
 ): void {
-  const contract = readSaveContract(context, nodeId);
+  const contract = readSaveContract(context, nodeId, componentKey);
   if (normalizedArguments.itemType !== contract.itemType
     || normalizedArguments.itemId !== contract.itemId
     || normalizedArguments.nodeId !== contract.nodeId
@@ -272,22 +290,30 @@ function validateNodeFieldArguments(
   }
 }
 
-function readSaveContract(context: WorkflowContext, nodeId: number): SaveContract {
+function readSaveContract(context: WorkflowContext, nodeId: number, componentKey?: string): SaveContract {
   const node = readNode(context, nodeId);
-  const component = node?.components?.find((candidate: unknown) =>
-    isRecord(candidate) && isRecord(candidate.saveContract)
-    && candidate.saveContract.command === "development-item.node.field.update"
-    && candidate.saveContract.itemType === "TOPIC"
-    && candidate.saveContract.itemId === context.resource.id,
-  );
+  let component: Record<string, any> | undefined;
+  try {
+    component = node
+      ? resolveWorkflowComponent(node as any, { componentKey, mode: "write" })
+        .component as Record<string, any> | undefined
+      : undefined;
+  } catch (error) {
+    if (error instanceof ComponentResolutionError) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
+    }
+    throw error;
+  }
   if (!isRecord(component) || !isRecord(component.saveContract)) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "专题节点没有可用的 saveContract");
   }
   const raw = component.saveContract;
-  if (!isPositiveInteger(raw.itemId) || !isPositiveInteger(raw.nodeId)
-    || !isNonNegativeInteger(raw.version) || typeof raw.command !== "string"
-    || typeof raw.itemType !== "string" || typeof raw.componentKey !== "string"
-    || typeof raw.fieldValuesPath !== "string" || !isStringArray(raw.writableFields)) {
+  if (!isPositiveInteger(raw.itemId) || raw.itemId !== context.resource.id
+    || !isPositiveInteger(raw.nodeId) || !isNonNegativeInteger(raw.version)
+    || raw.command !== "development-item.node.field.update"
+    || raw.itemType !== "TOPIC" || typeof raw.componentKey !== "string"
+    || typeof raw.fieldValuesPath !== "string"
+    || !isStringArray(raw.effectiveWritableFields ?? raw.writableFields)) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "专题节点 saveContract 不完整");
   }
   return {
@@ -299,7 +325,9 @@ function readSaveContract(context: WorkflowContext, nodeId: number): SaveContrac
     componentKey: raw.componentKey,
     fieldValuesPath: raw.fieldValuesPath,
     sourceProjectNodeKey: typeof raw.sourceProjectNodeKey === "string" ? raw.sourceProjectNodeKey : null,
-    writableFields: raw.writableFields,
+    writableFields: isStringArray(raw.effectiveWritableFields)
+      ? raw.effectiveWritableFields
+      : raw.writableFields,
     protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
     ...(raw.completionCommand === "development-item.node.complete-with-data"
       ? { completionCommand: raw.completionCommand } : {}),
@@ -396,6 +424,20 @@ function readNode(context: WorkflowContext, nodeId: number): Record<string, any>
   const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.id === nodeId);
   return isRecord(node) ? node : null;
+}
+
+function resolveReadComponent(
+  context: WorkflowContext,
+  nodeId: number,
+  componentKey?: string,
+) {
+  const node = readNode(context, nodeId);
+  if (!node) return undefined;
+  try {
+    return resolveWorkflowComponent(node as any, { componentKey, mode: "read" });
+  } catch {
+    return undefined;
+  }
 }
 
 function assertMatchingNumber(value: unknown, expected: number, name: string): void {

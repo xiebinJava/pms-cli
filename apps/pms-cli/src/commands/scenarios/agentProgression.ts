@@ -83,7 +83,14 @@ export async function planAgentProgression(
   const riskRequiresConfirmation = executionMode === "confirmation" && parsed.executeMode !== "confirm";
   const draftExecutionMode = draftModeForRequest(parsed, executionMode);
   const draftPlan = parsed.draft && preflightContext
-    ? planAgentProgressionDraft(parsed.draft, preflightContext, parsed.nodeId, parsed.intent, draftExecutionMode)
+    ? planAgentProgressionDraft(
+      parsed.draft,
+      preflightContext,
+      parsed.nodeId,
+      parsed.intent,
+      draftExecutionMode,
+      parsed.componentKey,
+    )
     : null;
   if (draftPlan && draftPlan.writeDecision !== "READY") {
     return {
@@ -187,6 +194,7 @@ export async function validateAgentProgressionDraft(
     parsed.draft,
     readback.context,
     parsed.nodeId,
+    parsed.componentKey,
   );
   return agentProgressionDraftResultSchema.parse({
     contractVersion: agentProgressionContractVersion,

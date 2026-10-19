@@ -148,6 +148,42 @@ describe("Agent context mapping", () => {
     expect(node.missingInputRules).toContain("当前用户未获准执行 saveContract 命令，禁止生成写入预览");
   });
 
+  it("does not guess the first component when a node has multiple writable contracts", () => {
+    const baseNode = context().workflow!.nodes[0] as any;
+    const ambiguous = context({
+      meta: { ...context().meta!, selectedComponentKey: null },
+      workflow: {
+        ...context().workflow!,
+        nodes: [{
+          ...baseNode,
+          components: [
+            baseNode.components[0],
+            {
+              key: "story-node-review",
+              label: "评审工作台",
+              fields: [],
+              actions: ["development-item.node.field.update"],
+              saveContract: {
+                command: "development-item.node.field.update",
+                itemType: "STORY",
+                itemId: 34,
+                nodeId: 383,
+                version: 2,
+                componentKey: "story-node-review",
+                writableFields: ["reviewNote"],
+              },
+            },
+          ],
+        }],
+      },
+    });
+
+    const node = buildNodeContract(ambiguous, 383);
+    expect(node.writeCapable).toBe(false);
+    expect(node.writableFields).toEqual([]);
+    expect(node.missingInputRules).toContain("当前节点存在多个可写组件，请显式指定 componentKey");
+  });
+
   it("rejects an unsupported component instead of guessing a writable scope", () => {
     expect(() => buildNodeContract(context(), 383, "missing-component")).toThrow(/组件/);
   });

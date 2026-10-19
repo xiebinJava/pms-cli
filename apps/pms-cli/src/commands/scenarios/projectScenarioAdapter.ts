@@ -11,6 +11,10 @@ import {
   ResourceScenarioError,
   type ResourceScenarioAdapter,
 } from "./resourceScenarioRegistry.js";
+import {
+  ComponentResolutionError,
+  resolveWorkflowComponent,
+} from "../core/componentResolver.js";
 
 const PROJECT_OPERATIONS = new Set([
   "project.create",
@@ -47,15 +51,28 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     if (input.operation === "project.create") return null;
     const projectId = requireProjectId(input);
     const focused = input.operation === "node.field.update" || input.operation === "node.complete-with-data";
+    const requestedComponent = input.componentKey ?? readString(input.arguments.workbench);
     const context = await client.context(
       { type: "project", id: projectId },
-      focused ? { nodeId: requireNodeId(input), view: "focused" } : undefined,
+      focused
+        ? {
+          nodeId: requireNodeId(input),
+          view: "focused",
+          ...(requestedComponent === undefined ? {} : { component: requestedComponent }),
+        }
+        : undefined,
     );
+    const selectedNodeId = context.meta?.selectedNodeId ?? context.currentNode?.id ?? null;
+    const resolution = selectedNodeId === null
+      ? undefined
+      : resolveReadComponent(context, selectedNodeId, requestedComponent);
     return {
       id: `project:${projectId}`,
       version: String(context.entityVersion ?? context.version ?? "unknown"),
       entityVersion: context.entityVersion ?? context.version ?? null,
-      selectedNodeId: context.meta?.selectedNodeId ?? context.currentNode?.id ?? null,
+      selectedNodeId,
+      selectedComponentKey: resolution?.componentKey ?? context.meta?.selectedComponentKey ?? null,
+      writeCapable: resolution?.writeCapable ?? false,
       snapshot: context,
     };
   },
@@ -70,7 +87,7 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     const project = readProjectContext(context);
     if (!project) throw new ResourceScenarioError("RESOURCE_NOT_FOUND", "项目上下文不存在");
     const nodeId = requireNodeId(input);
-    const saveContract = readSaveContract(project, nodeId, input.arguments.workbench, readPatch(input));
+    const saveContract = readSaveContract(project, nodeId, input.componentKey ?? input.arguments.workbench);
     const normalized: Record<string, unknown> = {
       projectId: saveContract.projectId,
       nodeId: saveContract.nodeId,
@@ -115,8 +132,7 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     }
 
     const nodeId = requireNodeId(input);
-    const fieldsForContract = isRecord(normalizedArguments.fields) ? normalizedArguments.fields : {};
-    const saveContract = readSaveContract(project, nodeId, normalizedArguments.workbench, fieldsForContract);
+    const saveContract = readSaveContract(project, nodeId, normalizedArguments.workbench);
     if (normalizedArguments.projectId !== saveContract.projectId
       || normalizedArguments.nodeId !== saveContract.nodeId
       || normalizedArguments.workbench !== saveContract.workbench) {
@@ -190,34 +206,21 @@ function readSaveContract(
   context: WorkflowContext,
   nodeId: number,
   requestedWorkbench: unknown,
-  patch: Record<string, unknown> = {},
 ): SaveContract {
   const node = readNode(context, nodeId);
-  const components = node?.components;
-  const candidates = (Array.isArray(components) ? components : []).filter((candidate) => {
-    if (!isRecord(candidate) || !isRecord(candidate.saveContract)) return false;
-    return requestedWorkbench === undefined || candidate.saveContract.workbench === requestedWorkbench;
-  });
-  const matching = requestedWorkbench === undefined && Object.keys(patch).length > 0
-    ? candidates.filter((candidate) => {
-      const contract = candidate.saveContract;
-      if (contract.dynamicFields === true) return true;
-      return isStringArray(contract.writableFields)
-        && Object.keys(patch).every((field) => contract.writableFields.includes(field));
-    })
-    : candidates;
-  const raw = matching.length === 1 && isRecord(matching[0]) ? matching[0].saveContract : null;
+  if (!node) throw new ResourceScenarioError("CONTEXT_CONFLICT", `项目上下文中不存在节点 ${nodeId}`);
+  const resolution = resolveWriteComponent(node as any, readString(requestedWorkbench));
+  const raw = isRecord(resolution.saveContract) ? resolution.saveContract : null;
   if (!isRecord(raw)) {
     throw new ResourceScenarioError(
       "CAPABILITY_UNAVAILABLE",
-      candidates.length > 1 && Object.keys(patch).length === 0
-        ? "项目节点存在多个可写 saveContract，请指定 workbench"
-        : "项目节点没有可用的 saveContract",
+      "项目节点没有可用的 saveContract",
     );
   }
   if (raw.command !== "node.field.update" || !isPositiveInteger(raw.projectId)
     || !isPositiveInteger(raw.nodeId) || !isNonNegativeInteger(raw.nodeVersion)
-    || typeof raw.workbench !== "string" || !isStringArray(raw.writableFields)) {
+    || (typeof raw.workbench !== "string" && typeof raw.componentKey !== "string")
+    || !isStringArray(raw.effectiveWritableFields ?? raw.writableFields)) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目节点 saveContract 不完整");
   }
   return {
@@ -225,8 +228,10 @@ function readSaveContract(
     projectId: raw.projectId,
     nodeId: raw.nodeId,
     nodeVersion: raw.nodeVersion,
-    workbench: raw.workbench,
-    writableFields: raw.writableFields,
+    workbench: typeof raw.workbench === "string" ? raw.workbench : resolution.componentKey!,
+    writableFields: isStringArray(raw.effectiveWritableFields)
+      ? raw.effectiveWritableFields
+      : isStringArray(raw.writableFields) ? raw.writableFields : [],
     protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
     dynamicFields: raw.dynamicFields === true,
     completionSupported: raw.completionSupported === true,
@@ -296,6 +301,44 @@ function compareProtectedFields(before: ResourceDetail | null | undefined, after
 
 function isRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function resolveWriteComponent(
+  node: Record<string, any>,
+  requestedWorkbench?: string,
+) {
+  try {
+    return resolveWorkflowComponent(node as any, {
+      workbench: requestedWorkbench,
+      mode: "write",
+    });
+  } catch (error) {
+    if (error instanceof ComponentResolutionError) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
+    }
+    throw error;
+  }
+}
+
+function resolveReadComponent(
+  context: WorkflowContext,
+  nodeId: number,
+  requestedComponent?: string,
+) {
+  const node = readNode(context, nodeId);
+  if (!node) return undefined;
+  try {
+    return resolveWorkflowComponent(node as any, {
+      componentKey: requestedComponent,
+      mode: "read",
+    });
+  } catch {
+    return undefined;
+  }
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
 }
 
 function isStringArray(value: unknown): value is string[] {

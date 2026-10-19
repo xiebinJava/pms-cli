@@ -4,11 +4,14 @@ import {
   agentWorkSessionSchema,
   workflowContextNodeSchema,
   type AgentWorkSession,
-  type ContextNode,
   type NodeContract,
   type WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
+import {
+  ComponentResolutionError,
+  resolveWorkflowComponent,
+} from "./componentResolver.js";
 
 type AgentResourceType = "project" | "requirement" | "topic" | "story";
 
@@ -60,7 +63,8 @@ export function buildAgentContext(
 
   const snapshotId = `${resource.type}:${resource.id}@${contextVersion}`;
   const selectedNodeId = options.nodeId ?? context.meta?.selectedNodeId ?? context.currentNode?.id ?? undefined;
-  const selectedComponentKey = options.component ?? context.meta?.selectedComponentKey ?? undefined;
+  const requestedComponentKey = options.component ?? context.meta?.selectedComponentKey ?? undefined;
+  const selectedComponentKey = resolveSelectedComponentKey(context, selectedNodeId, requestedComponentKey);
   const nodeContract = context.workflow && selectedNodeId !== undefined && selectedNodeId !== null
     ? buildNodeContract(context, selectedNodeId,
       selectedComponentKey)
@@ -140,10 +144,16 @@ export function buildNodeContract(
     throw new AgentContextMappingError(`AGENT_CONTEXT_NODE_INVALID: 流程节点 ${selectedId} 结构不完整`);
   }
   const node = parsedNode.data;
-  const component = selectComponent(node, componentKey);
+  let resolution;
+  try {
+    resolution = resolveWorkflowComponent(node, { componentKey, mode: "read" });
+  } catch (error) {
+    throw componentMappingError(error);
+  }
+  const component = resolution.component;
   const fields = component?.fields ?? node.fields;
   const saveContract = asRecord(component?.saveContract);
-  const writableFields = stringArray(saveContract?.writableFields);
+  const writableFields = stringArray(saveContract?.effectiveWritableFields ?? saveContract?.writableFields);
   const protectedFields = stringArray(saveContract?.protectedFields).length > 0
     ? stringArray(saveContract?.protectedFields)
     : fields.map((field) => field.key).filter((key) => !writableFields.includes(key));
@@ -163,7 +173,9 @@ export function buildNodeContract(
     ? saveContract.completionAutomaticConfirmation : undefined;
   const completionBlockReason = typeof saveContract?.completionBlockReason === "string"
     ? saveContract.completionBlockReason : undefined;
-  if (!saveContract) {
+  if (resolution.reason === "MULTIPLE_WRITABLE_COMPONENTS") {
+    missingInputRules.push("当前节点存在多个可写组件，请显式指定 componentKey");
+  } else if (!saveContract) {
     missingInputRules.push("当前节点/组件未公开 saveContract，禁止生成写入预览");
   } else if (!actionAuthorized) {
     missingInputRules.push("当前用户未获准执行 saveContract 命令，禁止生成写入预览");
@@ -221,15 +233,32 @@ function readContextVersion(context: WorkflowContext): string {
   return `${context.resource.type}:${context.resource.id}:entity:${version ?? "unknown"}`;
 }
 
-function selectComponent(node: ContextNode, componentKey?: string) {
-  if (componentKey === undefined || componentKey.trim() === "") {
-    return node.components.length === 1 ? node.components[0] : undefined;
+function resolveSelectedComponentKey(
+  context: WorkflowContext,
+  nodeId: number | null | undefined,
+  componentKey?: string,
+): string | undefined {
+  if (!context.workflow || nodeId === undefined || nodeId === null) return componentKey;
+  const rawNode = context.workflow.nodes.find((candidate) => isNodeWithId(candidate, nodeId));
+  if (rawNode === undefined) return componentKey;
+  const parsedNode = workflowContextNodeSchema.safeParse(rawNode);
+  if (!parsedNode.success) return componentKey;
+  try {
+    return resolveWorkflowComponent(parsedNode.data, { componentKey, mode: "read" }).componentKey
+      ?? componentKey;
+  } catch (error) {
+    throw componentMappingError(error);
   }
-  const component = node.components.find((candidate) => candidate.key === componentKey);
-  if (!component) {
-    throw new AgentContextMappingError(`AGENT_CONTEXT_COMPONENT_NOT_FOUND: 未找到组件 ${componentKey}`);
+}
+
+function componentMappingError(error: unknown): AgentContextMappingError {
+  if (error instanceof ComponentResolutionError) {
+    const code = error.code === "COMPONENT_NOT_FOUND"
+      ? "AGENT_CONTEXT_COMPONENT_NOT_FOUND"
+      : "AGENT_CONTEXT_COMPONENT_UNAVAILABLE";
+    return new AgentContextMappingError(`${code}: ${error.message.replace(`${error.code}: `, "")}`);
   }
-  return component;
+  return new AgentContextMappingError(`AGENT_CONTEXT_COMPONENT_INVALID: ${String(error)}`);
 }
 
 function isNodeWithId(value: unknown, id: number): boolean {

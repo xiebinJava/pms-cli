@@ -18,6 +18,7 @@ import {
 } from "./storyWorkbench.js";
 import { planAgentProgressionDraft } from "./AgentDraftContract.js";
 import { deriveProgressionExecutionMode, mayExecuteProgression } from "./progressionPolicy.js";
+import { ComponentResolutionError, resolveWorkflowComponent } from "../core/componentResolver.js";
 import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
 
 export async function planStoryProgression(
@@ -38,7 +39,14 @@ export async function planStoryProgression(
     ? "confirmation" as const
     : "automatic" as const;
   const draftPlan = input.draft
-    ? planAgentProgressionDraft(input.draft, binding.context, binding.nodeId, input.intent, draftExecutionMode)
+    ? planAgentProgressionDraft(
+      input.draft,
+      binding.context,
+      binding.nodeId,
+      input.intent,
+      draftExecutionMode,
+      input.componentKey,
+    )
     : null;
   if (draftPlan && draftPlan.writeDecision !== "READY") {
     return {
@@ -49,7 +57,7 @@ export async function planStoryProgression(
       intent: input.intent,
       operation: declaredCommand,
       context: binding.context,
-      normalizedArguments: storyArguments(workbenchInput, declaredCommand),
+      normalizedArguments: storyArguments(workbenchInput, binding, declaredCommand),
       capability,
       preview: null,
       fieldChanges: draftPlan.fieldChanges,
@@ -84,7 +92,7 @@ export async function planStoryProgression(
     intent: input.intent,
     operation: plan.preview.command,
     context: binding.context,
-    normalizedArguments: storyArguments(workbenchInput, plan.preview.command),
+    normalizedArguments: storyArguments(workbenchInput, binding, plan.preview.command),
     capability,
     preview: plan.preview,
     fieldChanges: draftPlan?.fieldChanges ?? [],
@@ -166,39 +174,59 @@ type StoryBinding = {
   nodeId: number;
   version: number;
   variant: StoryWorkbenchInput["variant"];
+  componentKey: string;
+  fieldValuesPath: string;
   command: string;
   completionCommand?: string;
 };
 
 async function readStoryBinding(client: PmsClient, input: ParsedAgentProgressionInput): Promise<StoryBinding> {
+  const requestedComponent = input.componentKey;
   const context = await client.context(
     { type: "story", id: input.resourceId },
     input.nodeId === undefined
-      ? { view: "focused", component: "story-node-workbench" }
-      : { nodeId: input.nodeId, view: "focused", component: "story-node-workbench" },
+      ? { view: "focused", ...(requestedComponent === undefined ? {} : { component: requestedComponent }) }
+      : {
+        nodeId: input.nodeId,
+        view: "focused",
+        ...(requestedComponent === undefined ? {} : { component: requestedComponent }),
+      },
   );
   const nodeId = input.nodeId ?? context.currentNode?.id;
   if (!isPositiveInteger(nodeId)) throw new Error("故事推进必须绑定当前节点 nodeId");
   const node = (Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [])
     .find((candidate) => isRecord(candidate) && candidate.id === nodeId) as Record<string, any> | undefined;
-  const component = (node && Array.isArray(node.components) ? node.components : [])
-    .find((candidate) => isRecord(candidate) && candidate.key === "story-node-workbench");
+  let component: Record<string, any> | undefined;
+  try {
+    component = node
+      ? resolveWorkflowComponent(node as any, { componentKey: requestedComponent, mode: "write" })
+        .component as Record<string, any> | undefined
+      : undefined;
+  } catch (error) {
+    if (error instanceof ComponentResolutionError) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
+    }
+    throw error;
+  }
   const contract = component?.saveContract;
   if (!contract || typeof contract !== "object" || Array.isArray(contract)) {
-    throw new Error("故事当前节点没有 story-node-workbench saveContract");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事当前节点没有可写 saveContract");
   }
   const raw = contract as Record<string, unknown>;
   const version = raw.version ?? context.version;
   const variant = raw.variant;
   if (!isNonNegativeInteger(version) || !isStoryVariant(variant)
     || raw.command !== "development-item.node.field.update") {
-    throw new Error("故事当前节点 saveContract 不完整");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事当前节点 saveContract 不完整");
   }
   return {
     context,
     nodeId,
     version,
     variant,
+    componentKey: typeof raw.componentKey === "string" ? raw.componentKey : component?.key,
+    fieldValuesPath: typeof raw.fieldValuesPath === "string"
+      ? raw.fieldValuesPath : `__components.${component?.key}`,
     command: raw.command,
     ...(typeof raw.completionCommand === "string" ? { completionCommand: raw.completionCommand } : {}),
   };
@@ -217,6 +245,7 @@ function toWorkbenchInput(
     resourceId: input.resourceId,
     nodeId: binding.nodeId,
     version: binding.version,
+    componentKey: binding.componentKey,
     variant: binding.variant,
     patch: draft?.patch ?? {},
     save: execute,
@@ -230,13 +259,17 @@ function toWorkbenchInput(
   };
 }
 
-function storyArguments(input: StoryWorkbenchInput, operation: string): Record<string, unknown> {
+function storyArguments(
+  input: StoryWorkbenchInput,
+  binding: StoryBinding,
+  operation: string,
+): Record<string, unknown> {
   return {
     itemType: "STORY",
     itemId: input.resourceId,
     nodeId: input.nodeId,
     version: input.version,
-    fieldValues: { __components: { "story-node-workbench": input.patch } },
+    fieldValues: fieldValuesAtPath(binding.fieldValuesPath, input.patch),
     ...(operation === "development-item.node.complete-with-data" && input.ownerId !== undefined
       ? { ownerId: input.ownerId } : {}),
     ...(operation === "development-item.node.complete-with-data" && input.startDate !== undefined
@@ -244,6 +277,15 @@ function storyArguments(input: StoryWorkbenchInput, operation: string): Record<s
     ...(operation === "development-item.node.complete-with-data" && input.endDate !== undefined
       ? { endDate: input.endDate } : {}),
   };
+}
+
+function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record<string, unknown> {
+  const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
+  let result: Record<string, unknown> = patch;
+  for (let index = segments.length - 1; index >= 0; index -= 1) {
+    result = { [segments[index]!]: result };
+  }
+  return result;
 }
 
 function isStoryVariant(value: unknown): value is StoryWorkbenchInput["variant"] {
