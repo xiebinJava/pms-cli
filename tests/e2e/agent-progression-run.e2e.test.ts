@@ -4,7 +4,12 @@ import { BrowserAuth, type CliSession } from "../../apps/pms-cli/src/auth/Browse
 import { executeAgentProgression } from "../../apps/pms-cli/src/commands/scenarios/agentProgression.js";
 import { runAgentProgression } from "../../apps/pms-cli/src/commands/scenarios/agentProgressionRun.js";
 import { PmsHttpClient, StaticTokenProvider } from "../../packages/pms-client/src/index.js";
-import { agentProgressionContractVersion, type WorkflowContext } from "../../packages/pms-contracts/src/index.js";
+import {
+  agentProgressionContractVersion,
+  computeDraftDigest,
+  type DraftProvenance,
+  type WorkflowContext,
+} from "../../packages/pms-contracts/src/index.js";
 import { auditOperationsInWindow } from "./support/operationAudit.js";
 import {
   assertIsolatedE2EConfig,
@@ -72,6 +77,7 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
         throw new Error("Agent progression E2E 目标节点没有可用版本或不是当前节点");
       }
       const draft = draftForContext(before, config.runId);
+      const provenance = provenanceForContext(before, draft);
       const base = {
         contractVersion: agentProgressionContractVersion,
         resourceType: "requirement" as const,
@@ -81,6 +87,7 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
         intent: "UPDATE_NODE_FIELDS" as const,
         executeMode: "auto" as const,
         draft,
+        provenance,
         idempotencyKey: `${config.runId}-agent-progression-write`,
       };
 
@@ -102,8 +109,9 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
         { nodeId, view: "focused" },
       );
       if (afterFirst.version === null) throw new Error("Agent progression replay 缺少最新上下文版本");
+      const { provenance: _provenance, ...replayInput } = base;
       const replay = await executeAgentProgression(client, {
-        ...base,
+        ...replayInput,
         contextVersion: afterFirst.version,
         previewOperationId: first.previewOperationId!,
       });
@@ -146,13 +154,74 @@ function draftForContext(context: WorkflowContext, runId: string) {
     patch,
     fieldSources: {
       [fieldKey]: {
-        sourceType: "conversation" as const,
-        sourceRefs: [`conversation:${runId}`],
+        sourceType: "pms_context" as const,
+        sourceRefs: [`requirement-node:${context.currentNode?.id}#component:${componentKey(component)}`],
         confidence: "high" as const,
       },
     },
     requestedCompletion: false,
   };
+}
+
+function provenanceForContext(
+  context: WorkflowContext,
+  draft: ReturnType<typeof draftForContext>,
+): DraftProvenance {
+  const nodeId = context.currentNode?.id;
+  if (typeof nodeId !== "number") throw new Error("Agent progression E2E 当前上下文缺少节点 ID");
+  const node = (context.workflow?.nodes ?? []).find((candidate) => isRecord(candidate)
+    && candidate.id === nodeId);
+  const component = isRecord(node) && Array.isArray(node.components)
+    ? node.components.find((candidate) => isRecord(candidate) && isRecord(candidate.saveContract))
+    : undefined;
+  const key = componentKey(component);
+  const saveContract = isRecord(component) && isRecord(component.saveContract)
+    ? component.saveContract
+    : undefined;
+  const versions = isRecord(component) && isRecord(component.versions) ? component.versions : undefined;
+  const versionSnapshot = {
+    nodeVersion: isRecord(node) && typeof node.version === "number" ? node.version : null,
+    entityVersion: typeof context.entityVersion === "number" ? context.entityVersion : null,
+    workflowInstanceVersion: typeof context.meta?.workflowInstanceVersion === "number"
+      ? context.meta.workflowInstanceVersion : null,
+    componentVersion: typeof versions?.content === "number"
+      ? versions.content
+      : typeof versions?.node === "number"
+        ? versions.node
+        : typeof saveContract?.version === "number" ? saveContract.version : null,
+    contextVersion: typeof context.meta?.contextVersion === "string"
+      || typeof context.meta?.contextVersion === "number"
+      ? context.meta.contextVersion
+      : context.version,
+  } as const;
+  const digestInput = {
+    contractVersion: "draft-provenance/v1" as const,
+    resourceType: "requirement" as const,
+    resourceId: context.resource.id,
+    nodeId,
+    componentKey: key,
+    intent: "UPDATE_NODE_FIELDS" as const,
+    requestedCompletion: draft.requestedCompletion === true,
+    versionSnapshot,
+    facts: draft.facts,
+    inferences: draft.inferences,
+    assumptions: draft.assumptions,
+    unresolvedDecisions: draft.unresolvedDecisions,
+    patch: draft.patch,
+    fieldSources: draft.fieldSources ?? {},
+  };
+  return {
+    contractVersion: "draft-provenance/v1",
+    draftDigest: computeDraftDigest(digestInput),
+    fieldSources: draft.fieldSources ?? {},
+  };
+}
+
+function componentKey(component: unknown): string {
+  if (!isRecord(component) || typeof component.key !== "string" || component.key.trim() === "") {
+    throw new Error("Agent progression E2E 当前节点缺少可写组件 key");
+  }
+  return component.key;
 }
 
 function valueForField(field: unknown, marker: string): unknown {
