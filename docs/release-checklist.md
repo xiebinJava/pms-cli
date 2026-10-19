@@ -39,7 +39,7 @@ pnpm run verify:real-pms:story-orchestrator
 
 当 execute 返回成功但回读不完整时，状态必须是 `WRITE_RESULT_UNKNOWN`。处理顺序固定为：
 
-1. 保留 `previewOperationId`、`operationId`、`auditId`、幂等键和 `draftDigest`；完成节点导致的状态、负责人或排期变化必须使用 preview 变更集中的 `allowedMutations` 回读核验。
+1. 保留 `previewOperationId`、`operationId`、`auditId`、幂等键和 `draftDigest`；完成节点导致的状态、负责人或排期变化必须使用 preview/operation 中由 PMS 声明的 `allowedMutations` 回读核验，execute 请求本身不得携带这份白名单。
 2. 只在同一 conversation、同一 preview、同一 `draftDigest` 范围内用相同幂等键重放。
 3. 重放前重新读取资源和 focused context；如果版本冲突，返回 `CONFLICT` 并重新 plan。
 4. 不根据一次 HTTP 成功猜测字段已经落库，也不依赖尚未提供的 operation GET 或 provenance 查询来自动收敛。
