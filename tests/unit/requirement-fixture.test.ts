@@ -146,6 +146,7 @@ function clientFor(resultData: Record<string, unknown>, context: Record<string, 
         details: { title: "fixture" },
       }),
       context: async () => context,
+      organizationTree: async () => [{ id: 101, status: "ACTIVE", children: [] }],
     } as never,
     calls,
   };

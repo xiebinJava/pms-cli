@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PmsHttpClient, StaticTokenProvider } from "../../../packages/pms-client/src/index.js";
 import { AuthStore } from "./auth/AuthStore.js";
 import { BrowserAuth } from "./auth/BrowserAuth.js";
-import { authLogin, authLogout, authStatus } from "./commands/core/auth.js";
+import { authDoctor, authLogin, authLogout, authStatus } from "./commands/core/auth.js";
 import { doctor } from "./commands/core/doctor.js";
 import { setup } from "./commands/core/setup.js";
 import { runCli } from "./cli/runCli.js";
@@ -36,6 +36,7 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
 async function runAuth(command: string | undefined, args: string[]) {
   const store = createAuthStore();
   if (command === "status") return authStatus(store);
+  if (command === "doctor") return authDoctor(store);
   const rawBaseUrl = process.env.PMS_BASE_URL?.trim() || "http://localhost:5173/api";
   const baseUrl = AuthStore.normalizeBaseUrl(rawBaseUrl);
   const authOrigin = process.env.PMS_AUTH_ORIGIN?.trim() || originFromBase(baseUrl);

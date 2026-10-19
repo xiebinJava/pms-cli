@@ -67,6 +67,10 @@ export class AuthStore {
     this.keyringTimeoutMs = Math.max(1, options.keyringTimeoutMs ?? DEFAULT_KEYRING_TIMEOUT_MS);
   }
 
+  get serviceName(): string {
+    return this.service;
+  }
+
   static normalizeBaseUrl(baseUrl: string): string {
     const url = new URL(baseUrl.trim());
     if (url.username || url.password) throw new Error("PMS 地址不能包含用户信息");

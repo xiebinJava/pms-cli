@@ -97,7 +97,7 @@ import {
 const HELP = [
   "PMS CLI",
   "",
-  "  pms auth login|status|logout",
+  "  pms auth login|status|doctor|logout",
   "  pms capabilities [--scope <scope>]",
   "  pms search <resourceType> [--keyword <text>] [--filter key=value]",
   "  pms resolve <project|requirement|topic|story> --name <exact-name>",

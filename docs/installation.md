@@ -23,12 +23,15 @@ node dist/pms-cli.js --help
 ```bash
 set PMS_BASE_URL=http://localhost:5173/api  # Windows PowerShell: $env:PMS_BASE_URL=...
 pms auth login
+pms auth doctor --format json
 pms capabilities --format json
 ```
 
 `pms auth login` 会打开 PMS 浏览器登录页，CLI 使用 PKCE 回调交换短时 access token；长期 refresh token 只保存到操作系统凭据管理器。
 
 `PMS_BASE_URL` 必须填写纯 URL，例如 `http://localhost:5173/api`，不要粘贴 `[地址](地址)` 形式的 Markdown 链接。登录成功只返回账号摘要，不会把 access token 或 refresh token 打印到终端。
+
+`pms auth doctor --format json` 只读取本地凭据状态，不会访问 PMS 业务接口，也不会输出 Token。它会区分已登录、未登录、钥匙串超时和钥匙串权限失败。遇到 `KEYRING_TIMEOUT` 或 `KEYRING_ACCESS` 时，请在普通终端重新执行 `pms auth login`，并允许终端访问 macOS 登录钥匙串。
 
 需求分析保存示例：
 
