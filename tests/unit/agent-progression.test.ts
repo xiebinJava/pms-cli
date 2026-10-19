@@ -99,6 +99,24 @@ describe("agent progression draft validation", () => {
       "testResult: 低置信度推断不能自动写入高风险业务结论",
     );
 
+    const evidence = await validateAgentProgressionDraft(pms, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 387,
+      intent: "UPDATE_NODE_FIELDS",
+      draft: {
+        ...baseDraft({}),
+        facts: [{ text: "事实缺少来源", sourceRefs: [] }],
+        inferences: [{ text: "推断缺少来源", sourceRefs: [] }],
+        assumptions: [{ text: "需要用户确认的假设", sourceRefs: [] }],
+      },
+    });
+    expect(evidence.diagnostics.missingSources).toEqual(["facts[0]", "inferences[0]"]);
+    expect(evidence.diagnostics.unresolvedDecisions).toContain(
+      "假设需要确认后才能继续写入：需要用户确认的假设",
+    );
+
     const empty = await validateAgentProgressionDraft(pms, {
       contractVersion: agentProgressionContractVersion,
       resourceType: "story",

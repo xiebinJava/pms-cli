@@ -414,10 +414,20 @@ function progressionWarnings(details: ReturnType<typeof planAgentProgressionDraf
   return [
     ...details.unknownFields.map((key) => `草稿字段 ${key} 不在当前 PMS 可写契约中`),
     ...details.protectedFields.map((key) => `草稿字段 ${key} 是受保护字段`),
-    ...details.missingSources.map((key) => `草稿字段 ${key} 缺少来源引用`),
+    ...details.missingSources.map((key) => evidenceWarning(key)),
     ...details.unresolvedDecisions,
     ...(details.completionBlockReason ? [details.completionBlockReason] : []),
   ];
+}
+
+function evidenceWarning(key: string): string {
+  if (/^(facts|inferences)\[\d+\]\.sourceRefs$/.test(key)) {
+    return `草稿证据 ${key} 引用了当前 PMS 上下文之外的来源`;
+  }
+  if (/^(facts|inferences)\[\d+\]$/.test(key)) {
+    return `草稿证据 ${key} 缺少来源引用`;
+  }
+  return `草稿字段 ${key} 缺少来源引用`;
 }
 
 function draftModeForRequest(

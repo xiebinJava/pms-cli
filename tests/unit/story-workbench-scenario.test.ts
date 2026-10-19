@@ -6,6 +6,7 @@ import {
   runStoryWorkbenchScenario,
   type StoryWorkbenchScenarioClient,
 } from "../../apps/pms-cli/src/commands/scenarios/storyWorkbench.js";
+import { ResourceScenarioError } from "../../apps/pms-cli/src/commands/scenarios/resourceScenarioRegistry.js";
 import { storyWorkbenchContractVersion } from "../../packages/pms-contracts/src/index.js";
 
 const catalog = {
@@ -230,6 +231,22 @@ describe("story workbench write scenario", () => {
       ...input,
       patch: { serverOnlyField: "不能写" },
     }, async () => true)).rejects.toThrow(/writableFields/);
+    expect(calls).toEqual(["context"]);
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("normalizes stale context as an in-band scenario conflict", async () => {
+    const { client, calls } = fakeClient();
+
+    await expect(runStoryWorkbenchScenario(client, {
+      ...input,
+      version: 2,
+      save: false,
+      idempotencyKey: undefined,
+    }, async () => true)).rejects.toMatchObject({
+      name: "ResourceScenarioError",
+      code: "CONTEXT_CONFLICT",
+    } satisfies Partial<ResourceScenarioError>);
     expect(calls).toEqual(["context"]);
     expect(client.preview).not.toHaveBeenCalled();
   });

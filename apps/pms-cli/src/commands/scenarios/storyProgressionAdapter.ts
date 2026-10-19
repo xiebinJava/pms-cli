@@ -29,7 +29,7 @@ export async function planStoryProgression(
   const workbenchInput = toWorkbenchInput(input, binding, false);
   const declaredCommand = input.intent === "COMPLETE_NODE" ? binding.completionCommand : binding.command;
   if (!declaredCommand) throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事当前节点未声明该推进能力");
-  const capability = await new CapabilityResolver(client).action(declaredCommand);
+  const capability = await capabilityFor(client, input, binding);
   if (capability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
@@ -210,8 +210,15 @@ async function capabilityFor(
   binding: StoryBinding,
 ): Promise<ActionCapability> {
   const command = input.intent === "COMPLETE_NODE" ? binding.completionCommand : binding.command;
-  if (!command) throw new Error("故事当前节点未声明该推进能力");
-  return new CapabilityResolver(client).action(command);
+  if (!command) throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事当前节点未声明该推进能力");
+  try {
+    return await new CapabilityResolver(client).action(command);
+  } catch (error) {
+    throw new ResourceScenarioError(
+      "CAPABILITY_UNAVAILABLE",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 function waitingForConfirmation(
@@ -260,7 +267,9 @@ async function readStoryBinding(client: PmsClient, input: ParsedAgentProgression
       },
   );
   const nodeId = input.nodeId ?? context.currentNode?.id;
-  if (!isPositiveInteger(nodeId)) throw new Error("故事推进必须绑定当前节点 nodeId");
+  if (!isPositiveInteger(nodeId)) {
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "故事推进必须绑定当前节点 nodeId");
+  }
   if (context.currentNode?.id !== nodeId) {
     throw new ResourceScenarioError(
       "CONTEXT_CONFLICT",
@@ -292,14 +301,22 @@ async function readStoryBinding(client: PmsClient, input: ParsedAgentProgression
     || raw.command !== "development-item.node.field.update") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事当前节点 saveContract 不完整");
   }
+  const componentKey = typeof raw.componentKey === "string" ? raw.componentKey : component?.key;
+  const fieldValuesPath = typeof raw.fieldValuesPath === "string"
+    ? raw.fieldValuesPath : `__components.${component?.key}`;
+  if (typeof componentKey !== "string" || componentKey.trim() === "") {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事节点 saveContract 缺少 componentKey");
+  }
+  if (fieldValuesPath.split(".").map((segment) => segment.trim()).filter(Boolean).length === 0) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "故事节点 saveContract.fieldValuesPath 不能为空");
+  }
   return {
     context,
     nodeId,
     version,
     variant,
-    componentKey: typeof raw.componentKey === "string" ? raw.componentKey : component?.key,
-    fieldValuesPath: typeof raw.fieldValuesPath === "string"
-      ? raw.fieldValuesPath : `__components.${component?.key}`,
+    componentKey,
+    fieldValuesPath,
     command: raw.command,
     ...(typeof raw.completionCommand === "string" ? { completionCommand: raw.completionCommand } : {}),
   };

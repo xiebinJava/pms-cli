@@ -239,8 +239,24 @@ export function validateAgentProgressionDraftFields(
     const source = fieldSources[key];
     return writable.has(key) && (source === undefined || source.sourceRefs.length === 0);
   });
+  const readableReferences = readableContextReferences(context);
+  for (const [kind, items] of [
+    ["facts", draft.facts],
+    ["inferences", draft.inferences],
+  ] as const) {
+    items.forEach((item, index) => {
+      if (item.sourceRefs.length === 0) {
+        missingSources.push(`${kind}[${index}]`);
+        return;
+      }
+      if (item.sourceRefs.some((sourceRef) => !readableReferences.has(sourceRef))) {
+        missingSources.push(`${kind}[${index}].sourceRefs`);
+      }
+    });
+  }
   const unresolvedDecisions = [
     ...draft.unresolvedDecisions.map((item) => item.text),
+    ...draft.assumptions.map((item) => `假设需要确认后才能继续写入：${item.text}`),
     ...patchKeys.filter((key) => {
       const source = fieldSources[key];
       return highRiskInferenceFields.has(key)
@@ -294,7 +310,11 @@ export function planAgentProgressionDraft(
   if (contract.writableFields.length === 0 || !contract.command) writeDecision = "CAPABILITY_UNAVAILABLE";
   else if (diagnostics.unknownFields.length > 0 || diagnostics.protectedFields.length > 0) {
     writeDecision = "CAPABILITY_UNAVAILABLE";
-  } else if (allMissing.length > 0 || diagnostics.missingSources.length > 0) {
+  } else if (
+    allMissing.length > 0
+    || diagnostics.missingSources.length > 0
+    || draft.assumptions.length > 0
+  ) {
     writeDecision = "NEEDS_INPUT";
   } else if (diagnostics.unresolvedDecisions.length > 0 || executionMode === "confirmation") {
     writeDecision = "WAITING_CONFIRMATION";

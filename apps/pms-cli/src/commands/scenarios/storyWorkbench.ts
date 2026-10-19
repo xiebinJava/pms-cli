@@ -152,16 +152,20 @@ async function prepare(
   );
   const allowIdempotentReplay = parsed.save && Boolean(parsed.idempotencyKey);
   if (context.version !== parsed.version && !allowIdempotentReplay) {
-    throw new Error(`故事上下文版本 ${context.version ?? "无"} 与请求版本 ${parsed.version} 不一致`);
+    throw new ResourceScenarioError(
+      "CONTEXT_CONFLICT",
+      `故事上下文版本 ${context.version ?? "无"} 与请求版本 ${parsed.version} 不一致`,
+    );
   }
   const saveContract = readSaveContract(context, parsed.nodeId, parsed.componentKey);
   validateSaveContract(saveContract, parsed, allowIdempotentReplay);
   const unknownField = Object.keys(parsed.patch).find(
     (key) => !saveContract.writableFields.includes(key),
   );
-  if (unknownField) {
-    throw new Error(`草稿字段 ${unknownField} 不在 saveContract.writableFields 中`);
-  }
+  if (unknownField) throw new ResourceScenarioError(
+    "CAPABILITY_UNAVAILABLE",
+    `草稿字段 ${unknownField} 不在 saveContract.writableFields 中`,
+  );
   const argumentsValue: Record<string, unknown> = {
     itemType: saveContract.itemType,
     itemId: saveContract.itemId,
@@ -172,7 +176,7 @@ async function prepare(
   const complete = parsed.complete === true;
   if (complete) {
     if (!saveContract.completionSupported || !saveContract.completionCommand) {
-      throw new Error("当前故事节点没有可用的完成命令");
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "当前故事节点没有可用的完成命令");
     }
     if (parsed.ownerId !== undefined) argumentsValue.ownerId = parsed.ownerId;
     if (parsed.startDate !== undefined) argumentsValue.startDate = parsed.startDate;
@@ -198,7 +202,9 @@ function readSaveContract(
 ): SaveContract {
   const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
   const node = nodes.find((candidate) => isRecord(candidate) && candidate.id === nodeId);
-  if (!isRecord(node)) throw new Error(`故事上下文中不存在节点 ${nodeId}`);
+  if (!isRecord(node)) {
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", `故事上下文中不存在节点 ${nodeId}`);
+  }
   let component: Record<string, any> | undefined;
   try {
     component = resolveWorkflowComponent(node as any, {
@@ -212,19 +218,22 @@ function readSaveContract(
     throw error;
   }
   if (!isRecord(component) || !isRecord(component.saveContract)) {
-    throw new Error("所选故事节点没有可写的 story-node-workbench saveContract");
+    throw new ResourceScenarioError(
+      "CAPABILITY_UNAVAILABLE",
+      "所选故事节点没有可写的 story-node-workbench saveContract",
+    );
   }
   const raw = component.saveContract;
   const writableFields = raw.writableFields;
   if (!Array.isArray(writableFields) || !writableFields.every((field) => typeof field === "string")) {
-    throw new Error("saveContract.writableFields 无效");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "saveContract.writableFields 无效");
   }
   if (!isPositiveInteger(raw.itemId) || !isPositiveInteger(raw.nodeId)
     || !isNonNegativeInteger(raw.version)
     || typeof raw.command !== "string" || typeof raw.itemType !== "string"
     || typeof raw.componentKey !== "string" || typeof raw.variant !== "string"
     || typeof raw.fieldValuesPath !== "string") {
-    throw new Error("story-node-workbench saveContract 不完整");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "story-node-workbench saveContract 不完整");
   }
   return {
     command: raw.command,
@@ -255,25 +264,31 @@ function validateSaveContract(
   allowIdempotentReplay: boolean,
 ): void {
   if (contract.command !== "development-item.node.field.update") {
-    throw new Error(`saveContract command 不支持: ${contract.command}`);
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", `saveContract command 不支持: ${contract.command}`);
   }
   if (contract.itemType !== "STORY" || contract.itemId !== input.resourceId) {
-    throw new Error("saveContract 的故事标识与请求不一致");
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "saveContract 的故事标识与请求不一致");
   }
   if (contract.nodeId !== input.nodeId || (!allowIdempotentReplay && contract.version !== input.version)) {
-    throw new Error("saveContract 的节点或版本与请求不一致");
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "saveContract 的节点或版本与请求不一致");
   }
   if (input.componentKey !== undefined && contract.componentKey !== input.componentKey) {
-    throw new Error(`saveContract componentKey ${contract.componentKey} 与请求 ${input.componentKey} 不一致`);
+    throw new ResourceScenarioError(
+      "CONTEXT_CONFLICT",
+      `saveContract componentKey ${contract.componentKey} 与请求 ${input.componentKey} 不一致`,
+    );
   }
   if (contract.fieldValuesPath.trim() === "") {
-    throw new Error("saveContract 的组件路径不受支持");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "saveContract 的组件路径不受支持");
   }
   if (contract.variant !== input.variant) {
-    throw new Error(`saveContract variant ${contract.variant} 与请求 ${input.variant} 不一致`);
+    throw new ResourceScenarioError(
+      "CONTEXT_CONFLICT",
+      `saveContract variant ${contract.variant} 与请求 ${input.variant} 不一致`,
+    );
   }
   if (input.complete === true && (!contract.completionSupported || !contract.completionCommand)) {
-    throw new Error("saveContract 未声明故事节点完成能力");
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "saveContract 未声明故事节点完成能力");
   }
 }
 
@@ -286,7 +301,9 @@ async function executeAfterPreview(
   let operation: OperationResult;
   try {
     const operationId = preview?.operationId ?? previewOperationId;
-    if (!operationId) throw new Error("执行写入前必须先取得操作预览");
+    if (!operationId) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "执行写入前必须先取得操作预览");
+    }
     operation = await operationExecutePreview(client, operationId, prepared.input.idempotencyKey!);
   } catch (error) {
     if (!isConflict(error)) throw error;
@@ -426,7 +443,9 @@ function baseResult(input: StoryWorkbenchInput, status: StoryWorkbenchResult["st
 
 function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record<string, unknown> {
   const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
-  if (segments.length === 0) throw new Error("saveContract.fieldValuesPath 不能为空");
+  if (segments.length === 0) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "saveContract.fieldValuesPath 不能为空");
+  }
   let result: Record<string, unknown> = patch;
   for (let index = segments.length - 1; index >= 0; index -= 1) {
     result = { [segments[index]!]: result };

@@ -267,6 +267,46 @@ describe("agent progression run", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("maps story binding conflicts to an in-band run status", async () => {
+    const client = {
+      context: vi.fn(async () => ({
+        resource: { type: "story" as const, id: 34 },
+        version: 1,
+        currentNode: { id: 384, key: "iteration", label: "迭代计划会" },
+        workflow: { nodes: [] },
+        relations: [],
+        allowedActions: [],
+      })),
+    } as any;
+
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 999,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "plan",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { meetingNote: "新内容" },
+        fieldSources: {
+          meetingNote: {
+            sourceType: "conversation",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("CONFLICT");
+    expect(result.plan).toBeNull();
+    expect(result.warnings.join(" ")).toContain("CONTEXT_CONFLICT");
+  });
+
   it("previews and executes a complete medium-risk draft in auto mode", async () => {
     const client = requirementClient("medium");
     const result = await runAgentProgression(client, input("auto", {
@@ -515,6 +555,23 @@ describe("agent progression run", () => {
     expect(protectedResult.status).toBe("CAPABILITY_UNAVAILABLE");
     expect(protectedClient.preview).not.toHaveBeenCalled();
     expect(protectedClient.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("keeps assumptions as follow-up questions instead of writing them", async () => {
+    const client = requirementClient();
+    const result = await runAgentProgression(client, input("auto", {
+      idempotencyKey: "run-assumption-follow-up",
+      draft: {
+        ...draft(),
+        assumptions: [{ text: "测试结果需要业务确认", sourceRefs: [] }],
+      },
+    }));
+
+    expect(result.status).toBe("NEEDS_INPUT");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.warnings.join(" ")).toContain("假设需要确认后才能继续写入");
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.executePreview).not.toHaveBeenCalled();
   });
 
   it("runs a project node field update through the shared resource scenario", async () => {
