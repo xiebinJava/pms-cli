@@ -2,6 +2,7 @@ import type {
   ActionCapability,
   ResourceDetail,
   ResourceScenarioContext,
+  ResourceScenarioSnapshot,
   ParsedResourceScenarioInput,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
@@ -161,7 +162,7 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
       && (expectedId === undefined || after.context.resource.id === Number(expectedId));
     const relationConsistent = relationIsConsistent(after.resource, after.context);
     const workflowStable = workflowDidNotDrift(before?.context, after.context);
-    const protectedFieldsUnchanged = compareProtectedFields(before?.resource, after.resource);
+    const protectedFieldsUnchanged = compareProtectedFields(before, after);
     return {
       resourceReadback,
       contextReadback: contextReadback && relationConsistent,
@@ -341,11 +342,23 @@ function nodeKey(value: unknown): string {
   return `${String(value.id)}:${String(value.key)}`;
 }
 
-function compareProtectedFields(before: ResourceDetail | null | undefined, after: ResourceDetail | null): boolean {
+function compareProtectedFields(
+  before: ResourceScenarioSnapshot | null | undefined,
+  after: ResourceScenarioSnapshot | null,
+): boolean {
   if (!before) return true;
   if (!after) return false;
-  return ["id", "status", "deleted"].every((key) => !Object.prototype.hasOwnProperty.call(before.details, key)
-    || JSON.stringify(before.details[key]) === JSON.stringify(after.details[key]));
+  const beforeDetails = {
+    ...(before.resource?.details ?? {}),
+    ...(before.context?.resourceDetails ?? {}),
+  };
+  const afterDetails = {
+    ...(after.resource?.details ?? {}),
+    ...(after.context?.resourceDetails ?? {}),
+  };
+  return ["id", "status", "deleted"].every((key) => !Object.prototype.hasOwnProperty.call(beforeDetails, key)
+    || Object.prototype.hasOwnProperty.call(afterDetails, key)
+      && JSON.stringify(beforeDetails[key]) === JSON.stringify(afterDetails[key]));
 }
 
 function validateDeclaredArguments(

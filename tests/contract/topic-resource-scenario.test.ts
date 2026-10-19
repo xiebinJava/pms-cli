@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PmsClient } from "../../packages/pms-client/src/index.js";
 import {
   resourceScenarioContractVersion,
+  type ResourceScenarioSnapshot,
   type WorkflowContext,
 } from "../../packages/pms-contracts/src/index.js";
 import {
@@ -320,5 +321,56 @@ describe("topic resource scenario contract", () => {
       idempotencyKey: "topic-update-readback-unknown",
     }, createResourceScenarioRegistry([topicScenarioAdapter]));
     expect(result.status).toBe("WRITE_RESULT_UNKNOWN");
+  });
+
+  it("uses the workflow context projection when the topic readback omits protected fields", () => {
+    const beforeContext = topicContext();
+    beforeContext.resourceDetails = {
+      ...beforeContext.resourceDetails,
+      status: "IN_PROGRESS",
+      deleted: false,
+    };
+    const afterContext = topicContext({ version: 5 });
+    afterContext.resourceDetails = {
+      ...beforeContext.resourceDetails,
+    };
+    const before: ResourceScenarioSnapshot = {
+      resource: {
+        ...topicDetail,
+        details: {
+          ...topicDetail.details,
+          deleted: false,
+        },
+      },
+      context: beforeContext,
+    };
+    const after: ResourceScenarioSnapshot = {
+      resource: {
+        ...topicDetail,
+        details: {
+          id: 12,
+          title: "研发流程专题",
+          projectId: 9,
+          projectName: "PMS 项目",
+          status: "IN_PROGRESS",
+        },
+      },
+      context: afterContext,
+    };
+
+    const verification = topicScenarioAdapter.verifyReadback(
+      before,
+      after,
+      { topicId: 12 },
+      {
+        operationId: "operation-topic-1",
+        status: "SUCCEEDED",
+        data: { topicId: 12 },
+        warnings: [],
+        refreshScopes: [],
+      },
+    );
+
+    expect(verification.protectedFieldsUnchanged).toBe(true);
   });
 });
