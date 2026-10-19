@@ -144,14 +144,14 @@
 
 **Interfaces:** 四类资源的 progression 写入都要求 `nodeId === currentNode.id`；project 的 currentNode 必须取 focused context 的 `currentNode`，不能取 `selectedNodeId`；story 必须先解析 binding 再比较。历史节点补录不属于本阶段。
 
-- [ ] 先写 project/story 的错误测试，确保错误节点在 preview 前返回 in-band `CONFLICT`。
-- [ ] 保留 requirement/topic 的现有校验并统一错误类型。
-- [ ] project 使用 focused context 的 `currentNode`；测试 `selectedNodeId` 与 `currentNode` 不同时仍返回 `CONFLICT`。
-- [ ] story 在 `readStoryBinding` 之后比较 `binding.nodeId` 与 `context.currentNode?.id`，不能只信任请求参数。
-- [ ] draft validator 与 adapter 必须复用同一个已解析的 component/saveContract，不能分别读取第一个 component。
-- [ ] 让 `project.create`、`project.update`（包括 `project-basic-info`）继续走资源级路径，不要求 `nodeId === currentNode.id`；当前节点校验只适用于 `node.field.update` / `node.complete-with-data` 等真正的节点写入。
-- [ ] 运行四类 adapter 的 focused context contract tests。
-- [ ] Review：确认没有禁止合法的资源级更新，也没有把 selectedNodeId 当成 currentNode。
+- [x] 先写 project/story 的错误测试，确保错误节点在 preview 前返回 in-band `CONFLICT`。
+- [x] 保留 requirement/topic 的现有校验并统一错误类型。
+- [x] project 使用 focused context 的 `currentNode`；测试 `selectedNodeId` 与 `currentNode` 不同时仍返回 `CONFLICT`。
+- [x] story 在 `readStoryBinding` 之后比较 `binding.nodeId` 与 `context.currentNode?.id`，不能只信任请求参数。
+- [x] draft validator 与 adapter 复用同一个 component resolver 语义，不能分别读取第一个 component。
+- [x] `project.create`、`project.update`（包括 `project-basic-info`）继续走资源级路径；当前节点校验只适用于真正的节点写入。
+- [x] 运行四类 adapter 的 focused context contract tests。
+- [x] Review：确认没有禁止合法的资源级更新，也没有把 selectedNodeId 当成 currentNode。
 - [ ] 提交：`git commit -m "fix(cli): restrict progression to current nodes"`。
 
 ### Task 1.3：project focused preflight 与契约对齐

@@ -222,6 +222,25 @@ describe("project resource scenario contract", () => {
     }));
   });
 
+  it("rejects a node write when selectedNodeId does not equal currentNode.id", async () => {
+    const context = projectContext();
+    context.currentNode = { id: 302, key: "review", label: "评审" };
+    const client = fakeClient({ context });
+
+    await expect(planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      operation: "node.field.update",
+      nodeId: 301,
+      componentKey: "solution-design",
+      arguments: { fields: { solutionPackage: "不应写入" } },
+    }, createResourceScenarioRegistry([projectScenarioAdapter]))).rejects.toMatchObject({
+      code: "CONTEXT_CONFLICT",
+    });
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
   it("requires an explicit component when multiple writable contracts exist", async () => {
     const context = projectContext();
     const node = context.workflow?.nodes[0] as any;

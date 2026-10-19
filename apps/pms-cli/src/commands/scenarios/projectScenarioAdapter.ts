@@ -132,6 +132,12 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     }
 
     const nodeId = requireNodeId(input);
+    if (project.currentNode?.id !== nodeId) {
+      throw new ResourceScenarioError(
+        "CONTEXT_CONFLICT",
+        `项目当前节点 ${project.currentNode?.id ?? "无"} 与指定节点 ${nodeId} 不一致`,
+      );
+    }
     const saveContract = readSaveContract(project, nodeId, normalizedArguments.workbench);
     if (normalizedArguments.projectId !== saveContract.projectId
       || normalizedArguments.nodeId !== saveContract.nodeId

@@ -194,6 +194,12 @@ async function readStoryBinding(client: PmsClient, input: ParsedAgentProgression
   );
   const nodeId = input.nodeId ?? context.currentNode?.id;
   if (!isPositiveInteger(nodeId)) throw new Error("故事推进必须绑定当前节点 nodeId");
+  if (context.currentNode?.id !== nodeId) {
+    throw new ResourceScenarioError(
+      "CONTEXT_CONFLICT",
+      `故事当前节点 ${context.currentNode?.id ?? "无"} 与指定节点 ${nodeId} 不一致`,
+    );
+  }
   const node = (Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [])
     .find((candidate) => isRecord(candidate) && candidate.id === nodeId) as Record<string, any> | undefined;
   let component: Record<string, any> | undefined;

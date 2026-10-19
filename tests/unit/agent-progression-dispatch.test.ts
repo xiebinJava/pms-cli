@@ -210,6 +210,59 @@ describe("agent progression dispatch", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("rejects a story write when the requested node is not the focused current node", async () => {
+    const client = {
+      capabilities: vi.fn(async () => ({
+        version: "ai-v1",
+        resources: [{
+          type: "story",
+          actions: [{
+            name: "development-item.node.field.update", label: "保存", description: "保存",
+            mode: "automatic", risk: "medium", scopes: [], inputSchema: {},
+            requiresContext: true, refreshScopes: [],
+          }],
+        }],
+        scopes: [], workflowTypes: [],
+      })),
+      context: vi.fn(async () => ({
+        resource: { type: "story", id: 12 },
+        version: 1,
+        currentNode: { id: 383, key: "writing", label: "编写" },
+        workflow: { nodes: [{
+          id: 384,
+          key: "acceptance",
+          label: "验收中",
+          components: [{
+            key: "story-node-workbench",
+            saveContract: {
+              command: "development-item.node.field.update",
+              itemType: "STORY",
+              itemId: 12,
+              nodeId: 384,
+              version: 1,
+              componentKey: "story-node-workbench",
+              variant: "acceptance",
+              fieldValuesPath: "__components.story-node-workbench",
+              writableFields: ["summary"],
+            },
+          }],
+        }] },
+        allowedActions: ["development-item.node.field.update"],
+      })),
+      preview: vi.fn(),
+    } as any;
+
+    await expect(planAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 12,
+      nodeId: 384,
+      intent: "UPDATE_NODE_FIELDS",
+      draft: { facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: { summary: "已分析" } },
+    })).rejects.toMatchObject({ code: "CONTEXT_CONFLICT" });
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
   it("rejects a read-only capability before creating a write preview", async () => {
     const client = {
       capabilities: vi.fn(async () => ({
