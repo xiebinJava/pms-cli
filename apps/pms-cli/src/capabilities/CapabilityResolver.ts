@@ -45,6 +45,12 @@ export class CapabilityResolver {
     return catalog.provenanceVersions?.includes(version) ?? false;
   }
 
+  async provenanceState(version = "draft-provenance/v1"): Promise<"supported" | "unsupported" | "unknown"> {
+    const catalog = await this.list();
+    if (catalog.provenanceVersions === undefined) return "unknown";
+    return catalog.provenanceVersions.includes(version) ? "supported" : "unsupported";
+  }
+
   validateArguments(operation: string, argumentsValue: Record<string, unknown>): Record<string, unknown> {
     const action = this.cachedAction(operation);
     const values = { ...argumentsValue };

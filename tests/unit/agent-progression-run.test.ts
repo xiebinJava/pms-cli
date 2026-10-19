@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import {
   runAgentProgression,
 } from "../../apps/pms-cli/src/commands/scenarios/agentProgressionRun.js";
-import { agentProgressionContractVersion } from "../../packages/pms-contracts/src/index.js";
+import {
+  agentProgressionContractVersion,
+  computeDraftDigest,
+} from "../../packages/pms-contracts/src/index.js";
 
 type Risk = "low" | "medium" | "high";
 
@@ -306,16 +309,38 @@ describe("agent progression run", () => {
       ...await originalCapabilities(),
       provenanceVersions: ["draft-provenance/v1"],
     }));
+    const fieldSources = {
+      testResult: {
+        sourceType: "pms_context" as const,
+        sourceRefs: ["requirement-node:101#component:requirement-node-workbench"],
+        confidence: "high" as const,
+      },
+    };
     const provenance = {
       contractVersion: "draft-provenance/v1" as const,
-      draftDigest: `sha256:${"a".repeat(64)}`,
-      fieldSources: {
-        testResult: {
-          sourceType: "pms_context" as const,
-          sourceRefs: ["requirement-node:101#component:requirement-node-workbench"],
-          confidence: "high" as const,
+      draftDigest: computeDraftDigest({
+        contractVersion: "draft-provenance/v1",
+        resourceType: "requirement",
+        resourceId: 24,
+        nodeId: 101,
+        componentKey: "requirement-node-workbench",
+        intent: "COMPLETE_NODE",
+        requestedCompletion: true,
+        versionSnapshot: {
+          nodeVersion: null,
+          entityVersion: 3,
+          workflowInstanceVersion: null,
+          componentVersion: 5,
+          contextVersion: 5,
         },
-      },
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { testResult: "PASS" },
+        fieldSources,
+      }),
+      fieldSources,
     };
     client.preview = vi.fn(async () => ({
       operationId: "preview-requirement-complete-with-provenance",
@@ -330,13 +355,48 @@ describe("agent progression run", () => {
       draftDigest: provenance.draftDigest,
     }));
 
-    const result = await runAgentProgression(client, input("plan", { provenance }));
+    const result = await runAgentProgression(client, input("plan", {
+      componentKey: "requirement-node-workbench",
+      provenance,
+    }));
 
     expect(result.status).toBe("PLAN_READY");
     expect(result.provenanceRef).toBe("operation:preview-requirement-complete-with-provenance");
     expect(result.draftDigest).toBe(provenance.draftDigest);
     expect(result.plan?.provenanceRef).toBe(result.provenanceRef);
     expect(result.plan?.preview?.draftDigest).toBe(provenance.draftDigest);
+  });
+
+  it("requires provenance when the PMS advertises the v1 contract", async () => {
+    const client = requirementClient();
+    const originalCapabilities = client.capabilities;
+    client.capabilities = vi.fn(async () => ({
+      ...await originalCapabilities(),
+      provenanceVersions: ["draft-provenance/v1"],
+    }));
+
+    const result = await runAgentProgression(client, input("plan"));
+
+    expect(result.status).toBe("NEEDS_INPUT");
+    expect(result.warnings.join(" ")).toContain("PROVENANCE_NOT_PROVIDED");
+    expect(result.plan?.preview).toBeNull();
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("blocks progression writes when the PMS explicitly lacks provenance support", async () => {
+    const client = requirementClient();
+    const originalCapabilities = client.capabilities;
+    client.capabilities = vi.fn(async () => ({
+      ...await originalCapabilities(),
+      provenanceVersions: [],
+    }));
+
+    const result = await runAgentProgression(client, input("plan"));
+
+    expect(result.status).toBe("CAPABILITY_UNAVAILABLE");
+    expect(result.warnings.join(" ")).toContain("PROVENANCE_NOT_SUPPORTED");
+    expect(result.plan?.preview).toBeNull();
+    expect(client.preview).not.toHaveBeenCalled();
   });
 
   it("rejects COMPLETE_NODE when the Agent did not explicitly request completion", async () => {

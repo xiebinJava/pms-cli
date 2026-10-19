@@ -15,6 +15,7 @@ import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import {
   assertSafeAgentPayload,
   planAgentProgressionDraft,
+  validateProgressionProvenance,
   validateAgentProgressionDraftFields,
 } from "./AgentDraftContract.js";
 import {
@@ -67,6 +68,8 @@ export async function planAgentProgression(
     return {
       ...storyPlan,
       ...(storyPlan.componentKey === undefined ? {} : { componentKey: storyPlan.componentKey }),
+      ...(parsed.provenance === undefined ? {} : { provenance: parsed.provenance }),
+      ...(storyPlan.preview?.provenanceRef === undefined ? {} : { provenanceRef: storyPlan.preview.provenanceRef }),
       ...versionFields(storyPlan.context, parsed.nodeId),
     };
   }
@@ -79,6 +82,40 @@ export async function planAgentProgression(
   const preflightContext = await readFocusedProgressionContext(client, parsed);
   const preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
+  if (parsed.provenance) {
+    const provenanceIssue = validateProgressionProvenance(parsed, parsed.provenance, preflightContext);
+    if (provenanceIssue) {
+      return {
+        contractVersion: agentProgressionContractVersion,
+        phase: "plan",
+        resourceType: parsed.resourceType,
+        resourceId: parsed.resourceId,
+        intent: parsed.intent,
+        ...(preflightComponentKey === undefined ? {} : { componentKey: preflightComponentKey }),
+        ...versionFields(preflightContext, parsed.nodeId),
+        operation,
+        context: preflightContext,
+        normalizedArguments: {},
+        capability: declaredCapability,
+        preview: null,
+        fieldChanges: [],
+        missingFields: [],
+        preconditions: [],
+        writeDecision: "NEEDS_INPUT",
+        requiresConfirmation: false,
+        executionMode,
+        rejectionReason: provenanceIssue.code,
+        warnings: [provenanceIssue.message],
+        userFacing: buildUserFacingDisplay({
+          resourceType: parsed.resourceType,
+          context: preflightContext,
+          operationStatus: "REJECTED",
+          actualChange: "来源审计校验未通过，尚未生成写入预览",
+          blockers: [provenanceIssue.message],
+        }),
+      };
+    }
+  }
   const riskRequiresConfirmation = executionMode === "confirmation" && parsed.executeMode !== "confirm";
   const draftExecutionMode = draftModeForRequest(parsed, executionMode);
   const draftPlan = parsed.draft && preflightContext
@@ -118,6 +155,67 @@ export async function planAgentProgression(
         operationStatus: draftPlan.writeDecision,
         actualChange: "缺少必填信息，尚未生成写入预览",
         blockers: progressionWarnings(draftPlan),
+      }),
+    };
+  }
+  const provenanceState = await new CapabilityResolver(client).provenanceState();
+  if (provenanceState === "unsupported") {
+    return {
+      contractVersion: agentProgressionContractVersion,
+      phase: "plan",
+      resourceType: parsed.resourceType,
+      resourceId: parsed.resourceId,
+      intent: parsed.intent,
+      ...(preflightComponentKey === undefined ? {} : { componentKey: preflightComponentKey }),
+      ...versionFields(preflightContext, parsed.nodeId),
+      operation,
+      context: preflightContext,
+      normalizedArguments: {},
+      capability: declaredCapability,
+      preview: null,
+      fieldChanges: draftPlan?.fieldChanges ?? [],
+      missingFields: draftPlan?.missingFields ?? [],
+      preconditions: [],
+      writeDecision: "CAPABILITY_UNAVAILABLE",
+      requiresConfirmation: false,
+      executionMode,
+      warnings: ["PROVENANCE_NOT_SUPPORTED: PMS 未声明 draft-provenance/v1，已阻止 progression 写入"],
+      userFacing: buildUserFacingDisplay({
+        resourceType: parsed.resourceType,
+        context: preflightContext,
+        operationStatus: "CAPABILITY_UNAVAILABLE",
+        actualChange: "PMS 未提供来源审计能力，尚未生成写入预览",
+        blockers: ["PROVENANCE_NOT_SUPPORTED: PMS 未声明 draft-provenance/v1"],
+      }),
+    };
+  }
+  if (provenanceState === "supported" && !parsed.provenance) {
+    return {
+      contractVersion: agentProgressionContractVersion,
+      phase: "plan",
+      resourceType: parsed.resourceType,
+      resourceId: parsed.resourceId,
+      intent: parsed.intent,
+      ...(preflightComponentKey === undefined ? {} : { componentKey: preflightComponentKey }),
+      ...versionFields(preflightContext, parsed.nodeId),
+      operation,
+      context: preflightContext,
+      normalizedArguments: {},
+      capability: declaredCapability,
+      preview: null,
+      fieldChanges: draftPlan?.fieldChanges ?? [],
+      missingFields: draftPlan?.missingFields ?? [],
+      preconditions: [],
+      writeDecision: "NEEDS_INPUT",
+      requiresConfirmation: false,
+      executionMode,
+      warnings: ["PROVENANCE_NOT_PROVIDED: progression 写入必须携带字段级来源审计"],
+      userFacing: buildUserFacingDisplay({
+        resourceType: parsed.resourceType,
+        context: preflightContext,
+        operationStatus: "NEEDS_INPUT",
+        actualChange: "缺少来源审计信息，尚未生成写入预览",
+        blockers: ["PROVENANCE_NOT_PROVIDED: 请补充字段来源和 draftDigest"],
       }),
     };
   }

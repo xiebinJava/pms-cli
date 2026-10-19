@@ -6,6 +6,7 @@ import type {
   StoryWorkbenchInput,
   StoryWorkbenchResult,
   WorkflowContext,
+  DraftProvenance,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import {
   storyWorkbenchInputSchema,
@@ -68,11 +69,13 @@ export interface StoryWorkbenchScenarioPlan {
 export async function planStoryWorkbenchScenario(
   client: StoryWorkbenchScenarioClient,
   input: StoryWorkbenchInput,
+  options: { provenance?: DraftProvenance } = {},
 ): Promise<StoryWorkbenchScenarioPlan> {
   const prepared = await prepare(client, input);
   const preview = await operationPreview(client, prepared.operationCommand, {
     arguments: prepared.arguments,
     context: prepared.operationContext,
+    provenance: options.provenance,
     requestId: prepared.input.requestId,
   });
   return {

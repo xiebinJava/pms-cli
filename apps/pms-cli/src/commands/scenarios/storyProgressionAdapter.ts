@@ -16,7 +16,7 @@ import {
   executeStoryWorkbenchScenario,
   planStoryWorkbenchScenario,
 } from "./storyWorkbench.js";
-import { planAgentProgressionDraft } from "./AgentDraftContract.js";
+import { planAgentProgressionDraft, validateProgressionProvenance } from "./AgentDraftContract.js";
 import { deriveProgressionExecutionMode, mayExecuteProgression } from "./progressionPolicy.js";
 import { ComponentResolutionError, resolveWorkflowComponent } from "../core/componentResolver.js";
 import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
@@ -32,6 +32,36 @@ export async function planStoryProgression(
   const capability = await new CapabilityResolver(client).action(declaredCommand);
   if (capability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
+  }
+  if (input.provenance) {
+    const provenanceIssue = validateProgressionProvenance(input, input.provenance, binding.context);
+    if (provenanceIssue) {
+      return {
+        contractVersion: agentProgressionContractVersion,
+        phase: "plan",
+        resourceType: "story",
+        resourceId: input.resourceId,
+        intent: input.intent,
+        componentKey: binding.componentKey,
+        nodeVersion: binding.version,
+        entityVersion: typeof binding.context.entityVersion === "number" ? binding.context.entityVersion : null,
+        workflowInstanceVersion: typeof binding.context.meta?.workflowInstanceVersion === "number"
+          ? binding.context.meta.workflowInstanceVersion : null,
+        operation: declaredCommand,
+        context: binding.context,
+        normalizedArguments: storyArguments(workbenchInput, binding, declaredCommand),
+        capability,
+        preview: null,
+        fieldChanges: [],
+        missingFields: [],
+        preconditions: [],
+        writeDecision: "NEEDS_INPUT",
+        requiresConfirmation: false,
+        executionMode: deriveProgressionExecutionMode(capability),
+        rejectionReason: provenanceIssue.code,
+        warnings: [provenanceIssue.message],
+      };
+    }
   }
   const executionMode = deriveProgressionExecutionMode(capability);
   const riskRequiresConfirmation = executionMode === "confirmation" && input.executeMode !== "confirm";
@@ -76,7 +106,42 @@ export async function planStoryProgression(
       ],
     };
   }
-  const plan = await planStoryWorkbenchScenario(client, workbenchInput);
+  const provenanceState = await new CapabilityResolver(client).provenanceState();
+  if ((provenanceState !== "supported" && input.provenance)
+    || provenanceState === "unsupported"
+    || (provenanceState === "supported" && !input.provenance)) {
+    const unsupported = provenanceState !== "supported";
+    const warning = unsupported
+      ? "PROVENANCE_NOT_SUPPORTED: PMS 未声明 draft-provenance/v1，已阻止 progression 写入"
+      : "PROVENANCE_NOT_PROVIDED: progression 写入必须携带字段级来源审计";
+    return {
+      contractVersion: agentProgressionContractVersion,
+      phase: "plan",
+      resourceType: "story",
+      resourceId: input.resourceId,
+      intent: input.intent,
+      componentKey: binding.componentKey,
+      nodeVersion: binding.version,
+      entityVersion: typeof binding.context.entityVersion === "number" ? binding.context.entityVersion : null,
+      workflowInstanceVersion: typeof binding.context.meta?.workflowInstanceVersion === "number"
+        ? binding.context.meta.workflowInstanceVersion : null,
+      operation: declaredCommand,
+      context: binding.context,
+      normalizedArguments: storyArguments(workbenchInput, binding, declaredCommand),
+      capability,
+      preview: null,
+      fieldChanges: draftPlan?.fieldChanges ?? [],
+      missingFields: draftPlan?.missingFields ?? [],
+      preconditions: [],
+      writeDecision: unsupported ? "CAPABILITY_UNAVAILABLE" : "NEEDS_INPUT",
+      requiresConfirmation: false,
+      executionMode,
+      warnings: [warning],
+    };
+  }
+  const plan = await planStoryWorkbenchScenario(client, workbenchInput, {
+    provenance: input.provenance,
+  });
   const preconditions = plan.preview.preconditions ?? [];
   const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
   const draftDecision = draftPlan?.writeDecision;

@@ -15,6 +15,10 @@ import {
   agentTaskSchema,
   analysisDraftSchema,
   contextSnapshotSchema,
+  draftDigestInputSchema,
+  verifyDraftDigest,
+  type DraftProvenance,
+  type DraftDigestInput,
   scenarioContractVersion,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { AnalysisDraftValidator } from "./AnalysisDraftValidator.js";
@@ -63,6 +67,139 @@ export interface AgentProgressionPlanDetails extends AgentProgressionDraftDiagno
   completionMode?: string;
   completionBlockReason?: string;
   writeDecision: "READY" | "NEEDS_INPUT" | "WAITING_CONFIRMATION" | "CAPABILITY_UNAVAILABLE";
+}
+
+export type ProgressionProvenanceIssue = {
+  code: "PROVENANCE_INVALID" | "PROVENANCE_TOO_LARGE";
+  message: string;
+};
+
+/**
+ * Checks that provenance points at the context that was actually read for this
+ * progression and that its digest is bound to the same draft/version snapshot.
+ * The PMS still validates the wire envelope; this client-side check prevents a
+ * stale or unrelated draft from reaching preview in the first place.
+ */
+export function validateProgressionProvenance(
+  input: Pick<AgentProgressionDraftInput, "resourceType" | "resourceId" | "nodeId" | "componentKey" | "intent" | "draft">,
+  provenance: DraftProvenance,
+  context: WorkflowContext,
+): ProgressionProvenanceIssue | null {
+  const readable = readableContextReferences(context);
+  const invalidRef = Object.values(provenance.fieldSources)
+    .flatMap((source) => source.sourceRefs)
+    .find((sourceRef) => !readable.has(sourceRef));
+  if (invalidRef) {
+    return {
+      code: "PROVENANCE_INVALID",
+      message: `PROVENANCE_INVALID: sourceRef 不在本次可读取 PMS 上下文中：${invalidRef}`,
+    };
+  }
+  const draft = input.draft;
+  if (!draft) {
+    return {
+      code: "PROVENANCE_INVALID",
+      message: "PROVENANCE_INVALID: 写入 provenance 必须绑定 Agent Draft",
+    };
+  }
+  let digestInput: DraftDigestInput;
+  try {
+    digestInput = draftDigestInputSchema.parse({
+      contractVersion: "draft-provenance/v1",
+      resourceType: input.resourceType,
+      resourceId: input.resourceId,
+      nodeId: input.nodeId ?? selectedNodeId(context),
+      componentKey: input.componentKey ?? context.meta?.selectedComponentKey ?? null,
+      intent: input.intent,
+      requestedCompletion: draft.requestedCompletion === true,
+      versionSnapshot: versionSnapshot(context, input.nodeId, input.componentKey),
+      facts: draft.facts,
+      inferences: draft.inferences,
+      assumptions: draft.assumptions,
+      unresolvedDecisions: draft.unresolvedDecisions,
+      patch: draft.patch,
+      fieldSources: provenance.fieldSources,
+    });
+  } catch (error) {
+    return {
+      code: "PROVENANCE_INVALID",
+      message: `PROVENANCE_INVALID: digest 输入无法规范化：${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+  if (!verifyDraftDigest(digestInput, provenance)) {
+    return {
+      code: "PROVENANCE_INVALID",
+      message: "PROVENANCE_INVALID: draftDigest 与当前草稿或版本快照不一致",
+    };
+  }
+  return null;
+}
+
+type AgentProgressionDraftInput = AgentProgressionInputShape;
+
+type AgentProgressionInputShape = {
+  resourceType: "project" | "requirement" | "topic" | "story";
+  resourceId: number;
+  nodeId?: number;
+  componentKey?: string;
+  intent: AgentProgressionIntent;
+  draft?: AgentProgressionDraft;
+};
+
+function readableContextReferences(context: WorkflowContext): Set<string> {
+  const references = new Set<string>([`${context.resource.type}:${context.resource.id}`]);
+  if (typeof context.currentNode?.id === "number") {
+    references.add(`${context.resource.type}-node:${context.currentNode.id}`);
+  }
+  for (const relation of context.relations ?? []) {
+    if (relation.readable) references.add(`${relation.resourceType}:${relation.resourceId}`);
+  }
+  for (const node of context.workflow?.nodes ?? []) {
+    if (!isRecord(node) || typeof node.id !== "number") continue;
+    const nodeRef = `${context.resource.type}-node:${node.id}`;
+    references.add(nodeRef);
+    if (!Array.isArray(node.components)) continue;
+    for (const component of node.components) {
+      if (isRecord(component) && typeof component.key === "string") {
+        references.add(`${nodeRef}#component:${component.key}`);
+      }
+    }
+  }
+  return references;
+}
+
+function selectedNodeId(context: WorkflowContext): number | null {
+  const value = context.meta?.selectedNodeId ?? context.currentNode?.id;
+  return typeof value === "number" ? value : null;
+}
+
+function versionSnapshot(
+  context: WorkflowContext,
+  nodeId?: number,
+  componentKey?: string,
+): DraftDigestInput["versionSnapshot"] {
+  const selectedId = nodeId ?? selectedNodeId(context);
+  const node = (context.workflow?.nodes ?? []).find((candidate) =>
+    isRecord(candidate) && candidate.id === selectedId);
+  const selectedComponentKey = componentKey ?? context.meta?.selectedComponentKey ?? undefined;
+  const component = isRecord(node) && Array.isArray(node.components)
+    ? node.components.find((candidate) => isRecord(candidate) && candidate.key === selectedComponentKey)
+    : undefined;
+  const versions = isRecord(component) && isRecord(component.versions) ? component.versions : undefined;
+  const saveContract = isRecord(component) && isRecord(component.saveContract)
+    ? component.saveContract : undefined;
+  return {
+    nodeVersion: isRecord(node) && typeof node.version === "number" ? node.version : null,
+    entityVersion: typeof context.entityVersion === "number" ? context.entityVersion : null,
+    workflowInstanceVersion: typeof context.meta?.workflowInstanceVersion === "number"
+      ? context.meta.workflowInstanceVersion : null,
+    componentVersion: typeof versions?.content === "number"
+      ? versions.content
+      : typeof versions?.node === "number"
+        ? versions.node
+        : typeof saveContract?.version === "number" ? saveContract.version : null,
+    contextVersion: context.meta?.contextVersion ?? context.version ?? null,
+  };
 }
 
 const highRiskInferenceFields = new Set([
