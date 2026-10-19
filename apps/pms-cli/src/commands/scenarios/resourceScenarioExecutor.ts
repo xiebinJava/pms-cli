@@ -127,7 +127,6 @@ export async function executeResourceScenario(
       nodeId: parsed.nodeId,
       componentKey: parsed.componentKey,
       expectedPatch: parsed.expectedPatch,
-      allowedMutations: parsed.allowedMutations,
     }, operation);
     const verification = parsed.expectedPatch === undefined
       ? { ...rawVerification, patchApplied: false }

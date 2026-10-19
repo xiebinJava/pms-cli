@@ -54,11 +54,6 @@ export const resourceScenarioExecuteInputSchema = z.object({
   nodeId: z.number().int().positive().optional(),
   componentKey: z.string().trim().min(1).max(160).optional(),
   expectedPatch: z.record(z.string(), z.unknown()).optional(),
-  /** Protected-field mutations explicitly declared by the preview change set. */
-  allowedMutations: z.union([
-    z.array(z.string().trim().min(1)),
-    z.record(z.string(), z.unknown()),
-  ]).optional(),
   previewOperationId: z.string().trim().min(1).max(160),
   idempotencyKey: z.string().trim().min(1).max(160),
   requestId: z.string().trim().min(1).max(160).optional(),

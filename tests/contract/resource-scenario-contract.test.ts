@@ -48,7 +48,7 @@ describe("resource scenario contract", () => {
       idempotencyKey: "idem-1",
       arguments: { title: "不应被接受" },
     })).toThrow();
-    expect(resourceScenarioExecuteInputSchema.parse({
+    expect(() => resourceScenarioExecuteInputSchema.parse({
       resourceType: "topic",
       operation: "development-item.node.field.update",
       resourceId: 12,
@@ -58,12 +58,7 @@ describe("resource scenario contract", () => {
       allowedMutations: ["status"],
       previewOperationId: "preview-1",
       idempotencyKey: "idem-1",
-    })).toMatchObject({
-      nodeId: 301,
-      componentKey: "topic-node-workbench",
-      expectedPatch: { title: "新的专题名称" },
-      allowedMutations: ["status"],
-    });
+    })).toThrow();
     expect(() => resourceScenarioExecuteInputSchema.parse({
       resourceType: "topic",
       operation: "topic.update",

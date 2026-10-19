@@ -21,7 +21,6 @@ export type ReadbackVerificationInput = {
   componentKey?: string;
   expectedPatch?: Record<string, unknown>;
   protectedFields?: string[];
-  allowedMutations?: unknown;
 };
 
 export type BuiltVerificationResult = ResourceScenarioVerification & {
@@ -209,7 +208,7 @@ export function buildVerificationResult(
     beforeDetails,
     afterDetails,
     protectedFields,
-    input.allowedMutations ?? operation.data.allowedMutations,
+    operation.data.allowedMutations,
   );
   const readbackComplete = resourceReadback && contextReadback
     && patchComparison.known && protectedComparison.known;
