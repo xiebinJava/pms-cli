@@ -118,6 +118,7 @@ describe("resource scenario adapter dispatch", () => {
       resourceType: "topic",
       resourceId: 12,
       operation: "topic.update",
+      expectedPatch: { title: "新的专题名称" },
       previewOperationId: "preview-1",
       idempotencyKey: "topic-update-1",
     }, registry);
@@ -141,6 +142,49 @@ describe("resource scenario adapter dispatch", () => {
       operation: "topic.update",
     } as never, registry)).rejects.toThrow(/previewOperationId|idempotencyKey/);
     expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("uses the node/component focused context for before and after readback", async () => {
+    const client = clientFor();
+    const registry = createResourceScenarioRegistry([adapter]);
+
+    const result = await executeResourceScenario(client, {
+      resourceType: "topic",
+      resourceId: 12,
+      operation: "topic.update",
+      nodeId: 301,
+      componentKey: "topic-node-workbench",
+      expectedPatch: { title: "新的专题名称" },
+      previewOperationId: "preview-1",
+      idempotencyKey: "topic-update-focused-1",
+    }, registry);
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(client.context).toHaveBeenNthCalledWith(1,
+      { type: "topic", id: 12 },
+      { nodeId: 301, view: "focused", component: "topic-node-workbench" },
+    );
+    expect(client.context).toHaveBeenNthCalledWith(2,
+      { type: "topic", id: 12 },
+      { nodeId: 301, view: "focused", component: "topic-node-workbench" },
+    );
+  });
+
+  it("downgrades legacy execute without expectedPatch to an unknown write result", async () => {
+    const client = clientFor();
+    const registry = createResourceScenarioRegistry([adapter]);
+
+    const result = await executeResourceScenario(client, {
+      resourceType: "topic",
+      resourceId: 12,
+      operation: "topic.update",
+      previewOperationId: "preview-1",
+      idempotencyKey: "topic-update-legacy-1",
+    }, registry);
+
+    expect(result.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(result.verification.patchApplied).toBe(false);
+    expect(result.warnings.some((warning) => warning.includes("expectedPatch"))).toBe(true);
   });
 
   it("routes the new CLI resource plan command to the shared executor", async () => {
@@ -169,5 +213,40 @@ describe("resource scenario adapter dispatch", () => {
       resourceType: "topic",
       operation: "topic.update",
     });
+  });
+
+  it("parses focused execute options through the CLI resource command", async () => {
+    resourceScenarioRegistry.register(adapter);
+    const client = clientFor();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const dependencies: CliDependencies = {
+      createRuntime: vi.fn(async () => ({ client })),
+      runAuth: vi.fn(async () => ({})),
+      writeStdout: (value) => stdout.push(value),
+      writeStderr: (value) => stderr.push(value),
+      setExitCode: vi.fn(),
+      requestIdFactory: () => "resource-scenario-cli-focused-1",
+    };
+
+    await runCli([
+      "scenario", "resource", "execute", "topic", "topic.update", "12",
+      "--node-id", "301",
+      "--component", "topic-node-workbench",
+      "--expected-patch-json", JSON.stringify({ title: "新的专题名称" }),
+      "--preview-operation-id", "preview-1",
+      "--idempotency-key", "topic-cli-focused-1",
+    ], dependencies);
+
+    expect(stderr).toEqual([]);
+    expect(JSON.parse(stdout[0] ?? "{}").data).toMatchObject({
+      phase: "execute",
+      status: "SUCCEEDED",
+      verification: { patchApplied: true },
+    });
+    expect(client.context).toHaveBeenNthCalledWith(1,
+      { type: "topic", id: 12 },
+      { nodeId: 301, view: "focused", component: "topic-node-workbench" },
+    );
   });
 });

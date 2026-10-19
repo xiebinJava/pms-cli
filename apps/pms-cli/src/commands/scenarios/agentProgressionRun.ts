@@ -101,6 +101,8 @@ async function runParsedAgentProgression(
 
   const result = await executeAgentProgression(client, {
     ...parsed,
+    ...(parsed.componentKey === undefined && plan.componentKey !== undefined
+      ? { componentKey: plan.componentKey } : {}),
     previewOperationId: plan.preview.operationId,
   });
   return baseResult(parsed, result.status, plan, result, {

@@ -101,9 +101,23 @@ export async function executeResourceScenario(
 
   try {
     const resource = await client.get({ type: parsed.resourceType, id: resourceId });
-    const context = await client.context({ type: parsed.resourceType, id: resourceId });
+    const context = await client.context(
+      { type: parsed.resourceType, id: resourceId },
+      readbackContextOptions(parsed),
+    );
     const after: ResourceScenarioSnapshot = { resource, context };
-    const verification = adapter.verifyReadback(before, after, {}, operation);
+    recordContextVersionChange(before, after, warnings);
+    const rawVerification = adapter.verifyReadback(before, after, {
+      nodeId: parsed.nodeId,
+      componentKey: parsed.componentKey,
+      expectedPatch: parsed.expectedPatch,
+    }, operation);
+    const verification = parsed.expectedPatch === undefined
+      ? { ...rawVerification, patchApplied: false }
+      : rawVerification;
+    if (parsed.expectedPatch === undefined) {
+      warnings.push("旧 execute 未携带 expectedPatch，只完成资源身份和保护字段校验，patchApplied 无法确认");
+    }
     const status = verification.resourceReadback
       && verification.contextReadback
       && verification.patchApplied
@@ -129,8 +143,31 @@ async function readBeforeSnapshot(
 ): Promise<ResourceScenarioSnapshot | null> {
   if (input.resourceId === undefined) return null;
   const resource = await client.get({ type: input.resourceType, id: input.resourceId });
-  const context = await client.context({ type: input.resourceType, id: input.resourceId });
+  const context = await client.context(
+    { type: input.resourceType, id: input.resourceId },
+    readbackContextOptions(input),
+  );
   return { resource, context };
+}
+
+function readbackContextOptions(input: ParsedResourceScenarioExecuteInput) {
+  if (input.nodeId === undefined) return undefined;
+  return {
+    nodeId: input.nodeId,
+    view: "focused" as const,
+    ...(input.componentKey === undefined ? {} : { component: input.componentKey }),
+  };
+}
+
+function recordContextVersionChange(
+  before: ResourceScenarioSnapshot | null,
+  after: ResourceScenarioSnapshot,
+  warnings: string[],
+): void {
+  const beforeVersion = before?.context?.version;
+  const afterVersion = after.context?.version;
+  if (beforeVersion === undefined || afterVersion === undefined || beforeVersion === afterVersion) return;
+  warnings.push(`写入前后上下文版本发生变化：${String(beforeVersion)} -> ${String(afterVersion)}`);
 }
 
 function resultFor(

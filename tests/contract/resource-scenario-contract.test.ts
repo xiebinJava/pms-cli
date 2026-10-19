@@ -48,6 +48,28 @@ describe("resource scenario contract", () => {
       idempotencyKey: "idem-1",
       arguments: { title: "不应被接受" },
     })).toThrow();
+    expect(resourceScenarioExecuteInputSchema.parse({
+      resourceType: "topic",
+      operation: "development-item.node.field.update",
+      resourceId: 12,
+      nodeId: 301,
+      componentKey: "topic-node-workbench",
+      expectedPatch: { title: "新的专题名称" },
+      previewOperationId: "preview-1",
+      idempotencyKey: "idem-1",
+    })).toMatchObject({
+      nodeId: 301,
+      componentKey: "topic-node-workbench",
+      expectedPatch: { title: "新的专题名称" },
+    });
+    expect(() => resourceScenarioExecuteInputSchema.parse({
+      resourceType: "topic",
+      operation: "topic.update",
+      resourceId: 12,
+      componentKey: "topic-node-workbench",
+      previewOperationId: "preview-1",
+      idempotencyKey: "idem-1",
+    })).toThrow(/componentKey.*nodeId/);
   });
 
   it("keeps plan and execute verification fields machine-readable", () => {

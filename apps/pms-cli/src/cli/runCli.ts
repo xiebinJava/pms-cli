@@ -114,7 +114,7 @@ const HELP = [
   "  pms scenario resource-write plan <project|topic|story> <operation> --arguments-json <json>",
   "  pms scenario resource-write execute <project|topic|story> <operation> --preview-operation-id <id> --idempotency-key <key>",
   "  pms scenario resource plan <requirement|topic|project> <operation> [id] --arguments-json <json>",
-  "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key>",
+  "  pms scenario resource execute <requirement|topic|project> <operation> [id] --preview-operation-id <id> --idempotency-key <key> [--node-id <id>] [--component <key>] [--expected-patch-json <json>]",
   "  pms scenario progression draft|plan|execute|shadow <project|requirement|topic|story> <id> --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--node-version <version>] [--context-version <version>] [--component <key>] [--execute-mode plan|auto|confirm] [--preview-operation-id <id>] [--idempotency-key <key>] [--cases-file <path>] [--provider mock]",
   "  pms scenario progression run <project|requirement|topic|story> [<id>|--name <exact-name>] --intent <READ_CONTEXT|UPDATE_NODE_FIELDS|COMPLETE_NODE> [--draft-json <json>] [--node-version <version>] [--context-version <version>] [--component <key>] [--execute-mode plan|auto|confirm] [--idempotency-key <key>]",
   "  pms scenario project-update|topic-create|topic-update|story-create|story-update plan --arguments-json <json>",
@@ -781,6 +781,7 @@ async function dispatchResourceScenario(
       operation,
       ...(rawNodeId === undefined ? {} : { nodeId: positiveInteger(rawNodeId, "node-id") }),
       ...(rawVersion === undefined ? {} : { contextVersion: nonNegativeInteger(rawVersion, "version") }),
+      ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
       arguments: argumentsValue,
       ...(draft === undefined ? {} : { draft }),
       requestId,
@@ -791,11 +792,18 @@ async function dispatchResourceScenario(
   }
   const previewOperationId = requiredResourceScenarioOption(invocation.options, "preview-operation-id");
   const idempotencyKey = requiredResourceScenarioOption(invocation.options, "idempotency-key");
+  const rawNodeId = invocation.options["node-id"];
+  const expectedPatch = invocation.options["expected-patch-json"] === undefined
+    ? undefined
+    : parseJsonObject(invocation.options["expected-patch-json"], "expected-patch-json");
   const runtime = await deps.createRuntime(requestId);
   return executeResourceScenario(runtime.client, {
     resourceType,
     ...(resourceId === undefined ? {} : { resourceId }),
     operation,
+    ...(rawNodeId === undefined ? {} : { nodeId: positiveInteger(rawNodeId, "node-id") }),
+    ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
+    ...(expectedPatch === undefined ? {} : { expectedPatch }),
     previewOperationId,
     idempotencyKey,
     requestId,

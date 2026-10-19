@@ -66,7 +66,7 @@ export async function planAgentProgression(
     const storyPlan = await planStoryProgression(client, parsed);
     return {
       ...storyPlan,
-      ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+      ...(storyPlan.componentKey === undefined ? {} : { componentKey: storyPlan.componentKey }),
       ...versionFields(storyPlan.context, parsed.nodeId),
     };
   }
@@ -77,6 +77,7 @@ export async function planAgentProgression(
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
   const preflightContext = await readFocusedProgressionContext(client, parsed);
+  const preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
   const riskRequiresConfirmation = executionMode === "confirmation" && parsed.executeMode !== "confirm";
   const draftExecutionMode = draftModeForRequest(parsed, executionMode);
@@ -97,7 +98,7 @@ export async function planAgentProgression(
       resourceType: parsed.resourceType,
       resourceId: parsed.resourceId,
       intent: parsed.intent,
-      ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+      ...(preflightComponentKey === undefined ? {} : { componentKey: preflightComponentKey }),
       ...versionFields(preflightContext, parsed.nodeId),
       operation,
       context: preflightContext,
@@ -131,6 +132,7 @@ export async function planAgentProgression(
     ...(parsed.draft === undefined ? {} : { draft: toResourceDraft(parsed) }),
     requestId: parsed.requestId,
   });
+  const resolvedComponentKey = parsed.componentKey ?? resourcePlan.context?.selectedComponentKey ?? undefined;
   const capability = resourcePlan.capability as ActionCapability;
   const preconditions = resourcePlan.preview?.preconditions ?? [];
   const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
@@ -146,7 +148,7 @@ export async function planAgentProgression(
     resourceType: parsed.resourceType,
     resourceId: parsed.resourceId,
     intent: parsed.intent,
-    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+    ...(resolvedComponentKey === undefined ? {} : { componentKey: resolvedComponentKey }),
     ...versionFields(preflightContext, parsed.nodeId),
     operation,
     context: resourcePlan.context,
@@ -232,6 +234,9 @@ export async function executeAgentProgression(
     resourceType: parsed.resourceType,
     resourceId: parsed.resourceId,
     operation,
+    ...(parsed.nodeId === undefined ? {} : { nodeId: parsed.nodeId }),
+    ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
+    ...(parsed.draft?.patch === undefined ? {} : { expectedPatch: parsed.draft.patch }),
     previewOperationId: parsed.previewOperationId,
     idempotencyKey: parsed.idempotencyKey,
     requestId: parsed.requestId,
@@ -258,13 +263,14 @@ async function planReadContext(
   input: ParsedAgentProgressionInput,
 ): Promise<AgentProgressionPlan> {
   const readback = await readContextSnapshot(client, input);
+  const componentKey = input.componentKey ?? contextComponentKey(readback.context);
   return {
     contractVersion: agentProgressionContractVersion,
     phase: "plan",
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     intent: input.intent,
-    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    ...(componentKey === undefined ? {} : { componentKey }),
     ...versionFields(readback.context, input.nodeId),
     operation: null,
     context: readback.context,
@@ -296,6 +302,13 @@ async function readFocusedProgressionContext(
   return context;
 }
 
+function contextComponentKey(context: unknown): string | undefined {
+  if (!isRecord(context) || !isRecord(context.meta)) return undefined;
+  return typeof context.meta.selectedComponentKey === "string"
+    ? context.meta.selectedComponentKey
+    : undefined;
+}
+
 function progressionWarnings(details: ReturnType<typeof planAgentProgressionDraft>): string[] {
   return [
     ...details.unknownFields.map((key) => `草稿字段 ${key} 不在当前 PMS 可写契约中`),
@@ -325,6 +338,7 @@ async function readContext(
   input: ParsedAgentProgressionInput,
 ): Promise<AgentProgressionResult> {
   const readback = await readContextSnapshot(client, input);
+  const componentKey = input.componentKey ?? contextComponentKey(readback.context);
   return agentProgressionResultSchema.parse({
     contractVersion: agentProgressionContractVersion,
     phase: "execute",
@@ -332,7 +346,7 @@ async function readContext(
     resourceType: input.resourceType,
     resourceId: input.resourceId,
     intent: input.intent,
-    ...(input.componentKey === undefined ? {} : { componentKey: input.componentKey }),
+    ...(componentKey === undefined ? {} : { componentKey }),
     ...versionFields(readback.context, input.nodeId),
     plan: null,
     operation: null,

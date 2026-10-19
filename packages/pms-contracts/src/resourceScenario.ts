@@ -49,10 +49,21 @@ export const resourceScenarioExecuteInputSchema = z.object({
   resourceType: resourceScenarioResourceTypeSchema,
   resourceId: z.number().int().positive().optional(),
   operation: z.string().trim().min(1).max(160),
+  nodeId: z.number().int().positive().optional(),
+  componentKey: z.string().trim().min(1).max(160).optional(),
+  expectedPatch: z.record(z.string(), z.unknown()).optional(),
   previewOperationId: z.string().trim().min(1).max(160),
   idempotencyKey: z.string().trim().min(1).max(160),
   requestId: z.string().trim().min(1).max(160).optional(),
-}).strict();
+}).strict().superRefine((value, ctx) => {
+  if (value.componentKey !== undefined && value.nodeId === undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["componentKey"],
+      message: "componentKey 只能与 nodeId 一起用于 focused 回读",
+    });
+  }
+});
 
 export const resourceScenarioContextSchema = z.object({
   id: z.string().trim().min(1),

@@ -152,7 +152,7 @@
 - [x] `project.create`、`project.update`（包括 `project-basic-info`）继续走资源级路径；当前节点校验只适用于真正的节点写入。
 - [x] 运行四类 adapter 的 focused context contract tests。
 - [x] Review：确认没有禁止合法的资源级更新，也没有把 selectedNodeId 当成 currentNode。
-- [ ] 提交：`git commit -m "fix(cli): restrict progression to current nodes"`。
+- [x] 提交：`git commit -m "fix(cli): restrict progression to current nodes"`。
 
 ### Task 1.3：project focused preflight 与契约对齐
 
@@ -172,7 +172,7 @@
 - [x] 将运行时 `saveContract` 与 YAML agent contract 分开处理，不给节点命令自动附加不兼容的 `contractId/contractVersion`。
 - [x] 添加 project `READ_CONTEXT` 零 preview/execute 测试。
 - [x] Review：确认 adapter 没有复制 PMS 业务规则。
-- [ ] 提交：`git commit -m "fix(cli): align project progression preflight"`。
+- [x] 提交：`git commit -m "fix(cli): align project progression preflight"`。
 
 ## Milestone 2：真实字段回读验证
 
@@ -180,25 +180,28 @@
 
 **Files:**
 - Modify: `packages/pms-contracts/src/resourceScenario.ts`
-- Modify: `packages/pms-contracts/src/agentProgression.ts`
 - Modify: `apps/pms-cli/src/commands/scenarios/resourceScenarioExecutor.ts`
 - Modify: `apps/pms-cli/src/commands/scenarios/agentProgression.ts`
+- Modify: `apps/pms-cli/src/commands/scenarios/agentProgressionRun.ts`
+- Modify: `apps/pms-cli/src/commands/scenarios/storyProgressionAdapter.ts`
+- Modify: `apps/pms-cli/src/cli/parseArguments.ts`
 - Modify: `apps/pms-cli/src/cli/runCli.ts`
-- Modify: `tests/unit/resource-write-scenarios.test.ts`
-- Modify: `tests/unit/agent-progression-run.test.ts`
+- Modify: `tests/unit/resource-scenario-dispatch.test.ts`
+- Modify: `tests/contract/requirement-resource-scenario.test.ts`
+- Modify: `tests/contract/topic-resource-scenario.test.ts`
 - Modify: `tests/contract/resource-scenario-contract.test.ts`
 
 **Interfaces:** execute 阶段复用或重建 focused before/after context，并把原始目标 `nodeId`、`componentKey`、normalizedArguments、selected saveContract 和 expectedPatch 传给 verifier。
 
-- [ ] execute 输入增加可选 `nodeId`、`componentKey`、`expectedPatch`；run 路径从内存中的 plan/draft 传入。
-- [ ] before/after 必须使用原始目标 nodeId，即使完成后 currentNode 已经前移；story 带 component 选择。
-- [ ] 尽量复用 plan 阶段的 context，减少 preview 到 execute 之间的 TOCTOU；若重新读取，记录版本变化。
-- [ ] 不再调用 `adapter.verifyReadback(before, after, {}, operation)`，改为传递真实执行参数和 expectedPatch。
-- [ ] 单步旧 execute 若没有 expectedPatch，保持兼容但明确降级为身份/保护字段验证，不能宣称 `patchApplied=true`；progression execute 必须带完整验证参数。
-- [ ] dispatchResourceScenario 的 execute 分支解析并传递 `--node-id`、`--component`、`--expected-patch-json`。
-- [ ] 添加测试证明非 focused projection 不能掩盖节点字段变化。
-- [ ] Review：检查不会增加隐式重试，也不会把 readback 失败标成成功。
-- [ ] 提交：`git commit -m "fix(cli): pass focused context into readback"`。
+- [x] execute 输入增加可选 `nodeId`、`componentKey`、`expectedPatch`；run 路径从内存中的 plan/draft 传入。
+- [x] before/after 使用原始目标 nodeId，即使完成后 currentNode 已经前移；story 带 component 选择。
+- [x] execute 重新读取 before/after context，并在版本变化时写入 warning，避免静默吞掉 TOCTOU 信号。
+- [x] 不再调用 `adapter.verifyReadback(before, after, {}, operation)`，改为传递真实执行参数和 expectedPatch。
+- [x] 单步旧 execute 若没有 expectedPatch，保持兼容但明确降级为身份/保护字段验证，不能宣称 `patchApplied=true`；progression execute 带 draft patch 作为验证参数。
+- [x] dispatchResourceScenario 的 execute 分支解析并传递 `--node-id`、`--component`、`--expected-patch-json`。
+- [x] 添加 focused readback、CLI 参数透传和 legacy execute 降级测试；节点字段级 projection 比较留给 Task 2.2 共享 verifier。
+- [x] Review：确认没有增加隐式重试，readback 失败不会标成成功。
+- [x] 提交：`git commit -m "fix(cli): pass focused context into readback"`。
 
 ### Task 2.2：抽取共享 verifier 与允许变更集
 

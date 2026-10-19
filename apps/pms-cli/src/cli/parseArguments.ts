@@ -7,6 +7,7 @@ const VALUE_OPTIONS = new Set([
   "page-size",
   "format",
   "arguments-json",
+  "expected-patch-json",
   "idempotency-key",
   "preview-operation-id",
   "node-id",
