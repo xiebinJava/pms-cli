@@ -235,6 +235,7 @@ async function runNodeUpdateScenario(
     nodeId: node.nodeId,
     componentKey: node.componentKey,
     expectedPatch: { [node.fieldKey]: node.fieldValue },
+    allowedMutations: allowedMutationsFromPreview(plan.preview),
     previewOperationId: plan.preview.operationId,
     idempotencyKey,
   });
@@ -330,6 +331,24 @@ async function runNodeCompletionScenario(
     protectedFieldsUnchanged: true,
   });
   return true;
+}
+
+function allowedMutationsFromPreview(preview: { changes: Array<Record<string, unknown>> }): string[] {
+  const allowed = new Set<string>();
+  for (const change of preview.changes) {
+    for (const [fromKey, toKey, field] of [
+      ["fromStatus", "toStatus", "status"],
+      ["fromOwnerId", "toOwnerId", "ownerId"],
+      ["fromStartDate", "toStartDate", "startDate"],
+      ["fromEndDate", "toEndDate", "endDate"],
+    ] as const) {
+      if (Object.prototype.hasOwnProperty.call(change, fromKey)
+        || Object.prototype.hasOwnProperty.call(change, toKey)) {
+        allowed.add(field);
+      }
+    }
+  }
+  return [...allowed];
 }
 
 function scenarioContextVersion(

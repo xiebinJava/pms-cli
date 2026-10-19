@@ -175,5 +175,22 @@ describe("shared readback verification", () => {
       ["status"],
       { status: { from: "DRAFT", to: "IN_PROGRESS" } },
     )).toMatchObject({ known: true, matches: true });
+
+    const completionBefore = snapshot("project", { startDate: "2026-10-19" }, { id: 12, status: "ACTIVE" });
+    const completionAfter = snapshot("project", { startDate: "2026-10-19" }, { id: 12, status: "COMPLETED" });
+    expect(buildVerificationResult({
+      resourceType: "project",
+      resourceId: 12,
+      nodeId: 301,
+      componentKey: "selected-component",
+      expectedPatch: { startDate: "2026-10-19" },
+      protectedFields: ["status"],
+    }, completionBefore, completionAfter, {
+      ...operation,
+      data: { projectId: 12, allowedMutations: ["status"] },
+    })).toMatchObject({
+      patchApplied: true,
+      protectedFieldsUnchanged: true,
+    });
   });
 });

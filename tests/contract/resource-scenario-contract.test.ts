@@ -55,12 +55,14 @@ describe("resource scenario contract", () => {
       nodeId: 301,
       componentKey: "topic-node-workbench",
       expectedPatch: { title: "新的专题名称" },
+      allowedMutations: ["status"],
       previewOperationId: "preview-1",
       idempotencyKey: "idem-1",
     })).toMatchObject({
       nodeId: 301,
       componentKey: "topic-node-workbench",
       expectedPatch: { title: "新的专题名称" },
+      allowedMutations: ["status"],
     });
     expect(() => resourceScenarioExecuteInputSchema.parse({
       resourceType: "topic",
