@@ -297,7 +297,10 @@ async function executeAfterPreview(
       contextReadback: true,
       patchApplied: Object.entries(prepared.input.patch)
         .every(([key, value]) => jsonEqual(content?.[key], value)),
-      protectedFieldsUnchanged: compareProtectedFields(prepared.context.resourceDetails, resource.details),
+      protectedFieldsUnchanged: compareProtectedFields(
+        prepared.context.resourceDetails,
+        context.resourceDetails,
+      ),
     };
     if (!verification.patchApplied || !verification.protectedFieldsUnchanged) {
       warnings.push("故事节点回读结果未完全匹配预期，写入结果需要人工核验");
@@ -405,9 +408,10 @@ function readComponentContent(context: WorkflowContext, nodeId: number): Record<
 
 function compareProtectedFields(
   before: Record<string, unknown> | undefined,
-  after: Record<string, unknown>,
+  after: Record<string, unknown> | undefined,
 ): boolean {
   if (!before) return true;
+  if (!after) return false;
   return ["title", "status", "ownerId", "startDate", "dueDate"].every((key) => {
     if (!Object.prototype.hasOwnProperty.call(before, key)) return true;
     return jsonEqual(before[key], after[key]);

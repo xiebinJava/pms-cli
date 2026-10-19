@@ -106,6 +106,11 @@ function fakeClient(
   readbackContent: Record<string, unknown> = { meetingNote: "已确认进入本周迭代" },
   variant: "iteration" | "acceptance" = "iteration",
   completion = false,
+  options: {
+    beforeContextDetails?: Record<string, unknown>;
+    readbackContextDetails?: Record<string, unknown>;
+    readbackResourceDetails?: Record<string, unknown>;
+  } = {},
 ) {
   const calls: string[] = [];
   let saved = false;
@@ -113,7 +118,13 @@ function fakeClient(
     capabilities: vi.fn(async () => catalog),
     context: vi.fn(async () => {
       calls.push("context");
-      return makeContext(saved ? readbackContent : {}, 1, variant);
+      const context = makeContext(saved ? readbackContent : {}, 1, variant);
+      if (saved && options.readbackContextDetails) {
+        context.resourceDetails = options.readbackContextDetails as typeof context.resourceDetails;
+      } else if (!saved && options.beforeContextDetails) {
+        context.resourceDetails = options.beforeContextDetails as typeof context.resourceDetails;
+      }
+      return context;
     }),
     get: vi.fn(async () => {
       calls.push("get");
@@ -121,7 +132,12 @@ function fakeClient(
         resourceType: "story",
         resourceId: 34,
         entityVersion: null,
-        details: { id: 34, title: "项目管理标准", status: "IN_PROGRESS", ownerId: 2 },
+        details: options.readbackResourceDetails ?? {
+          id: 34,
+          title: "项目管理标准",
+          status: "IN_PROGRESS",
+          ownerId: 2,
+        },
       };
     }),
     preview: vi.fn(async (request: { operation: string; arguments: Record<string, unknown> }) => {
@@ -259,6 +275,46 @@ describe("story workbench write scenario", () => {
     expect(result.verification?.patchApplied).toBe(false);
     expect(result.warnings.some((warning) => warning.includes("未完全匹配"))).toBe(true);
     expect(calls).toEqual(["context", "preview", "execute-preview", "get", "context"]);
+  });
+
+  it("does not treat omitted fields in the resource projection as protected-field changes", async () => {
+    const { client } = fakeClient(
+      { meetingNote: "已确认进入本周迭代" },
+      "iteration",
+      true,
+      {
+        beforeContextDetails: {
+          title: "项目管理标准",
+          status: "IN_PROGRESS",
+          ownerId: 2,
+          startDate: "2026-10-15",
+          dueDate: "2026-10-22",
+        },
+        readbackContextDetails: {
+          title: "项目管理标准",
+          status: "IN_PROGRESS",
+          ownerId: 2,
+          startDate: "2026-10-15",
+          dueDate: "2026-10-22",
+        },
+        readbackResourceDetails: {
+          id: 34,
+          title: "项目管理标准",
+          status: "IN_PROGRESS",
+          ownerId: 2,
+        },
+      },
+    );
+    const result = await executeStoryWorkbenchScenario(client, {
+      ...input,
+      complete: true,
+      ownerId: 2,
+      startDate: "2026-10-15",
+      endDate: "2026-10-22",
+    });
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.verification?.protectedFieldsUnchanged).toBe(true);
   });
 
   it("rejects a stale requested version before preview", async () => {
