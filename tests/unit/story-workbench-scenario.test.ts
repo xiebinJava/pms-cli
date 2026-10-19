@@ -251,6 +251,23 @@ describe("story workbench write scenario", () => {
     expect(client.preview).not.toHaveBeenCalled();
   });
 
+  it("normalizes a missing component save contract as unavailable capability", async () => {
+    const { client, calls } = fakeClient();
+    client.context = vi.fn(async () => {
+      const context = makeContext({}, 1);
+      delete (context.workflow.nodes[0] as any).components[0].saveContract;
+      calls.push("context");
+      return context;
+    });
+
+    await expect(runStoryWorkbenchScenario(client, input, async () => true)).rejects.toMatchObject({
+      name: "ResourceScenarioError",
+      code: "CAPABILITY_UNAVAILABLE",
+    } satisfies Partial<ResourceScenarioError>);
+    expect(calls).toEqual(["context"]);
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
   it("previews before approval and executes only after approval, then verifies readback", async () => {
     const { client, calls } = fakeClient();
     const result = await runStoryWorkbenchScenario(client, input, async () => true);
