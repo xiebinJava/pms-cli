@@ -35,7 +35,7 @@ async function credentialReport(
   env: NodeJS.ProcessEnv,
   store: AuthStore,
 ): Promise<DoctorReport["credentials"]> {
-  if (env.PMS_REFRESH_TOKEN) return { ok: true, source: "PMS_REFRESH_TOKEN" };
+  if (env.PMS_AUTH_TOKEN) return { ok: true, source: "PMS_AUTH_TOKEN" };
   try {
     return { ok: Boolean(await store.getActiveAccount()), source: "OS keyring" };
   } catch {

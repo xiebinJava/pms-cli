@@ -11,6 +11,20 @@ function memoryKeyring(values = new Map<string, string>()): Keyring {
 }
 
 describe("pms auth doctor", () => {
+  it("reports an explicit process-local access token without touching the keyring", async () => {
+    const hangingKeyring: Keyring = {
+      async get() { return new Promise<string | null>(() => undefined); },
+      async set() { return undefined; },
+      async delete() { return undefined; },
+    };
+    const store = new AuthStore(hangingKeyring, { service: "pms-cli-env-test", keyringTimeoutMs: 5 });
+
+    const report = await authDoctor(store, { PMS_AUTH_TOKEN: "short-lived-token" });
+
+    expect(report).toMatchObject({ status: "HEALTHY", credentialSource: "PMS_AUTH_TOKEN" });
+    expect(JSON.stringify(report)).not.toContain("short-lived-token");
+  });
+
   it("reports a healthy keyring and login guidance without exposing credentials", async () => {
     const store = new AuthStore(memoryKeyring(), { service: "pms-cli-doctor-test" });
     const report = await authDoctor(store);

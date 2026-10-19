@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { PmsHttpClient, StaticTokenProvider } from "../../../packages/pms-client/src/index.js";
 import { AuthStore } from "./auth/AuthStore.js";
 import { BrowserAuth } from "./auth/BrowserAuth.js";
+import { environmentAuth } from "./auth/RuntimeAuth.js";
 import { authDoctor, authLogin, authLogout, authStatus } from "./commands/core/auth.js";
 import { doctor } from "./commands/core/doctor.js";
 import { setup } from "./commands/core/setup.js";
@@ -36,7 +37,7 @@ async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
 async function runAuth(command: string | undefined, args: string[]) {
   const store = createAuthStore();
   if (command === "status") return authStatus(store);
-  if (command === "doctor") return authDoctor(store);
+  if (command === "doctor") return authDoctor(store, process.env);
   const rawBaseUrl = process.env.PMS_BASE_URL?.trim() || "http://localhost:5173/api";
   const baseUrl = AuthStore.normalizeBaseUrl(rawBaseUrl);
   const authOrigin = process.env.PMS_AUTH_ORIGIN?.trim() || originFromBase(baseUrl);
@@ -58,6 +59,18 @@ async function runAuth(command: string | undefined, args: string[]) {
 }
 
 async function authenticatedRuntime(requestId: string): Promise<CliRuntime> {
+  const envAuth = environmentAuth(process.env);
+  if (envAuth) {
+    return {
+      account: null,
+      client: new PmsHttpClient({
+        baseUrl: envAuth.baseUrl,
+        auth: envAuth.auth,
+        clientId: "pms-cli",
+        requestIdFactory: () => requestId,
+      }),
+    };
+  }
   const store = createAuthStore();
   const account = await store.getActiveAccount();
   if (!account) throw new Error("尚未登录，请先执行 pms auth login");

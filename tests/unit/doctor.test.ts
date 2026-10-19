@@ -12,6 +12,16 @@ function memoryKeyring(): Keyring {
 }
 
 describe("pms doctor", () => {
+  it("reports an explicit process-local access token without exposing it", async () => {
+    const report = await doctor({
+      PMS_BASE_URL: "http://127.0.0.1:5173/api",
+      PMS_AUTH_TOKEN: "short-lived-token",
+    });
+
+    expect(report.credentials).toEqual({ ok: true, source: "PMS_AUTH_TOKEN" });
+    expect(JSON.stringify(report)).not.toContain("short-lived-token");
+  });
+
   it("reports credentials stored in the OS keyring", async () => {
     const store = new AuthStore(memoryKeyring(), { service: "pms-cli-doctor-test" });
     await store.save({

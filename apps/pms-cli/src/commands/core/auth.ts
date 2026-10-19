@@ -9,6 +9,7 @@ export interface AuthCommandOptions {
 
 export interface AuthDoctorReport {
   status: "HEALTHY" | "NOT_AUTHENTICATED" | "KEYRING_UNAVAILABLE";
+  credentialSource?: "PMS_AUTH_TOKEN" | "OS keyring";
   keyring: {
     ok: boolean;
     service: string;
@@ -38,19 +39,32 @@ export async function authStatus(store = new AuthStore()) {
   return account ? { loggedIn: true, accountId: account.accountId, displayName: account.displayName, baseUrl: account.baseUrl } : { loggedIn: false };
 }
 
-export async function authDoctor(store = new AuthStore()): Promise<AuthDoctorReport> {
+export async function authDoctor(
+  store = new AuthStore(),
+  env: Record<string, string | undefined> = process.env,
+): Promise<AuthDoctorReport> {
   const service = store.serviceName;
+  if (env.PMS_AUTH_TOKEN?.trim()) {
+    return {
+      status: "HEALTHY",
+      credentialSource: "PMS_AUTH_TOKEN",
+      keyring: { ok: true, service },
+      remediation: [],
+    };
+  }
   try {
     const account = await store.getActiveAccount();
     if (!account) {
       return {
         status: "NOT_AUTHENTICATED",
+        credentialSource: "OS keyring",
         keyring: { ok: true, service },
         remediation: ["请执行 pms auth login 完成浏览器授权"],
       };
     }
     return {
       status: "HEALTHY",
+      credentialSource: "OS keyring",
       keyring: { ok: true, service },
       account: publicAccount(account),
       remediation: [],
@@ -60,6 +74,7 @@ export async function authDoctor(store = new AuthStore()): Promise<AuthDoctorRep
     const timeout = message.includes("超时");
     return {
       status: "KEYRING_UNAVAILABLE",
+      credentialSource: "OS keyring",
       keyring: {
         ok: false,
         service,

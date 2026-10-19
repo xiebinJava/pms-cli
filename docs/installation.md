@@ -33,6 +33,16 @@ pms capabilities --format json
 
 `pms auth doctor --format json` 只读取本地凭据状态，不会访问 PMS 业务接口，也不会输出 Token。它会区分已登录、未登录、钥匙串超时和钥匙串权限失败。遇到 `KEYRING_TIMEOUT` 或 `KEYRING_ACCESS` 时，请在普通终端重新执行 `pms auth login`，并允许终端访问 macOS 登录钥匙串。
 
+在 CI、隔离测试或钥匙串不可用的受限终端中，可以提供短期 PMS access token：
+
+```bash
+PMS_BASE_URL=http://localhost:5173/api \
+PMS_AUTH_TOKEN='<short-lived-access-token>' \
+pms context requirement --name "PMS项目管理系统建设" --view focused --format agent
+```
+
+`PMS_AUTH_TOKEN` 只在当前 CLI 进程内使用，不会写入钥匙串、日志或输出；它不是模型 API Key，也不支持用长期 refresh token 替代。使用后应立即撤销或等待其过期。
+
 需求分析保存示例：
 
 ```bash
