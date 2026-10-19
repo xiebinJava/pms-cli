@@ -100,6 +100,7 @@ const operationWireResultSchema = z.object({
   data: z.record(z.string(), z.unknown()).nullable().optional(),
   refreshScopes: z.array(z.string()).nullable().optional(),
   auditId: z.string().optional(),
+  warnings: z.array(z.string()).optional(),
 });
 
 const orgUnitTreeNodeSchema: z.ZodType<OrgUnitTreeNode> = z.lazy(() => z.object({
@@ -252,7 +253,7 @@ export class PmsHttpClient implements PmsClient {
       status: raw.status,
       message: raw.message,
       data: raw.data ?? {},
-      warnings: raw.status === "SUCCEEDED" || !raw.message ? [] : [raw.message],
+      warnings: raw.warnings ?? (raw.status === "SUCCEEDED" || !raw.message ? [] : [raw.message]),
       refreshScopes: raw.refreshScopes ?? [],
       auditId: raw.auditId,
     });
@@ -278,7 +279,7 @@ export class PmsHttpClient implements PmsClient {
       status: raw.status,
       message: raw.message,
       data: raw.data ?? {},
-      warnings: raw.status === "SUCCEEDED" || !raw.message ? [] : [raw.message],
+      warnings: raw.warnings ?? (raw.status === "SUCCEEDED" || !raw.message ? [] : [raw.message]),
       refreshScopes: raw.refreshScopes ?? [],
       auditId: raw.auditId,
     });
@@ -406,6 +407,7 @@ export class PmsHttpClient implements PmsClient {
         contractVersion: normalized.contract?.version,
         clientId: normalized.clientId,
         requestId: normalized.requestId,
+        provenance: normalized.provenance,
       }),
     }, false, normalized.requestId);
     return operationPreviewSchema.parse(data);

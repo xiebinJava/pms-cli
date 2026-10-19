@@ -299,6 +299,46 @@ describe("agent progression run", () => {
     expect(client.executePreview).not.toHaveBeenCalled();
   });
 
+  it("propagates the PMS-bound provenance reference and digest through the run envelope", async () => {
+    const client = requirementClient();
+    const originalCapabilities = client.capabilities;
+    client.capabilities = vi.fn(async () => ({
+      ...await originalCapabilities(),
+      provenanceVersions: ["draft-provenance/v1"],
+    }));
+    const provenance = {
+      contractVersion: "draft-provenance/v1" as const,
+      draftDigest: `sha256:${"a".repeat(64)}`,
+      fieldSources: {
+        testResult: {
+          sourceType: "pms_context" as const,
+          sourceRefs: ["requirement-node:101#component:requirement-node-workbench"],
+          confidence: "high" as const,
+        },
+      },
+    };
+    client.preview = vi.fn(async () => ({
+      operationId: "preview-requirement-complete-with-provenance",
+      command: "development-item.node.complete-with-data",
+      expiresAt: "2099-01-01T00:00:00Z",
+      contextVersion: "5",
+      warnings: [],
+      changes: [{ field: "testResult", to: "PASS" }],
+      refreshScopes: ["development-detail"],
+      preconditions: [],
+      provenanceRef: "operation:preview-requirement-complete-with-provenance",
+      draftDigest: provenance.draftDigest,
+    }));
+
+    const result = await runAgentProgression(client, input("plan", { provenance }));
+
+    expect(result.status).toBe("PLAN_READY");
+    expect(result.provenanceRef).toBe("operation:preview-requirement-complete-with-provenance");
+    expect(result.draftDigest).toBe(provenance.draftDigest);
+    expect(result.plan?.provenanceRef).toBe(result.provenanceRef);
+    expect(result.plan?.preview?.draftDigest).toBe(provenance.draftDigest);
+  });
+
   it("rejects COMPLETE_NODE when the Agent did not explicitly request completion", async () => {
     const client = requirementClient();
     const result = await runAgentProgression(client, input("auto", {
@@ -311,6 +351,52 @@ describe("agent progression run", () => {
     expect(result.plan?.preview).toBeNull();
     expect(client.preview).not.toHaveBeenCalled();
     expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
+  it("maps invalid provenance to an in-band rejected run without touching PMS", async () => {
+    const client = requirementClient();
+    const result = await runAgentProgression(client, input("auto", {
+      provenance: {
+        contractVersion: "draft-provenance/v1",
+        draftDigest: `sha256:${"a".repeat(64)}`,
+        fieldSources: {
+          testResult: {
+            sourceType: "pms_context",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
+      },
+    }));
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.rejectionReason).toBe("PROVENANCE_INVALID");
+    expect(result.plan).toBeNull();
+    expect(client.context).not.toHaveBeenCalled();
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("maps oversized provenance to a distinct in-band rejection", async () => {
+    const client = requirementClient();
+    const result = await runAgentProgression(client, input("plan", {
+      provenance: {
+        contractVersion: "draft-provenance/v1",
+        draftDigest: `sha256:${"b".repeat(64)}`,
+        fieldSources: Object.fromEntries(Array.from({ length: 201 }, (_, index) => [
+          `field-${index}`,
+          {
+            sourceType: "pms_context",
+            sourceRefs: ["requirement:24"],
+            confidence: "high",
+          },
+        ])),
+      },
+    }));
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.rejectionReason).toBe("PROVENANCE_TOO_LARGE");
+    expect(client.context).not.toHaveBeenCalled();
   });
 
   it("does not execute a high-risk draft in auto mode", async () => {

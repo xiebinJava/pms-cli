@@ -124,6 +124,57 @@ describe("PMS HTTP client", () => {
     });
   });
 
+  it("sends provenance only with preview and reads the server binding back", async () => {
+    let body: Record<string, unknown> | undefined;
+    const provenance = {
+      contractVersion: "draft-provenance/v1" as const,
+      draftDigest: `sha256:${"a".repeat(64)}`,
+      fieldSources: {
+        title: {
+          sourceType: "pms_context" as const,
+          sourceRefs: ["project:42"],
+          confidence: "high" as const,
+        },
+      },
+    };
+    const client = new PmsHttpClient({
+      baseUrl: "https://pms.example.test",
+      auth: new StaticTokenProvider("token"),
+      clientId: "pms-cli",
+      fetchImpl: async (_input, init) => {
+        body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        return response({
+          operationId: "preview-1",
+          command: "project.update",
+          expiresAt: "2099-01-01T00:00:00Z",
+          contextVersion: "v1",
+          warnings: [],
+          changes: [],
+          refreshScopes: [],
+          preconditions: [],
+          provenanceRef: "operation:preview-1",
+          draftDigest: provenance.draftDigest,
+        });
+      },
+    });
+
+    const preview = await client.preview({
+      operation: "project.update",
+      arguments: { projectId: 42, name: "新名称" },
+      context: { id: "project:42", version: "v1" },
+      provenance,
+      idempotencyKey: "preview-1",
+      clientId: "pms-cli",
+      requestId: "request-preview-1",
+    });
+
+    expect(body?.provenance).toEqual(provenance);
+    expect(preview).toMatchObject({
+      provenanceRef: "operation:preview-1",
+      draftDigest: provenance.draftDigest,
+    });
+  });
+
   it("executes an existing preview operation through the confirmed route", async () => {
     let captured: { input: RequestInfo | URL; init?: RequestInit } | undefined;
     const client = new PmsHttpClient({
@@ -137,6 +188,7 @@ describe("PMS HTTP client", () => {
           status: "SUCCEEDED",
           data: { saved: true },
           refreshScopes: ["story-detail"],
+          warnings: ["PROVENANCE_NOT_AUDITED"],
         });
       },
     });
@@ -148,7 +200,12 @@ describe("PMS HTTP client", () => {
     );
     expect(new Headers(captured?.init?.headers).get("idempotency-key")).toBe("idem-preview-1");
     expect(JSON.parse(String(captured?.init?.body))).toEqual({ idempotencyKey: "idem-preview-1" });
-    expect(result).toMatchObject({ operationId: "preview-1", status: "SUCCEEDED", data: { saved: true } });
+    expect(result).toMatchObject({
+      operationId: "preview-1",
+      status: "SUCCEEDED",
+      data: { saved: true },
+      warnings: ["PROVENANCE_NOT_AUDITED"],
+    });
   });
 
   it("normalizes a project context whose current node has no numeric id", async () => {

@@ -130,6 +130,7 @@ export async function planAgentProgression(
     arguments: progressionArguments(parsed),
     ...(parsed.componentKey === undefined ? {} : { componentKey: parsed.componentKey }),
     ...(parsed.draft === undefined ? {} : { draft: toResourceDraft(parsed) }),
+    ...(parsed.provenance === undefined ? {} : { provenance: parsed.provenance }),
     requestId: parsed.requestId,
   });
   const resolvedComponentKey = parsed.componentKey ?? resourcePlan.context?.selectedComponentKey ?? undefined;
@@ -155,6 +156,8 @@ export async function planAgentProgression(
     normalizedArguments: resourcePlan.normalizedArguments,
     capability,
     preview: resourcePlan.preview,
+    ...(resourcePlan.provenance === undefined ? {} : { provenance: resourcePlan.provenance }),
+    ...(resourcePlan.provenanceRef === undefined ? {} : { provenanceRef: resourcePlan.provenanceRef }),
     fieldChanges: draftPlan?.fieldChanges ?? [],
     missingFields: draftPlan?.missingFields ?? [],
     preconditions,

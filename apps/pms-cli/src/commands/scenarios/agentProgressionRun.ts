@@ -7,6 +7,9 @@ import type {
 import {
   agentProgressionRunContractVersion,
   agentProgressionRunResultSchema,
+  agentProgressionResourceTypeSchema,
+  agentProgressionIntentSchema,
+  validateDraftProvenance,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import {
@@ -27,7 +30,14 @@ export async function runAgentProgression(
   client: PmsClient,
   input: unknown,
 ): Promise<AgentProgressionRunResult> {
-  const parsed = parseAgentProgressionInput(input);
+  let parsed: ParsedAgentProgressionInput;
+  try {
+    parsed = parseAgentProgressionInput(input);
+  } catch (error) {
+    const rejected = provenanceRejection(input);
+    if (rejected) return rejected;
+    throw error;
+  }
 
   try {
     return await runParsedAgentProgression(client, parsed);
@@ -43,6 +53,47 @@ export async function runAgentProgression(
       warnings: [error.message],
     });
   }
+}
+
+function provenanceRejection(input: unknown): AgentProgressionRunResult | null {
+  if (!isRecord(input)
+    || input.contractVersion !== "agent-progression/v2"
+    || input.provenance === undefined) return null;
+  const resourceType = agentProgressionResourceTypeSchema.safeParse(input.resourceType);
+  const resourceId = typeof input.resourceId === "number"
+    && Number.isInteger(input.resourceId) && input.resourceId > 0
+    ? input.resourceId : null;
+  const intent = agentProgressionIntentSchema.safeParse(input.intent);
+  if (!resourceType.success || resourceId === null || !intent.success) return null;
+  const validation = validateDraftProvenance(input.provenance);
+  if (validation.success) return null;
+  const rejectionReason = validation.code === "PROVENANCE_TOO_LARGE"
+    ? "PROVENANCE_TOO_LARGE" as const
+    : "PROVENANCE_INVALID" as const;
+  return agentProgressionRunResultSchema.parse({
+    contractVersion: agentProgressionRunContractVersion,
+    phase: "run",
+    status: "REJECTED",
+    resourceType: resourceType.data,
+    resourceId,
+    intent: intent.data,
+    writeDecision: "NEEDS_INPUT",
+    plan: null,
+    result: null,
+    previewOperationId: null,
+    operationId: null,
+    auditId: null,
+    readback: null,
+    verification: null,
+    rejectionReason,
+    warnings: [validation.code === "PROVENANCE_TOO_LARGE"
+      ? "provenance 超过 PMS 允许的大小限制"
+      : "provenance 不符合 draft-provenance/v1 契约"],
+  });
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 async function runParsedAgentProgression(
@@ -151,6 +202,10 @@ function baseResult(
       ? {} : { entityVersion: plan?.entityVersion ?? result?.entityVersion }),
     ...((plan?.workflowInstanceVersion ?? result?.workflowInstanceVersion) === undefined
       ? {} : { workflowInstanceVersion: plan?.workflowInstanceVersion ?? result?.workflowInstanceVersion }),
+    ...((plan?.provenanceRef ?? result?.provenanceRef) === undefined
+      ? {} : { provenanceRef: plan?.provenanceRef ?? result?.provenanceRef }),
+    ...((plan?.provenance?.draftDigest ?? result?.draftDigest) === undefined
+      ? {} : { draftDigest: plan?.provenance?.draftDigest ?? result?.draftDigest }),
     previewOperationId: null,
     operationId: null,
     auditId: null,

@@ -135,6 +135,7 @@ export const capabilityCatalogWireSchema = z.object({
   scopes: z.array(z.string()),
   features: z.record(z.string(), z.boolean()).optional(),
   workflowTypes: z.array(wireWorkflowTypeCapabilitySchema).default([]),
+  provenanceVersions: z.array(z.string().min(1)).optional(),
   viewer: z.object({
     id: z.number().int().positive(),
     displayName: z.string().min(1),
@@ -151,6 +152,7 @@ export const capabilityCatalogSchema = z.object({
   scopes: z.array(z.string()),
   features: z.record(z.string(), z.boolean()).optional(),
   workflowTypes: z.array(workflowTypeCapabilitySchema).default([]),
+  provenanceVersions: z.array(z.string().min(1)).optional(),
   viewer: z.object({
     id: z.number().int().positive(),
     displayName: z.string().min(1),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { draftProvenanceSchema, type DraftProvenance } from "./provenance.js";
 
 export const resourceTypeSchema = z.enum([
   "requirement",
@@ -39,12 +40,14 @@ export const automaticOperationRequestSchema = z.object({
   arguments: z.record(z.string(), z.unknown()).default({}),
   context: operationContextSchema.optional(),
   contract: operationContractSchema.optional(),
+  provenance: draftProvenanceSchema.optional(),
   idempotencyKey: z.string().trim().min(1).max(160),
   clientId: z.literal("pms-cli"),
   requestId: z.string().trim().min(1).max(160),
 });
 
 export type AutomaticOperationRequest = z.infer<typeof automaticOperationRequestSchema>;
+export type OperationProvenance = DraftProvenance;
 
 export const operationStatusSchema = z.enum([
   "SUCCEEDED",
@@ -84,6 +87,8 @@ export const operationPreviewSchema = z.object({
   changes: z.array(z.record(z.string(), z.unknown())).default([]),
   refreshScopes: z.array(z.string()).default([]),
   preconditions: z.array(operationPreconditionSchema).default([]),
+  provenanceRef: z.string().trim().min(1).nullable().optional(),
+  draftDigest: z.string().trim().min(1).nullable().optional(),
 });
 
 export type OperationPreview = z.infer<typeof operationPreviewSchema>;

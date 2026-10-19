@@ -40,6 +40,11 @@ export class CapabilityResolver {
     throw new Error(`能力目录中不存在操作: ${operation}`);
   }
 
+  async supportsProvenance(version = "draft-provenance/v1"): Promise<boolean> {
+    const catalog = await this.list();
+    return catalog.provenanceVersions?.includes(version) ?? false;
+  }
+
   validateArguments(operation: string, argumentsValue: Record<string, unknown>): Record<string, unknown> {
     const action = this.cachedAction(operation);
     const values = { ...argumentsValue };

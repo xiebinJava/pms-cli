@@ -49,4 +49,12 @@ describe("CLI capability resolver", () => {
     const filtered = await resolver.list("pms:task:read");
     expect(filtered.resources).toEqual([]);
   });
+
+  it("checks the server-declared provenance contract before a write preview", async () => {
+    const resolver = new CapabilityResolver({
+      capabilities: async () => ({ ...catalog, provenanceVersions: ["draft-provenance/v1"] }),
+    } as never);
+
+    expect(await resolver.supportsProvenance()).toBe(true);
+  });
 });

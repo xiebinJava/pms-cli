@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
-import type { AutomaticOperationRequest, OperationPreview, OperationResult } from "../../../../../packages/pms-contracts/src/index.js";
+import type { AutomaticOperationRequest, DraftProvenance, OperationPreview, OperationResult } from "../../../../../packages/pms-contracts/src/index.js";
 
 export interface OperationOptions {
   arguments?: Record<string, unknown>;
   context?: { id: string; version: string };
   contract?: { id: string; version: string };
+  provenance?: DraftProvenance;
   clientId?: "pms-cli";
   requestId?: string;
 }
@@ -17,6 +18,7 @@ function requestFor(operation: string, options: OperationOptions, idempotencyKey
     arguments: options.arguments ?? {},
     context: options.context,
     contract: options.contract,
+    provenance: options.provenance,
     idempotencyKey,
     clientId: options.clientId ?? "pms-cli",
     requestId: options.requestId ?? randomUUID(),
@@ -29,7 +31,10 @@ export async function operationPreview(
   options: OperationOptions = {},
 ): Promise<OperationPreview> {
   const resolver = new CapabilityResolver(client);
-  await resolver.list();
+  const catalog = await resolver.list();
+  if (options.provenance && !(catalog.provenanceVersions?.includes("draft-provenance/v1") ?? false)) {
+    throw new Error("PMS 未声明 draft-provenance/v1，不能发送来源审计写入预览");
+  }
   const argumentsValue = resolver.validateArguments(operation, options.arguments ?? {});
   return client.preview(requestFor(operation, { ...options, arguments: argumentsValue }, `preview-${randomUUID()}`));
 }
@@ -40,6 +45,7 @@ export async function operationExecute(
   idempotencyKey: string,
   options: OperationOptions = {},
 ): Promise<OperationResult> {
+  if (options.provenance) throw new Error("operation execute 只能引用原 preview，不能提交新的 provenance");
   const resolver = new CapabilityResolver(client);
   await resolver.list();
   const argumentsValue = resolver.validateArguments(operation, options.arguments ?? {});
@@ -58,6 +64,7 @@ export async function operationAuto(
   idempotencyKey: string,
   options: OperationOptions = {},
 ): Promise<OperationResult> {
+  if (options.provenance) throw new Error("operation auto 只能引用原 preview，不能提交新的 provenance");
   const resolver = new CapabilityResolver(client);
   const action = await resolver.action(operation);
   if (action.mode !== "automatic") {

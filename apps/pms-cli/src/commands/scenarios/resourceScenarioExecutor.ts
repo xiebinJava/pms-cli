@@ -17,6 +17,7 @@ import { operationExecutePreview, operationPreview } from "../core/operation.js"
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import {
   resourceScenarioRegistry,
+  ResourceScenarioError,
   type ResourceScenarioAdapter,
   type ResourceScenarioRegistry,
 } from "./resourceScenarioRegistry.js";
@@ -32,6 +33,9 @@ export async function planResourceScenario(
   const normalizedArguments = await adapter.normalizeArguments(parsed, context);
   const resolver = new CapabilityResolver(client);
   const action = await resolver.action(parsed.operation);
+  if (parsed.provenance && !(await resolver.supportsProvenance())) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "PMS 未声明 draft-provenance/v1，不能发送来源审计写入预览");
+  }
   const validatedArguments = resolver.validateArguments(parsed.operation, normalizedArguments);
   adapter.validate(parsed, context, validatedArguments, action);
   const executionMode = action.mode === "read"
@@ -40,6 +44,7 @@ export async function planResourceScenario(
   const preview = await operationPreview(client, parsed.operation, {
     arguments: validatedArguments,
     context: context ? { id: context.id, version: context.version } : { id: "global:pms", version: "v1" },
+    provenance: parsed.provenance,
     requestId: parsed.requestId,
   });
   return {
@@ -55,6 +60,8 @@ export async function planResourceScenario(
     preview,
     requiresConfirmation: executionMode === "confirmation",
     executionMode,
+    ...(parsed.provenance === undefined ? {} : { provenance: parsed.provenance }),
+    ...(preview.provenanceRef === undefined ? {} : { provenanceRef: preview.provenanceRef }),
     warnings: [...preview.warnings],
     userFacing: buildUserFacingDisplay({
       resourceType: parsed.resourceType,
