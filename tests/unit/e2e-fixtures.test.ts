@@ -63,6 +63,55 @@ function client() {
       entityVersion: 1,
       details: {},
     })),
+    context: vi.fn(async ({ type, id }: { type: string; id: number }, options?: { nodeId?: number }) => ({
+      resource: { type, id },
+      version: 4,
+      entityVersion: type === "project" ? 1 : null,
+      currentNode: { id: options?.nodeId ?? 301, key: "intake", label: "录入" },
+      workflow: {
+        nodes: [{
+          id: options?.nodeId ?? 301,
+          key: "intake",
+          label: "录入",
+          version: 2,
+          components: [{
+            key: type === "project" ? "project-intake" : "topic-intake",
+            label: "录入信息",
+            content: { summary: "旧值" },
+            saveContract: {
+              command: type === "project" ? "node.field.update" : "development-item.node.field.update",
+              projectId: type === "project" ? id : undefined,
+              itemType: type === "topic" ? "TOPIC" : undefined,
+              itemId: type === "topic" ? id : undefined,
+              nodeId: options?.nodeId ?? 301,
+              version: 2,
+              workbench: type === "project" ? "project-intake" : undefined,
+              componentKey: type === "topic" ? "topic-intake" : undefined,
+              fieldValuesPath: type === "topic" ? "__components.topic-intake" : "fields",
+              writableFields: ["summary"],
+              protectedFields: ["status"],
+              fieldContracts: [{ key: "summary", type: "string" }],
+            },
+          }],
+        }],
+      },
+      relations: [],
+      allowedActions: [],
+      meta: {
+        formatVersion: 2,
+        pureRead: true,
+        loadedAt: "2026-10-16T00:00:00Z",
+        businessTimezone: "Asia/Shanghai",
+        view: options ? "focused" : "legacy",
+        fieldValuesScope: options ? "selected-node" : "all-nodes",
+        componentContentScope: options ? "selected-component" : "selected-node",
+        workflowConfigured: true,
+        workflowStatus: "ACTIVE",
+        permissionsScope: "business-user",
+        referencesScope: "readable-only",
+        warnings: [],
+      },
+    })),
   } as any;
 }
 
@@ -71,7 +120,17 @@ describe("isolated resource fixtures", () => {
     const pms = client();
     const fixture = await createProjectFixture(pms, "run-project");
 
-    expect(fixture).toEqual({ projectId: 42, name: "AI-E2E-项目-run-project", created: true });
+    expect(fixture).toMatchObject({
+      projectId: 42,
+      name: "AI-E2E-项目-run-project",
+      created: true,
+      node: {
+        nodeId: 301,
+        componentKey: "project-intake",
+        fieldKey: "summary",
+        contextVersion: 1,
+      },
+    });
     expect(pms.preview).toHaveBeenCalledWith(expect.objectContaining({
       operation: "project.create",
       arguments: {
@@ -87,7 +146,17 @@ describe("isolated resource fixtures", () => {
     const pms = client();
     const fixture = await createTopicFixture(pms, "run-topic");
 
-    expect(fixture).toEqual({ topicId: 19, title: "AI-E2E-专题-run-topic", created: true });
+    expect(fixture).toMatchObject({
+      topicId: 19,
+      title: "AI-E2E-专题-run-topic",
+      created: true,
+      node: {
+        nodeId: 301,
+        componentKey: "topic-intake",
+        fieldKey: "summary",
+        contextVersion: 4,
+      },
+    });
     expect(pms.preview).toHaveBeenCalledWith(expect.objectContaining({
       operation: "topic.create",
       arguments: { title: "AI-E2E-专题-run-topic", ownerId: 7 },

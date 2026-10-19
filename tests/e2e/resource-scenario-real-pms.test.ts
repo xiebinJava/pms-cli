@@ -16,8 +16,9 @@ import {
   expectedViewerId,
   isolatedE2EEnabled,
 } from "./support/isolatedSession.js";
-import { createProjectFixture } from "./support/projectFixture.js";
+import { createProjectFixture, type ProjectFixture } from "./support/projectFixture.js";
 import { createTopicFixture } from "./support/topicFixture.js";
+import type { TopicFixture } from "./support/topicFixture.js";
 
 const requested = process.env.PMS_E2E_RESOURCE_SCENARIO === "true";
 const createFixtures = process.env.PMS_E2E_CREATE_RESOURCE_FIXTURES === "true";
@@ -77,11 +78,24 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
         name: `${await titleOf(client, "project", projectId)} [AI-E2E-${config.runId}]`,
       }, `resource-project-${config.runId}`);
 
+      if (project?.node) {
+        await runNodeUpdateScenario(client, "project", projectId, project.node,
+          "node.field.update", `resource-project-node-${config.runId}`);
+      }
+      if (topic?.node) {
+        await runNodeUpdateScenario(client, "topic", topicId, topic.node,
+          "development-item.node.field.update", `resource-topic-node-${config.runId}`);
+      }
+
       const audit = await auditOperations(config.runId, startedAt);
       const commands = audit.map((record) => record.commandName.toLowerCase());
       expect(commands.some((command) => command.includes("requirement.update"))).toBe(true);
       expect(commands.some((command) => command.includes("topic.update"))).toBe(true);
       expect(commands.some((command) => command.includes("project.update"))).toBe(true);
+      if (createFixtures) {
+        expect(commands.some((command) => command.includes("development-item.node.field.update"))).toBe(true);
+        expect(commands).toContain("node.field.update");
+      }
     } finally {
       if (session) await auth.logout(session.account);
     }
@@ -150,6 +164,72 @@ async function runUpdateScenario(
   if (beforeResource.entityVersion !== null && replay.readback.resource?.entityVersion !== null) {
     expect(replay.readback.resource?.entityVersion).not.toBe(beforeResource.entityVersion);
   }
+}
+
+async function runNodeUpdateScenario(
+  client: PmsHttpClient,
+  resourceType: "project" | "topic",
+  resourceId: number,
+  node: ProjectFixture["node"] | TopicFixture["node"],
+  operation: "node.field.update" | "development-item.node.field.update",
+  idempotencyKey: string,
+): Promise<void> {
+  const argumentsValue = resourceType === "project"
+    ? { fields: { [node.fieldKey]: node.fieldValue } }
+    : { fieldValues: { [node.fieldKey]: node.fieldValue } };
+  const context = await client.context(
+    { type: resourceType, id: resourceId },
+    { nodeId: node.nodeId, view: "focused", component: node.componentKey },
+  );
+  const contextVersion = resourceType === "project"
+    ? context.entityVersion ?? context.version
+    : context.version;
+  if (contextVersion === null || contextVersion === undefined) {
+    throw new Error(`${resourceType} 节点夹具缺少当前并发版本`);
+  }
+  const plan = await planResourceScenario(client, {
+    contractVersion: resourceScenarioContractVersion,
+    resourceType,
+    resourceId,
+    operation,
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    contextVersion,
+    arguments: argumentsValue,
+  });
+  expect(plan.phase).toBe("plan");
+  expect(plan.preview.command).toBe(operation);
+
+  const first = await executeResourceScenario(client, {
+    resourceType,
+    resourceId,
+    operation,
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    expectedPatch: { [node.fieldKey]: node.fieldValue },
+    previewOperationId: plan.preview.operationId,
+    idempotencyKey,
+  });
+  expect(first.status).toBe("SUCCEEDED");
+  expect(first.verification).toEqual({
+    resourceReadback: true,
+    contextReadback: true,
+    patchApplied: true,
+    protectedFieldsUnchanged: true,
+  });
+
+  const replay = await executeResourceScenario(client, {
+    resourceType,
+    resourceId,
+    operation,
+    nodeId: node.nodeId,
+    componentKey: node.componentKey,
+    expectedPatch: { [node.fieldKey]: node.fieldValue },
+    previewOperationId: plan.preview.operationId,
+    idempotencyKey,
+  });
+  expect(replay.status).toBe("SUCCEEDED");
+  expect(replay.operation.operationId).toBe(first.operation.operationId);
 }
 
 function scenarioContextVersion(

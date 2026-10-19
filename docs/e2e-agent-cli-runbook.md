@@ -100,6 +100,12 @@ pnpm run verify:real-pms:node-autofill
 `PMS_E2E_PROJECT_ID` 或 `PMS_E2E_TOPIC_ID`，但仍需准备一个可读的
 `PMS_E2E_REQUIREMENT_ID`。夹具不调用未声明的 delete 命令，需通过隔离数据库销毁清理。
 
+创建夹具后，测试会再次读取资源的当前节点和 focused context，并要求后端声明唯一可写
+`saveContract` 以及至少一个非保护字段。随后用该组件和字段执行一次节点字段更新、回读和
+幂等重放；如果创建态没有当前节点或可写字段，测试会显式失败并说明缺失条件，不会把它
+当成“没有节点场景”而跳过。项目使用实体版本作为并发版本，专题使用流程版本，均由
+focused context 实时读取，不从模板或测试代码猜测。
+
 该命令还要求前面的隔离目标变量完整（`PMS_E2E_BASE_URL`、`PMS_E2E_ALLOWED_BASE_URL`、`PMS_E2E_DATABASE_NAME`、`PMS_E2E_ALLOWED_DATABASE_NAME`、`PMS_E2E_ACCOUNT_ID`、`PMS_E2E_RUN_ID`），并且必须设置 `PMS_E2E_WRITE=true` 和 `PMS_E2E_ISOLATED=true`。需求夹具不能自动清理已推进的流程节点，因此只应使用可销毁的隔离数据库；故事夹具同样随隔离数据库一起销毁。
 
 要只验证模型输出和缺失项，不写入 PMS，可以直接运行：
