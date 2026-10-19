@@ -119,6 +119,12 @@ export PMS_E2E_MYSQL_CLIENT="$PWD/scripts/e2e-mysql-client.sh"
 export PMS_E2E_MYSQL_CONTAINER="pms-ai-e2e-${PMS_E2E_RUN_ID}-mysql-1"
 ```
 
+如果隔离库没有可复用的项目或专题，可以设置
+`PMS_E2E_CREATE_RESOURCE_FIXTURES=true`。测试会通过已注册的
+`project.create` 和 `topic.create` 预览/执行命令创建本轮夹具；此时不再读取
+`PMS_E2E_PROJECT_ID`、`PMS_E2E_TOPIC_ID`，但仍需要提供
+`PMS_E2E_REQUIREMENT_ID`。项目和专题没有在连接器中猜测删除接口，清理由一次性数据库销毁完成。
+
 配置必须指向可丢弃的 `pms_ai_e2e_` 数据库和专用资源。执行：
 
 ```bash

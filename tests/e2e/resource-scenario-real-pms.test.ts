@@ -16,8 +16,11 @@ import {
   expectedViewerId,
   isolatedE2EEnabled,
 } from "./support/isolatedSession.js";
+import { createProjectFixture } from "./support/projectFixture.js";
+import { createTopicFixture } from "./support/topicFixture.js";
 
 const requested = process.env.PMS_E2E_RESOURCE_SCENARIO === "true";
+const createFixtures = process.env.PMS_E2E_CREATE_RESOURCE_FIXTURES === "true";
 const enabled = requested;
 
 /**
@@ -51,14 +54,27 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
         throw new Error("浏览器批准身份与 PMS_E2E_ACCOUNT_ID 不一致，停止资源场景验收");
       }
 
-      await runUpdateScenario(client, "requirement", config.requirementId, "requirement.update", {
-        title: `${await titleOf(client, "requirement", config.requirementId)} [AI-E2E-${config.runId}]`,
+      const project = createFixtures
+        ? await createProjectFixture(client, config.runId)
+        : null;
+      const topic = createFixtures
+        ? await createTopicFixture(client, config.runId)
+        : null;
+      const requirementId = config.requirementId;
+      const topicId = topic?.topicId ?? config.topicId;
+      const projectId = project?.projectId ?? config.projectId;
+      if (requirementId === null || topicId === null || projectId === null) {
+        throw new Error("资源场景 E2E 没有解析出需求、专题和项目夹具 ID");
+      }
+
+      await runUpdateScenario(client, "requirement", requirementId, "requirement.update", {
+        title: `${await titleOf(client, "requirement", requirementId)} [AI-E2E-${config.runId}]`,
       }, `resource-requirement-${config.runId}`);
-      await runUpdateScenario(client, "topic", config.topicId, "topic.update", {
-        title: `${await titleOf(client, "topic", config.topicId)} [AI-E2E-${config.runId}]`,
+      await runUpdateScenario(client, "topic", topicId, "topic.update", {
+        title: `${await titleOf(client, "topic", topicId)} [AI-E2E-${config.runId}]`,
       }, `resource-topic-${config.runId}`);
-      await runUpdateScenario(client, "project", config.projectId, "project.update", {
-        name: `${await titleOf(client, "project", config.projectId)} [AI-E2E-${config.runId}]`,
+      await runUpdateScenario(client, "project", projectId, "project.update", {
+        name: `${await titleOf(client, "project", projectId)} [AI-E2E-${config.runId}]`,
       }, `resource-project-${config.runId}`);
 
       const audit = await auditOperations(config.runId, startedAt);
@@ -166,8 +182,8 @@ function assertResourceScenarioConfig(env: NodeJS.ProcessEnv) {
   }
   const config = assertIsolatedE2EConfig(env);
   if (!env.PMS_E2E_DB_URL?.trim()) throw new Error("真实资源场景验收缺少 PMS_E2E_DB_URL");
-  const projectId = positiveEnvNumber(env.PMS_E2E_PROJECT_ID, "PMS_E2E_PROJECT_ID");
-  const topicId = positiveEnvNumber(env.PMS_E2E_TOPIC_ID, "PMS_E2E_TOPIC_ID");
+  const projectId = createFixtures ? null : positiveEnvNumber(env.PMS_E2E_PROJECT_ID, "PMS_E2E_PROJECT_ID");
+  const topicId = createFixtures ? null : positiveEnvNumber(env.PMS_E2E_TOPIC_ID, "PMS_E2E_TOPIC_ID");
   const requirementId = positiveEnvNumber(env.PMS_E2E_REQUIREMENT_ID, "PMS_E2E_REQUIREMENT_ID");
   return { ...config, projectId, topicId, requirementId };
 }

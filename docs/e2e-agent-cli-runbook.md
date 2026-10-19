@@ -94,6 +94,12 @@ export PMS_E2E_CREATE_STORY_FIXTURE=false  # 创建夹具时改为 true
 pnpm run verify:real-pms:node-autofill
 ```
 
+资源场景的 project/topic 更新 E2E 支持同样的隔离夹具模式：设置
+`PMS_E2E_RESOURCE_SCENARIO=true`、`PMS_E2E_CREATE_RESOURCE_FIXTURES=true`，
+测试会用 `project.create` 和 `topic.create` 在本轮数据库内创建资源；此模式下不需要
+`PMS_E2E_PROJECT_ID` 或 `PMS_E2E_TOPIC_ID`，但仍需准备一个可读的
+`PMS_E2E_REQUIREMENT_ID`。夹具不调用未声明的 delete 命令，需通过隔离数据库销毁清理。
+
 该命令还要求前面的隔离目标变量完整（`PMS_E2E_BASE_URL`、`PMS_E2E_ALLOWED_BASE_URL`、`PMS_E2E_DATABASE_NAME`、`PMS_E2E_ALLOWED_DATABASE_NAME`、`PMS_E2E_ACCOUNT_ID`、`PMS_E2E_RUN_ID`），并且必须设置 `PMS_E2E_WRITE=true` 和 `PMS_E2E_ISOLATED=true`。需求夹具不能自动清理已推进的流程节点，因此只应使用可销毁的隔离数据库；故事夹具同样随隔离数据库一起销毁。
 
 要只验证模型输出和缺失项，不写入 PMS，可以直接运行：
