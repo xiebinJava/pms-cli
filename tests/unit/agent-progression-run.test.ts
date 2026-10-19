@@ -400,6 +400,23 @@ describe("agent progression run", () => {
     );
   });
 
+  it("reads project context without preview or execute", async () => {
+    const client = projectClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "project",
+      resourceId: 42,
+      nodeId: 301,
+      intent: "READ_CONTEXT",
+      executeMode: "plan",
+    });
+
+    expect(result.status).toBe("CONTEXT_READY");
+    expect(result.result?.status).toBe("CONTEXT_READY");
+    expect(client.preview).not.toHaveBeenCalled();
+    expect(client.executePreview).not.toHaveBeenCalled();
+  });
+
   it("reports project node completion as unavailable without preview or execute", async () => {
     const client = projectClient();
     const result = await runAgentProgression(client, {
@@ -416,6 +433,13 @@ describe("agent progression run", () => {
         assumptions: [],
         unresolvedDecisions: [],
         patch: { solutionPackage: "新方案" },
+        fieldSources: {
+          solutionPackage: {
+            sourceType: "conversation",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
         requestedCompletion: true,
       },
     });
@@ -441,6 +465,13 @@ describe("agent progression run", () => {
         assumptions: [],
         unresolvedDecisions: [],
         patch: { solutionPackage: "新方案" },
+        fieldSources: {
+          solutionPackage: {
+            sourceType: "conversation",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
         requestedCompletion: true,
       },
     });

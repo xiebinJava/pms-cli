@@ -165,13 +165,13 @@
 
 **Interfaces:** project 节点更新/完成与其他资源一样，先读取 focused context、校验项目/节点/版本/saveContract，再进入 preview。
 
-- [ ] 移除 project 节点写入的 `preflightContext = null` 特例。
-- [ ] 使用 Task 1.1 的 component resolver，不在 project adapter 和 draft validator 中各自选择组件。
-- [ ] 对 project workbench 明确 `project-basic-info` 走 `project.update`，unsupported workbench 返回 `CAPABILITY_UNAVAILABLE`。
-- [ ] 如果后端暂时没有 project `fieldContracts/requiredFields`，只由 preview preconditions 提供缺失信息，不伪造统一字段契约。
-- [ ] 将运行时 `saveContract` 与 YAML agent contract 分开处理，不给节点命令自动附加不兼容的 `contractId/contractVersion`。
-- [ ] 添加 project `READ_CONTEXT` 零 preview/execute 测试。
-- [ ] Review：确认 adapter 没有复制 PMS 业务规则。
+- [x] 移除 project 节点写入的 `preflightContext = null` 特例。
+- [x] 使用 Task 1.1 的 component resolver，不在 project adapter 和 draft validator 中各自选择组件。
+- [x] project 节点继续只接受 focused context 中声明的 workbench；不支持的 workbench 返回 `CAPABILITY_UNAVAILABLE`；`project-basic-info` 仍走资源级 `project.update`。
+- [x] 如果后端暂时没有 project `fieldContracts/requiredFields`，只由 preview preconditions 提供缺失信息，不伪造统一字段契约。
+- [x] 将运行时 `saveContract` 与 YAML agent contract 分开处理，不给节点命令自动附加不兼容的 `contractId/contractVersion`。
+- [x] 添加 project `READ_CONTEXT` 零 preview/execute 测试。
+- [x] Review：确认 adapter 没有复制 PMS 业务规则。
 - [ ] 提交：`git commit -m "fix(cli): align project progression preflight"`。
 
 ## Milestone 2：真实字段回读验证

@@ -115,7 +115,13 @@ describe("agent progression dispatch", () => {
       resourceId: 12,
       nodeId: 301,
       intent: "UPDATE_NODE_FIELDS",
-      draft: { facts: [], inferences: [], assumptions: [], unresolvedDecisions: [], patch: { architecture: "模块化" } },
+      draft: {
+        facts: [], inferences: [], assumptions: [],
+        patch: { architecture: "模块化" },
+        fieldSources: {
+          architecture: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" },
+        },
+      },
       executeMode: "auto",
     });
     expect(plan.operation).toBe("node.field.update");

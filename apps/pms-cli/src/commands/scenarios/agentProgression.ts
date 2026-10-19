@@ -76,9 +76,7 @@ export async function planAgentProgression(
   if (declaredCapability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
-  const preflightContext = parsed.resourceType === "project"
-    ? null
-    : await readFocusedProgressionContext(client, parsed);
+  const preflightContext = await readFocusedProgressionContext(client, parsed);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
   const riskRequiresConfirmation = executionMode === "confirmation" && parsed.executeMode !== "confirm";
   const draftExecutionMode = draftModeForRequest(parsed, executionMode);
