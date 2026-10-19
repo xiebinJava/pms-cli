@@ -47,6 +47,14 @@ export async function planResourceScenario(
     provenance: parsed.provenance,
     requestId: parsed.requestId,
   });
+  if (parsed.provenance
+    && (preview.provenanceRef === undefined || preview.provenanceRef === null
+      || preview.draftDigest !== parsed.provenance.draftDigest)) {
+    throw new ResourceScenarioError(
+      "CAPABILITY_UNAVAILABLE",
+      "PMS preview 未返回与本次 draft 匹配的 provenanceRef/draftDigest",
+    );
+  }
   return {
     scenario: "resource-scenario",
     phase: "plan",
