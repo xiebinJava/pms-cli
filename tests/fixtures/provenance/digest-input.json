@@ -1,0 +1,30 @@
+{
+  "contractVersion": "draft-provenance/v1",
+  "resourceType": "requirement",
+  "resourceId": 12,
+  "nodeId": 3,
+  "componentKey": "requirement-node-workbench",
+  "intent": "UPDATE_NODE_FIELDS",
+  "requestedCompletion": false,
+  "versionSnapshot": {
+    "nodeVersion": 1,
+    "entityVersion": 7,
+    "workflowInstanceVersion": 2,
+    "componentVersion": 4,
+    "contextVersion": "ctx-7"
+  },
+  "facts": [
+    { "text": "测试已通过", "sourceRefs": ["requirement:12"] }
+  ],
+  "inferences": [],
+  "assumptions": [],
+  "unresolvedDecisions": [],
+  "patch": { "testResult": "PASS" },
+  "fieldSources": {
+    "testResult": {
+      "sourceType": "pms_context",
+      "sourceRefs": ["requirement-node:3", "requirement:12"],
+      "confidence": "high"
+    }
+  }
+}

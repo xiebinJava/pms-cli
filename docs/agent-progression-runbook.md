@@ -71,15 +71,15 @@ pms scenario progression run requirement 33 \
 
 ```json
 {
-  "facts": [{"text": "测试节点当前为空", "sourceRefs": ["pms:context:requirement:33:node:<node>"]}],
+  "facts": [{"text": "测试节点当前为空", "sourceRefs": ["requirement-node:<node>"]}],
   "inferences": [],
   "assumptions": [],
   "unresolvedDecisions": [],
   "patch": {"testResult": "PASS"},
   "fieldSources": {
     "testResult": {
-      "sourceType": "conversation",
-      "sourceRefs": ["conversation:latest"],
+      "sourceType": "pms_context",
+      "sourceRefs": ["requirement-node:<node>#component:requirement-node-workbench"],
       "confidence": "high"
     }
   },

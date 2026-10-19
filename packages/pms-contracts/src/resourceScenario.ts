@@ -7,6 +7,7 @@ import {
 } from "./operation.js";
 import { resourceDetailSchema, type ResourceDetail, type WorkflowContext } from "./query.js";
 import { userFacingDisplaySchema } from "./userFacing.js";
+import { draftProvenanceSchema, provenanceRefSchema } from "./provenance.js";
 
 export const resourceScenarioContractVersion = "resource-scenario/v1" as const;
 
@@ -42,6 +43,7 @@ export const resourceScenarioInputSchema = z.object({
   contextVersion: contextVersionSchema.optional(),
   arguments: z.record(z.string(), z.unknown()).default({}),
   draft: resourceScenarioDraftSchema.optional(),
+  provenance: draftProvenanceSchema.optional(),
   requestId: z.string().trim().min(1).max(160).optional(),
 }).strict();
 
@@ -105,6 +107,8 @@ export const resourceScenarioPlanSchema = z.object({
   preview: operationPreviewSchema,
   requiresConfirmation: z.boolean(),
   executionMode: z.enum(["read", "automatic", "confirmation"]).default("confirmation"),
+  provenance: draftProvenanceSchema.optional(),
+  provenanceRef: provenanceRefSchema.nullable().optional(),
   warnings: z.array(z.string()).default([]),
   userFacing: userFacingDisplaySchema.optional(),
 }).strict();
@@ -122,6 +126,8 @@ export const resourceScenarioResultSchema = z.object({
     context: resourceScenarioReadbackContextSchema.nullable(),
   }).strict(),
   verification: resourceScenarioVerificationSchema,
+  provenanceRef: provenanceRefSchema.nullable().optional(),
+  draftDigest: z.string().trim().min(1).optional(),
   status: z.enum(["SUCCEEDED", "REJECTED", "CONFLICT", "WRITE_RESULT_UNKNOWN"]),
   warnings: z.array(z.string()).default([]),
   refreshScopes: z.array(z.string()).default([]),

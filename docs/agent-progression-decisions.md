@@ -41,5 +41,10 @@
 
 ## 来源边界
 
-- `fieldSources` 的来源持久化、实体校验和大小限制由后续 provenance 任务完成。
+- `fieldSources`、版本快照、`draftDigest` 和 `provenanceRef` 已在 `docs/agent-provenance-contract.md` 与 `packages/pms-contracts/src/provenance.ts` 冻结；后续任务只负责把可选契约接入后端持久化和 capabilities。
+- 持久化 `sourceRefs` 只允许可读取的 PMS 资源、节点和组件引用；外部对话引用必须先由 Orchestrator 投影，不能直接写入 `conversation:` 或 `pms:` 命名空间。
+- `draftDigest` 必须包含五条版本轴，未知值显式为 `null`；任一版本变化都必须导致 digest 变化。
+- `pms_ai_operation.provenance_json` 是下一次 migration 的唯一新增列，`pms_ai_plan` 复用 `draft_json`，事件只记录 `provenanceRef` 和 digest。
+- preview 的 `provenanceRef` 固定为 `operation:<previewOperationId>`；execute 只能引用原 preview 的 provenance，不接受新 provenance。
+- 限制为最多 200 个字段、每字段最多 20 个来源、序列化后最多 64 KiB；非法 sourceRef 和超限分别返回 `PROVENANCE_INVALID`、`PROVENANCE_TOO_LARGE`。
 - provenance 非法或超限在 run 边界返回 `REJECTED`，分别使用 `PROVENANCE_INVALID` 或 `PROVENANCE_TOO_LARGE`；不能伪装成缺少业务字段。

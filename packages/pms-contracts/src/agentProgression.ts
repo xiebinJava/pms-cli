@@ -7,6 +7,7 @@ import {
 import { resourceDetailSchema } from "./query.js";
 import { analysisItemSchema } from "./scenario.js";
 import { userFacingDisplaySchema } from "./userFacing.js";
+import { draftProvenanceSchema, provenanceRefSchema } from "./provenance.js";
 
 export const agentProgressionContractVersion = "agent-progression/v2" as const;
 
@@ -92,6 +93,7 @@ export const agentProgressionInputSchema = z.object({
   componentKey: z.string().trim().min(1).max(160).optional(),
   intent: agentProgressionIntentSchema,
   draft: agentProgressionDraftSchema.optional(),
+  provenance: draftProvenanceSchema.optional(),
   executeMode: agentProgressionExecuteModeSchema.default("plan"),
   previewOperationId: z.string().trim().min(1).max(160).optional(),
   idempotencyKey: z.string().trim().min(1).max(160).optional(),
@@ -113,6 +115,8 @@ export const agentProgressionPlanSchema = z.object({
   normalizedArguments: z.record(z.string(), z.unknown()).default({}),
   capability: z.record(z.string(), z.unknown()).nullable(),
   preview: operationPreviewSchema.nullable(),
+  provenance: draftProvenanceSchema.optional(),
+  provenanceRef: provenanceRefSchema.nullable().optional(),
   fieldChanges: z.array(agentProgressionFieldChangeSchema).default([]),
   missingFields: z.array(agentProgressionMissingFieldSchema).default([]),
   preconditions: z.array(z.unknown()).default([]),
@@ -151,6 +155,8 @@ export const agentProgressionResultSchema = z.object({
     context: z.unknown().nullable(),
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
+  provenanceRef: provenanceRefSchema.nullable().optional(),
+  draftDigest: z.string().trim().min(1).optional(),
   warnings: z.array(z.string()).default([]),
   rejectionReason: agentProgressionRejectionReasonSchema.optional(),
   userFacing: userFacingDisplaySchema.optional(),

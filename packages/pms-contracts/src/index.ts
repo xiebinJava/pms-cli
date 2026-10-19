@@ -12,3 +12,4 @@ export * from "./resourceScenario.js";
 export * from "./agentProgression.js";
 
 export * from "./agentProgressionRun.js";
+export * from "./provenance.js";

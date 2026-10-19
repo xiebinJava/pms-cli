@@ -1,0 +1,26 @@
+{
+  "contractVersion": "draft-provenance/v1",
+  "draftDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "fieldSources": {
+    "testResult": {
+      "sourceType": "pms_context",
+      "sourceRefs": ["requirement-node:12#component:requirement-node-workbench"],
+      "confidence": "high"
+    },
+    "resourceSummary": {
+      "sourceType": "pms_context",
+      "sourceRefs": ["project:42"],
+      "confidence": "high"
+    },
+    "nodeState": {
+      "sourceType": "pms_context",
+      "sourceRefs": ["requirement-node:3"],
+      "confidence": "medium"
+    },
+    "storyComponent": {
+      "sourceType": "pms_context",
+      "sourceRefs": ["story-node:7#component:story-node-workbench"],
+      "confidence": "high"
+    }
+  }
+}

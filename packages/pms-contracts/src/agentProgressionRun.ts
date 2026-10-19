@@ -14,6 +14,7 @@ import {
 import { resourceDetailSchema, type ResourceDetail } from "./query.js";
 import { resourceScenarioVerificationSchema, type ResourceScenarioVerification } from "./resourceScenario.js";
 import { userFacingDisplaySchema } from "./userFacing.js";
+import { provenanceRefSchema } from "./provenance.js";
 
 export const agentProgressionRunContractVersion = "agent-progression-run/v2" as const;
 
@@ -55,6 +56,8 @@ export const agentProgressionRunResultSchema = z.object({
     context: z.unknown().nullable(),
   }).strict().nullable(),
   verification: resourceScenarioVerificationSchema.nullable(),
+  provenanceRef: provenanceRefSchema.nullable().optional(),
+  draftDigest: z.string().trim().min(1).optional(),
   warnings: z.array(z.string()).default([]),
   rejectionReason: agentProgressionRejectionReasonSchema.optional(),
   userFacing: userFacingDisplaySchema.optional(),

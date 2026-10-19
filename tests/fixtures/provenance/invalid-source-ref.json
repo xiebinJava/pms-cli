@@ -1,0 +1,11 @@
+{
+  "contractVersion": "draft-provenance/v1",
+  "draftDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "fieldSources": {
+    "testResult": {
+      "sourceType": "conversation",
+      "sourceRefs": ["conversation:latest"],
+      "confidence": "high"
+    }
+  }
+}

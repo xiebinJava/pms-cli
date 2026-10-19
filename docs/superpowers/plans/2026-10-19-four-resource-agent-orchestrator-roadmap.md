@@ -237,6 +237,9 @@
 **Files:**
 - Create: `docs/agent-provenance-contract.md`
 - Modify: `docs/agent-progression-decisions.md`
+- Create: `packages/pms-contracts/src/provenance.ts`
+- Modify: `packages/pms-contracts/src/index.ts`
+- Modify: `packages/pms-contracts/src/agentProgression.ts`
 - Modify: `packages/pms-contracts/src/agentProgressionRun.ts`
 - Modify: `packages/pms-contracts/src/resourceScenario.ts`
 - Modify: `docs/agent-progression-runbook.md`
@@ -245,13 +248,13 @@
 
 **Interfaces:** 冻结 spec“来源持久化契约”小节中的 wire shape、`draftDigest` 规范化、存储位置、大小/脱敏限制、`provenanceRef`、capabilities 的 `provenanceVersions` 和发布顺序。本任务只改契约、文档和 fixture，不写后端持久化代码。
 
-- [ ] 把 spec 中的 provenance wire shape 落成 TypeScript schema 和 JSON fixture，覆盖合法、超限、非法 sourceRef、digest 稳定性和 digest 不一致。
-- [ ] `draftDigest` 输入必须包含 `versionSnapshot`（node/entity/workflow/component/context versions）；未知值写 `null`，并测试任一版本变化都会改变 digest。
-- [ ] sourceRef 契约沿用现有 `<type>:<id>`、`<type>-node:<id>`、`<type>-node:<id>#component:<key>`；不新增 `pms:`/`conversation:` 命名空间；用 fixture 证明 CLI 和后端 validator 使用同一组格式。
-- [ ] 明确 `pms_ai_operation.provenance_json` 为下一次 migration 的唯一新增列；`pms_ai_plan` 复用 `draft_json`；不新增重复会话/审计表。
-- [ ] 明确 `provenanceRef = "operation:<previewOperationId>"`，execute 不接受新 provenance。
-- [ ] 在 `docs/agent-provenance-contract.md` 记录规范化算法、限制、脱敏规则和 rollout 顺序（backend first）。
-- [ ] Review：确认契约没有保存完整对话、Token 或自由文本。
+- [x] 把 spec 中的 provenance wire shape 落成 TypeScript schema 和 JSON fixture，覆盖合法、超限、非法 sourceRef、digest 稳定性和 digest 不一致。
+- [x] `draftDigest` 输入必须包含 `versionSnapshot`（node/entity/workflow/component/context versions）；未知值写 `null`，并测试任一版本变化都会改变 digest。
+- [x] sourceRef 契约沿用现有 `<type>:<id>`、`<type>-node:<id>`、`<type>-node:<id>#component:<key>`；不新增 `pms:`/`conversation:` 命名空间；用 fixture 证明 CLI 和后端 validator 使用同一组格式。
+- [x] 明确 `pms_ai_operation.provenance_json` 为下一次 migration 的唯一新增列；`pms_ai_plan` 复用 `draft_json`；不新增重复会话/审计表。
+- [x] 明确 `provenanceRef = "operation:<previewOperationId>"`，execute 不接受新 provenance。
+- [x] 在 `docs/agent-provenance-contract.md` 记录规范化算法、限制、脱敏规则和 rollout 顺序（backend first）。
+- [x] Review：确认契约没有保存完整对话、Token 或自由文本。
 - [ ] 提交：`git commit -m "docs(contract): freeze draft provenance v1"`。
 
 ### Task 3.1：跨仓库增加 draft provenance
