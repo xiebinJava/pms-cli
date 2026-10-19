@@ -52,7 +52,7 @@ pms scenario resource plan project project.update 42 \
   --version 9
 ```
 
-plan 只返回 `resource-scenario/v1` 预览，包括 `normalizedArguments`、`capability`、`preview`、`warnings` 和 `requiresConfirmation=true`。它不会返回执行结果，也不会调用 execute。
+plan 只返回 `resource-scenario/v1` 预览，包括 `normalizedArguments`、`capability`、`preview`、`warnings` 和由能力目录风险决定的 `requiresConfirmation`/`executionMode`。高风险操作返回 `requiresConfirmation=true`；低/中风险兼容操作可返回 automatic。它不会返回执行结果，也不会调用 execute。节点 Agent 写入仍应优先使用 `scenario progression run`，由其额外应用 completionMode 和 provenance 规则。
 
 用户确认后，代理只能复用原来的 `preview.operationId` 和新生成的幂等键：
 
