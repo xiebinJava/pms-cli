@@ -108,6 +108,7 @@ export async function executeResourceScenario(
     const after: ResourceScenarioSnapshot = { resource, context };
     recordContextVersionChange(before, after, warnings);
     const rawVerification = adapter.verifyReadback(before, after, {
+      resourceType: parsed.resourceType,
       nodeId: parsed.nodeId,
       componentKey: parsed.componentKey,
       expectedPatch: parsed.expectedPatch,

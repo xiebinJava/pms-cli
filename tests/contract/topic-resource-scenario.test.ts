@@ -225,7 +225,7 @@ describe("topic resource scenario contract", () => {
     const result = await executeResourceScenario(client, {
       resourceType: "topic",
       operation: "topic.create",
-      expectedPatch: { title: "AI 协作专题" },
+      expectedPatch: { title: "研发流程专题" },
       previewOperationId: plan.preview.operationId,
       idempotencyKey: "topic-create-1",
     }, createResourceScenarioRegistry([topicScenarioAdapter]));

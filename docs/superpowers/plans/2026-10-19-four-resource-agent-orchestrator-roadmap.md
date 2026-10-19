@@ -222,12 +222,12 @@
 - `compareProtectedFields(before, after, protectedFields, allowedMutations)`：`allowedMutations` 来自 preview/operation 的规范化变更集，不直接从 draft 猜测；
 - `buildVerificationResult(...)`：区分 `patchApplied`、`protectedFieldsUnchanged`、`readbackComplete` 和 `WRITE_RESULT_UNKNOWN`。
 
-- [ ] 先测试稀疏 topic/story projection、完整 project projection、日期/空值/类型归一化，以及 component 内容提取失败时的 unknown。
-- [ ] 明确资源级保护字段与本次 completion 合法变更字段分离。
-- [ ] 四类 adapter 逐个接入，不改变特殊 completion 命令映射。
-- [ ] 复用后端 `AiOrchestratorVerificationService` 的比较思路，但不复制 Java 业务规则到 CLI。
-- [ ] 验证器只信任 preview/operation 回传的 allowedMutations；缺少字段契约或无法完整读取时不得把“不知道”当成“未变化”。
-- [ ] Review：确认“不知道”不会被当成“未变化”，真实字段未回读时必须是 `WRITE_RESULT_UNKNOWN`。
+- [x] 已测试稀疏 topic/story projection、完整 project projection、日期/数值归一化，以及 component 内容提取失败时的 unknown。
+- [x] 明确资源级保护字段与本次 completion 合法变更字段分离；保护字段只从可观察快照比较。
+- [x] 四类资源 adapter/故事工作台逐个接入共享 verifier，不改变特殊 completion 命令映射。
+- [x] 复用后端 verifier 的“预期后状态 + 允许变更集”思路，不复制 Java 业务规则到 CLI。
+- [x] 验证器只信任 operation 回传的 `allowedMutations`；缺少字段契约或无法完整读取时不得把“不知道”当成“未变化”。
+- [x] Review：确认“不知道”不会被当成“未变化”，真实字段未回读时会降级为 `WRITE_RESULT_UNKNOWN`。
 - [ ] 提交：`git commit -m "refactor(cli): verify actual progression patches"`。
 
 ## Milestone 3：来源审计与统一 Agent 交接

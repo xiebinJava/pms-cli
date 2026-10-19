@@ -10,6 +10,7 @@ function storyClient() {
   const context = {
     resource: { type: "story" as const, id: 12 },
     version: 1,
+    resourceDetails: { title: "测试故事", status: "IN_PROGRESS" },
     currentNode: { id: 384, key: "writing", label: "编写" },
     workflow: {
       nodes: [{
@@ -88,15 +89,18 @@ function storyClient() {
       refreshScopes: [],
       preconditions: [],
     })),
-    executePreview: vi.fn(async () => ({
-      operationId: "operation-story-run",
-      command: "development-item.node.field.update",
-      status: "SUCCEEDED" as const,
-      data: { storyId: 12 },
-      warnings: [],
-      refreshScopes: [],
-      auditId: "audit-story-run",
-    })),
+    executePreview: vi.fn(async () => {
+      (context.workflow.nodes[0] as any).components[0].content = { summary: "草稿" };
+      return {
+        operationId: "operation-story-run",
+        command: "development-item.node.field.update",
+        status: "SUCCEEDED" as const,
+        data: { storyId: 12 },
+        warnings: [],
+        refreshScopes: [],
+        auditId: "audit-story-run",
+      };
+    }),
   } as any;
 }
 

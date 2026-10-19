@@ -1,9 +1,7 @@
 import type {
   ActionCapability,
-  ResourceDetail,
   ResourceScenarioContext,
   ParsedResourceScenarioInput,
-  ResourceScenarioSnapshot,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import {
@@ -15,6 +13,11 @@ import {
   ComponentResolutionError,
   resolveWorkflowComponent,
 } from "../core/componentResolver.js";
+import {
+  buildVerificationResult,
+  publicVerification,
+  type ReadbackVerificationInput,
+} from "./readbackVerification.js";
 
 const PROJECT_OPERATIONS = new Set([
   "project.create",
@@ -158,24 +161,18 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     return isPositiveInteger(projectId) ? projectId : null;
   },
 
-  verifyReadback(before, after, _normalizedArguments, operation) {
-    const expectedId = operation.data.projectId
-      ?? (isRecord(operation.data.project) ? operation.data.project.id : undefined)
-      ?? before?.resource?.resourceId
-      ?? before?.context?.resource.id;
-    const resourceReadback = after.resource?.resourceType === "project"
-      && (expectedId === undefined || after.resource.resourceId === Number(expectedId));
-    const contextReadback = after.context?.resource.type === "project"
-      && (expectedId === undefined || after.context.resource.id === Number(expectedId));
+  verifyReadback(before, after, verificationInput, operation) {
+    const result = buildVerificationResult({
+      ...(verificationInput as Partial<ReadbackVerificationInput>),
+      resourceType: "project",
+      protectedFields: ["status"],
+    }, before, after, operation);
     const workflowStable = workflowDidNotDrift(before?.context, after.context);
-    const protectedFieldsUnchanged = compareProtectedFields(before?.resource, after.resource);
-    return {
-      resourceReadback,
-      contextReadback,
-      patchApplied: resourceReadback && contextReadback && workflowStable
-        && operation.status === "SUCCEEDED",
-      protectedFieldsUnchanged,
-    };
+    return publicVerification({
+      ...result,
+      patchApplied: result.patchApplied && workflowStable,
+      readbackComplete: result.readbackComplete && workflowStable,
+    });
   },
 };
 
@@ -296,13 +293,6 @@ function readNode(context: WorkflowContext, nodeId: number): Record<string, any>
 function nodeKey(value: unknown): string {
   if (!isRecord(value)) return "unknown";
   return `${String(value.id)}:${String(value.key)}`;
-}
-
-function compareProtectedFields(before: ResourceDetail | null | undefined, after: ResourceDetail | null): boolean {
-  if (!before) return true;
-  if (!after) return false;
-  return ["id", "status", "deleted"].every((key) => !Object.prototype.hasOwnProperty.call(before.details, key)
-    || JSON.stringify(before.details[key]) === JSON.stringify(after.details[key]));
 }
 
 function isRecord(value: unknown): value is Record<string, any> {

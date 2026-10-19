@@ -43,7 +43,7 @@ export interface ResourceScenarioAdapter {
   verifyReadback(
     before: ResourceScenarioSnapshot | null,
     after: ResourceScenarioSnapshot,
-    normalizedArguments: Record<string, unknown>,
+    verificationInput: Record<string, unknown>,
     operation: OperationResult,
   ): ResourceScenarioVerification;
 }

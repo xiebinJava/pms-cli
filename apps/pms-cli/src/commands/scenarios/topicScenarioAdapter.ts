@@ -2,7 +2,6 @@ import type {
   ActionCapability,
   ResourceDetail,
   ResourceScenarioContext,
-  ResourceScenarioSnapshot,
   ParsedResourceScenarioInput,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
@@ -15,6 +14,11 @@ import {
   ComponentResolutionError,
   resolveWorkflowComponent,
 } from "../core/componentResolver.js";
+import {
+  buildVerificationResult,
+  publicVerification,
+  type ReadbackVerificationInput,
+} from "./readbackVerification.js";
 
 const TOPIC_OPERATIONS = new Set([
   "topic.create",
@@ -169,24 +173,19 @@ export const topicScenarioAdapter: ResourceScenarioAdapter = {
     return isPositiveInteger(id) ? id : null;
   },
 
-  verifyReadback(before, after, _normalizedArguments, operation) {
-    const expectedId = operation.data.topicId
-      ?? before?.resource?.resourceId
-      ?? before?.context?.resource.id;
-    const resourceReadback = after.resource?.resourceType === "topic"
-      && (expectedId === undefined || after.resource.resourceId === Number(expectedId));
-    const contextReadback = after.context?.resource.type === "topic"
-      && (expectedId === undefined || after.context.resource.id === Number(expectedId));
+  verifyReadback(before, after, verificationInput, operation) {
+    const result = buildVerificationResult({
+      ...(verificationInput as Partial<ReadbackVerificationInput>),
+      resourceType: "topic",
+      protectedFields: ["status"],
+    }, before, after, operation);
     const relationConsistent = relationIsConsistent(after.resource, after.context);
-    const workflowStable = workflowDidNotDrift(before?.context, after.context);
-    const protectedFieldsUnchanged = compareProtectedFields(before, after);
-    return {
-      resourceReadback,
-      contextReadback: contextReadback && relationConsistent,
-      patchApplied: resourceReadback && contextReadback && relationConsistent
-        && workflowStable && operation.status === "SUCCEEDED",
-      protectedFieldsUnchanged,
-    };
+    return publicVerification({
+      ...result,
+      contextReadback: result.contextReadback && relationConsistent,
+      patchApplied: result.patchApplied && relationConsistent,
+      readbackComplete: result.readbackComplete && relationConsistent,
+    });
   },
 };
 
@@ -368,25 +367,6 @@ function workflowDidNotDrift(before: WorkflowContext | null | undefined, after: 
 function nodeKey(value: unknown): string {
   if (!isRecord(value)) return "unknown";
   return `${String(value.id)}:${String(value.key)}`;
-}
-
-function compareProtectedFields(
-  before: ResourceScenarioSnapshot | null | undefined,
-  after: ResourceScenarioSnapshot | null,
-): boolean {
-  if (!before) return true;
-  if (!after) return false;
-  const beforeDetails = {
-    ...(before.resource?.details ?? {}),
-    ...(before.context?.resourceDetails ?? {}),
-  };
-  const afterDetails = {
-    ...(after.resource?.details ?? {}),
-    ...(after.context?.resourceDetails ?? {}),
-  };
-  return ["id", "status", "deleted"].every((key) => !Object.prototype.hasOwnProperty.call(beforeDetails, key)
-    || Object.prototype.hasOwnProperty.call(afterDetails, key)
-      && JSON.stringify(beforeDetails[key]) === JSON.stringify(afterDetails[key]));
 }
 
 function validateDeclaredArguments(

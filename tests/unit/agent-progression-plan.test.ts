@@ -143,7 +143,7 @@ function requirementClient() {
     contextVersion: "5",
     warnings: [], changes: [], refreshScopes: [], preconditions: [],
   }));
-  return { context: vi.fn(async () => context), capabilities, preview } as any;
+  return { context: vi.fn(async () => context), contextData: context, capabilities, preview } as any;
 }
 
 describe("agent progression plan", () => {
@@ -245,14 +245,17 @@ describe("agent progression plan", () => {
       entityVersion: 5,
       details: { title: "PMS", status: "IN_PROGRESS", ownerId: 2 },
     }));
-    client.executePreview = vi.fn(async () => ({
-      operationId: "preview-requirement-complete",
-      command: "development-item.node.complete-with-data",
-      status: "SUCCEEDED",
-      data: { requirementId: 24 },
-      warnings: [],
-      refreshScopes: ["development-detail"],
-    }));
+    client.executePreview = vi.fn(async () => {
+      (client.contextData.workflow.nodes[0] as any).components[0].content = { testResult: "PASS" };
+      return {
+        operationId: "preview-requirement-complete",
+        command: "development-item.node.complete-with-data",
+        status: "SUCCEEDED",
+        data: { requirementId: 24 },
+        warnings: [],
+        refreshScopes: ["development-detail"],
+      };
+    });
     const result = await executeAgentProgression(client, {
       contractVersion: agentProgressionContractVersion,
       resourceType: "requirement",

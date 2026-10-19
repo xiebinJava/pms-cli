@@ -76,15 +76,18 @@ function requirementClient(risk: Risk = "medium") {
     refreshScopes: ["development-detail"],
     preconditions: [],
   }));
-  const executePreview = vi.fn(async () => ({
-    operationId: "operation-requirement-complete",
-    command: "development-item.node.complete-with-data",
-    status: "SUCCEEDED" as const,
-    data: { requirementId: 24 },
-    warnings: [],
-    refreshScopes: ["development-detail"],
-    auditId: "audit-requirement-complete",
-  }));
+  const executePreview = vi.fn(async () => {
+    (context.workflow.nodes[0] as any).components[0].content = { testResult: "PASS" };
+    return {
+      operationId: "operation-requirement-complete",
+      command: "development-item.node.complete-with-data",
+      status: "SUCCEEDED" as const,
+      data: { requirementId: 24 },
+      warnings: [],
+      refreshScopes: ["development-detail"],
+      auditId: "audit-requirement-complete",
+    };
+  });
   const get = vi.fn(async () => ({
     resourceType: "requirement" as const,
     resourceId: 24,
@@ -196,15 +199,18 @@ function projectClient(options: { withCompletion?: boolean } = {}) {
       refreshScopes: [],
       preconditions: [],
     })),
-    executePreview: vi.fn(async () => ({
-      operationId: "operation-project-update",
-      command: "node.field.update",
-      status: "SUCCEEDED" as const,
-      data: { projectId: 42 },
-      warnings: [],
-      refreshScopes: [],
-      auditId: "audit-project-update",
-    })),
+    executePreview: vi.fn(async () => {
+      (context.workflow.nodes[0] as any).components[0].content = { solutionPackage: "新方案" };
+      return {
+        operationId: "operation-project-update",
+        command: "node.field.update",
+        status: "SUCCEEDED" as const,
+        data: { projectId: 42 },
+        warnings: [],
+        refreshScopes: [],
+        auditId: "audit-project-update",
+      };
+    }),
   } as any;
 }
 

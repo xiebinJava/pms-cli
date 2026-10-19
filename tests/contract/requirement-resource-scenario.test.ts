@@ -317,7 +317,7 @@ describe("requirement resource scenario contract", () => {
       resourceType: "requirement",
       resourceId: 42,
       operation: "requirement.update",
-      expectedPatch: { title: "新的需求名称" },
+      expectedPatch: { title: "统一项目管理标准" },
       previewOperationId: "preview-requirement.update",
       idempotencyKey: "requirement-42-update-v1",
     }, registry);

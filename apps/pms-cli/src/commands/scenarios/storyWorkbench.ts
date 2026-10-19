@@ -15,6 +15,7 @@ import { operationExecutePreview, operationPreview } from "../core/operation.js"
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import { ComponentResolutionError, resolveWorkflowComponent } from "../core/componentResolver.js";
 import { ResourceScenarioError } from "./resourceScenarioRegistry.js";
+import { buildVerificationResult, publicVerification } from "./readbackVerification.js";
 
 export type StoryWorkbenchScenarioClient = PmsClient;
 
@@ -317,21 +318,15 @@ async function executeAfterPreview(
         component: prepared.saveContract.componentKey,
       },
     );
-    const content = readComponentContent(
-      context,
-      prepared.input.nodeId,
-      prepared.saveContract.componentKey,
-    );
-    const verification = {
-      resourceReadback: true,
-      contextReadback: true,
-      patchApplied: Object.entries(prepared.input.patch)
-        .every(([key, value]) => jsonEqual(content?.[key], value)),
-      protectedFieldsUnchanged: compareProtectedFields(
-        prepared.context.resourceDetails,
-        context.resourceDetails,
-      ),
-    };
+    const builtVerification = buildVerificationResult({
+      resourceType: "story",
+      resourceId: prepared.input.resourceId,
+      nodeId: prepared.input.nodeId,
+      componentKey: prepared.saveContract.componentKey,
+      expectedPatch: prepared.input.patch,
+      protectedFields: ["status"],
+    }, { resource: null, context: prepared.context }, { resource, context }, operation);
+    const verification = publicVerification(builtVerification);
     if (!verification.patchApplied || !verification.protectedFieldsUnchanged) {
       warnings.push("故事节点回读结果未完全匹配预期，写入结果需要人工核验");
     }
@@ -424,41 +419,6 @@ function baseResult(input: StoryWorkbenchInput, status: StoryWorkbenchResult["st
     ...(input.complete === undefined ? {} : { complete: input.complete }),
     warnings: [],
   };
-}
-
-function readComponentContent(
-  context: WorkflowContext,
-  nodeId: number,
-  componentKey: string,
-): Record<string, unknown> | null {
-  const nodes = Array.isArray(context.workflow?.nodes) ? context.workflow.nodes : [];
-  const node = nodes.find((candidate) => isRecord(candidate) && candidate.id === nodeId);
-  if (!isRecord(node) || !Array.isArray(node.components)) return null;
-  let component: Record<string, any> | undefined;
-  try {
-    component = resolveWorkflowComponent(node as any, { componentKey, mode: "read" })
-      .component as Record<string, any> | undefined;
-  } catch {
-    return null;
-  }
-  if (!isRecord(component) || !isRecord(component.content)) return null;
-  return component.content;
-}
-
-function compareProtectedFields(
-  before: Record<string, unknown> | undefined,
-  after: Record<string, unknown> | undefined,
-): boolean {
-  if (!before) return true;
-  if (!after) return false;
-  return ["title", "status", "ownerId", "startDate", "dueDate"].every((key) => {
-    if (!Object.prototype.hasOwnProperty.call(before, key)) return true;
-    return jsonEqual(before[key], after[key]);
-  });
-}
-
-function jsonEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record<string, unknown> {

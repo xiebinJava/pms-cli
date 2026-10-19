@@ -2,7 +2,6 @@ import type {
   ActionCapability,
   AnalysisDraft,
   ResourceScenarioContext,
-  ResourceScenarioSnapshot,
   ParsedResourceScenarioInput,
   WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
@@ -16,6 +15,11 @@ import {
   ComponentResolutionError,
   resolveWorkflowComponent,
 } from "../core/componentResolver.js";
+import {
+  buildVerificationResult,
+  publicVerification,
+  type ReadbackVerificationInput,
+} from "./readbackVerification.js";
 
 const REQUIREMENT_OPERATIONS = new Set([
   "requirement.update",
@@ -184,24 +188,12 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
     return isPositiveInteger(id) ? id : null;
   },
 
-  verifyReadback(before, after, normalizedArguments, operation) {
-    const expectedId = normalizedArguments.requirementId
-      ?? normalizedArguments.itemId
-      ?? operation.data.requirementId
-      ?? before?.resource?.resourceId
-      ?? before?.context?.resource.id;
-    const resourceReadback = after.resource?.resourceType === "requirement"
-      && (expectedId === undefined || after.resource.resourceId === Number(expectedId));
-    const contextReadback = after.context?.resource.type === "requirement"
-      && (expectedId === undefined || after.context.resource.id === Number(expectedId));
-    const protectedFieldsUnchanged = compareProtectedFields(before, after);
-    const patchApplied = resourceReadback && contextReadback && operation.status === "SUCCEEDED";
-    return {
-      resourceReadback,
-      contextReadback,
-      patchApplied,
-      protectedFieldsUnchanged,
-    };
+  verifyReadback(before, after, verificationInput, operation) {
+    return publicVerification(buildVerificationResult({
+      ...(verificationInput as Partial<ReadbackVerificationInput>),
+      resourceType: "requirement",
+      protectedFields: ["status", "ownerId"],
+    }, before, after, operation));
   },
 };
 
@@ -416,25 +408,6 @@ function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record
     result = { [segments[index]!]: result };
   }
   return result;
-}
-
-function compareProtectedFields(
-  before: ResourceScenarioSnapshot | null | undefined,
-  after: ResourceScenarioSnapshot | null,
-): boolean {
-  if (!before || !after) return false;
-  const beforeDetails = {
-    ...(before.resource?.details ?? {}),
-    ...(before.context?.resourceDetails ?? {}),
-  };
-  const afterDetails = {
-    ...(after.resource?.details ?? {}),
-    ...(after.context?.resourceDetails ?? {}),
-  };
-  return ["systemId", "targetType", "targetId", "ownerId", "status", "startDate", "endDate"]
-    .every((key) => !Object.prototype.hasOwnProperty.call(beforeDetails, key)
-      || Object.prototype.hasOwnProperty.call(afterDetails, key)
-      && JSON.stringify(beforeDetails[key]) === JSON.stringify(afterDetails[key]));
 }
 
 function validateDeclaredArguments(
