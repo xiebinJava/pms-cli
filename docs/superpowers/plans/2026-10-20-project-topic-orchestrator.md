@@ -57,6 +57,7 @@
 - [ ] Make `nodeContract` fields that PMS does not declare optional; do not synthesize `allowedActions`, `allowedTransitions`, `missingInputRules`, or `requiredFields`.
 - [ ] Add the provenance golden vector to both fixture paths byte-for-byte; the Connector copy is the canonical authoring location and the backend copy is a checked-in test-resource duplicate, not an npm package asset.
 - [ ] Add `scripts/verify-provenance-fixture-sync.mjs` to compare the two files with SHA-256/byte equality and fail with both absolute paths when they diverge.
+- [ ] Commit the Connector fixture and sync script in the Connector repository; commit the Backend fixture copy in the Backend repository separately, either in Task 0's backend-side change or alongside Task 1's backend commit. Never stage the Backend file in the Connector commit.
 - [ ] Run `pnpm vitest run tests/contract/orchestrator-client.test.ts tests/contract/orchestrator-session.test.ts tests/contract/project-topic-orchestrator-contract.test.ts` and expect the new tests to pass after implementation.
 - [ ] Run `pnpm run typecheck` and `PMS_BACKEND_ROOT=/Users/fs/Desktop/Project/pms-backend node scripts/verify-provenance-fixture-sync.mjs`.
 - [ ] Review the wire shape against the backend DTO task before committing.
