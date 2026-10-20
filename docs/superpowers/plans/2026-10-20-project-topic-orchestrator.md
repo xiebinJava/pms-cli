@@ -24,6 +24,7 @@
 - Invalid/oversized provenance maps to the run envelope as `REJECTED`; turn responses remain PlanView responses.
 - Every write uses PMS preview, execute, idempotency, audit, and focused readback. No direct business Mapper access from the adapter.
 - No model URL, API key, token, password, or complete chat transcript is stored in PMS or CLI.
+- This phase uses a merge/release gate rather than a runtime feature flag: project/topic Orchestrator code may be exercised on the feature branch, but cannot merge to the release branch or be deployed until Task 7's isolated suite passes and Task 8 records the gate.
 
 ## Review Focus
 
@@ -32,6 +33,7 @@
 - `REJECTED` must remain a progression-run envelope result and must not appear in the Orchestrator state enum; cover state and contract tests together.
 - PMS-returned `expectedVersions`, `provenanceRef`, and `draftDigest` must be preserved and bound to the original preview; cover stale preview and replay.
 - Missing project `fieldContracts/requiredFields` must be reported through preview preconditions rather than fabricated `missingFields`; cover project and topic separately.
+- Project readback without a declared `fieldContracts` must use preview preconditions and returned focused values; verify that Task 5 does not fabricate a project field contract.
 - A `NEEDS_INPUT` follow-up must create a new immutable Plan and re-filter the old patch against the current saveContract.
 
 ### Task 0: Freeze the cross-repository contract and test vectors
@@ -44,16 +46,19 @@
 - Modify: `tests/contract/orchestrator-session.test.ts`
 - Modify: `tests/contract/story-orchestrator-contract.test.ts`
 - Create: `tests/contract/project-topic-orchestrator-contract.test.ts`
-- Create: `packages/pms-contracts/src/__fixtures__/draft-provenance-v1.json`
+- Create: `tests/fixtures/provenance/draft-provenance-v1.json` (Connector canonical copy)
+- Create: `/Users/fs/Desktop/Project/pms-backend/src/test/resources/fixtures/provenance/draft-provenance-v1.json` (Backend test-resource copy)
+- Create: `scripts/verify-provenance-fixture-sync.mjs`
 
 **Interfaces:** Extend existing orchestrator schemas with `resourceType: "project" | "topic"`, `RESOURCE_NODE_FIELD_UPDATE`, `RESOURCE_NODE_COMPLETE`, `nodeVersion`, `componentKey`, optional resource-node fields, and the resource-neutral node contract. Keep requirement/story literals and response parsing backward compatible.
 
 - [ ] Write failing Zod tests for project/topic Conversation, `resource-node/v1` Draft, PlanView, `nodeVersion`, `componentKey`, optional contract fields, and fixed `REJECTED` run mapping.
 - [ ] Add `nodeVersion` and `componentKey` to `AppendTurnRequest`; send them only when defined so existing callers keep their wire shape.
 - [ ] Make `nodeContract` fields that PMS does not declare optional; do not synthesize `allowedActions`, `allowedTransitions`, `missingInputRules`, or `requiredFields`.
-- [ ] Add a provenance golden vector containing the exact five-axis `versionSnapshot`, canonical input, expected `draftDigest`, `fieldSources`, and expected `provenanceRef` format.
+- [ ] Add the provenance golden vector to both fixture paths byte-for-byte; the Connector copy is the canonical authoring location and the backend copy is a checked-in test-resource duplicate, not an npm package asset.
+- [ ] Add `scripts/verify-provenance-fixture-sync.mjs` to compare the two files with SHA-256/byte equality and fail with both absolute paths when they diverge.
 - [ ] Run `pnpm vitest run tests/contract/orchestrator-client.test.ts tests/contract/orchestrator-session.test.ts tests/contract/project-topic-orchestrator-contract.test.ts` and expect the new tests to pass after implementation.
-- [ ] Run `pnpm run typecheck`.
+- [ ] Run `pnpm run typecheck` and `PMS_BACKEND_ROOT=/Users/fs/Desktop/Project/pms-backend node scripts/verify-provenance-fixture-sync.mjs`.
 - [ ] Review the wire shape against the backend DTO task before committing.
 - [ ] Commit: `feat(contract): add project topic orchestrator schemas`.
 
@@ -93,7 +98,7 @@
 - Modify: `/Users/fs/Desktop/Project/pms-backend/src/test/java/com/brad/pms/ai/orchestrator/AiAgentDraftValidatorTest.java`
 - Create: `/Users/fs/Desktop/Project/pms-backend/src/test/java/com/brad/pms/ai/orchestrator/ResourceOrchestratorAdapterTest.java`
 
-**Interfaces:** `ResourceOrchestratorAdapter` must expose resource identity, focused context loading, `ResourceNodeBinding resolveBinding(context, nodeId, componentKey, nodeVersion)`, draft validation, command mapping, and resource readback. `ResourceNodeBinding` carries `nodeId`, `nodeVersion`, `componentKey`, `saveContract`, and the five-axis version snapshot. The registry selects project/topic by `resourceType`; existing requirement/story paths remain available through their current adapters until Task 4.
+**Interfaces:** `ResourceOrchestratorAdapter` must expose resource identity, focused context loading, `ResourceNodeBinding resolveBinding(context, nodeId, componentKey, nodeVersion)`, draft validation, command mapping, and resource readback. `ResourceNodeBinding` carries `nodeId`, `nodeVersion`, `componentKey`, `saveContract`, and the five-axis version snapshot. The registry selects project/topic by `resourceType`; existing requirement/story paths remain inline in `AiOrchestratorService` until a separate refactor is explicitly approved.
 
 - [ ] Write failing tests for one writable saveContract, multiple writable saveContracts without `componentKey`, explicit non-writable component, zero writable contracts, wrong current node, and project `project-basic-info` resource-level boundary.
 - [ ] Implement binding resolution from focused context; project node version must come from `saveContract.nodeVersion`, never `context.version`.
@@ -108,6 +113,7 @@
 **Files:**
 - Create: `/Users/fs/Desktop/Project/pms-backend/src/main/java/com/brad/pms/ai/orchestrator/provenance/DraftProvenanceDigestService.java`
 - Create: `/Users/fs/Desktop/Project/pms-backend/src/test/java/com/brad/pms/ai/orchestrator/DraftProvenanceDigestServiceTest.java`
+- Read: `/Users/fs/Desktop/Project/pms-backend/src/test/resources/fixtures/provenance/draft-provenance-v1.json` (the byte-identical copy created in Task 0)
 - Modify: `/Users/fs/Desktop/Project/pms-backend/src/main/java/com/brad/pms/ai/orchestrator/service/AiOrchestratorService.java`
 - Modify: `/Users/fs/Desktop/Project/pms-backend/src/main/java/com/brad/pms/ai/command/CommandPreviewRequest.java` only if the existing provenance field cannot carry the adapter output
 - Modify: `/Users/fs/Desktop/Project/pms-backend/src/main/java/com/brad/pms/ai/connector/AiProvenanceValidator.java` only for shared validation gaps
@@ -117,7 +123,7 @@
 
 **Interfaces:** `DraftProvenanceDigestService.compute(DigestInput input): String` must implement the frozen canonical JSON and SHA-256 algorithm. `DigestInput` includes `contractVersion`, resource identity, `nodeId`, `componentKey`, intent, `requestedCompletion`, the five-axis `versionSnapshot`, facts, inferences, assumptions, unresolved decisions, patch, and fieldSources. The service returns `provenance = {contractVersion, draftDigest, fieldSources}` for `CommandPreviewRequest.provenance`.
 
-- [ ] Write failing Java tests from the connector golden vector, including sorted object keys, sorted `sourceRefs`, preserved array order, explicit `null` axes, and the `sha256:` prefix.
+- [ ] Write failing Java tests from `/Users/fs/Desktop/Project/pms-backend/src/test/resources/fixtures/provenance/draft-provenance-v1.json`, including sorted object keys, sorted `sourceRefs`, preserved array order, explicit `null` axes, and the `sha256:` prefix; the Task 0 sync script must have already proved byte equality with the Connector copy.
 - [ ] Implement the canonicalizer and size/reference limits without storing full conversation text.
 - [ ] Build `versionSnapshot` from `ResourceNodeBinding`: project `saveContract.nodeVersion`, project entity/context version as separate axes, workflow instance version, component version, and null for unknown values.
 - [ ] Pass the generated provenance into the existing `CommandPreviewRequest`; do not accept an externally supplied digest without recomputing it.
@@ -157,7 +163,7 @@
 - Modify: `/Users/fs/Desktop/Project/pms-backend/src/test/java/com/brad/pms/ai/orchestrator/AiOrchestratorPersistenceTest.java`
 - Create: `/Users/fs/Desktop/Project/pms-backend/src/test/java/com/brad/pms/ai/orchestrator/ProjectTopicOrchestratorRecoveryTest.java`
 
-**Interfaces:** Adapter readback returns resource detail, focused context, selected component field values, and the set of fields allowed by `saveContract.fieldContracts`. Verification must compare the normalized patch against focused readback and confirm protected fields and current node identity.
+**Interfaces:** Adapter readback returns resource detail, focused context, selected component field values, and fields from `saveContract.fieldContracts` where that contract is declared. When project does not declare `fieldContracts`, verification must use preview preconditions and the returned focused values; it must not fabricate a project field contract. Verification must compare the normalized patch against focused readback and confirm protected fields and current node identity.
 
 - [ ] Write failing tests for `PLAN_READY → PREVIEWED → WAITING_CONFIRMATION → EXECUTING → VERIFYING → SUCCEEDED` using a project fixture.
 - [ ] Map project to `node.field.update`/`node.complete-with-data` and topic to `development-item.node.field.update`/`development-item.node.complete-with-data`; preserve project `project-basic-info` as resource-level `project.update`.
@@ -183,11 +189,11 @@
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/tests/unit/orchestrator-client.test.ts`
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/tests/contract/orchestrator-session.test.ts`
 
-**Interfaces:** `PmsClient.appendTurn` accepts `{ conversationId, message, contractVersion, draft, nodeId?, nodeVersion?, componentKey?, contextVersion?, requestId? }`; existing methods keep their routes. Parsing accepts project/topic PlanView and preserves preview `expectedVersions`, `provenanceRef`, `draftDigest`, and operation warnings.
+**Interfaces:** `PmsClient.appendTurn` accepts `{ conversationId, message, contractVersion, draft, nodeId?, nodeVersion?, componentKey?, contextVersion?, requestId? }`; existing methods keep their routes. Add the CLI command `pms scenario resource-orchestrator create|turn|preview|confirm|events|session <project|topic> <id> [options]`, implemented by `resourceOrchestrator.ts` and dispatched from `runCli.ts`. Parsing accepts project/topic PlanView and preserves preview `expectedVersions`, `provenanceRef`, `draftDigest`, and operation warnings.
 
 - [ ] Write failing client tests for project/topic Conversation creation and turn requests with `nodeVersion`/`componentKey`.
 - [ ] Implement schema/client changes without adding another HTTP client or embedding model configuration.
-- [ ] Add CLI projection rules for progression-run: `REJECTED` is emitted only at run boundary; Orchestrator turn remains PlanView-shaped.
+- [ ] Implement `pms scenario resource-orchestrator create|turn|preview|confirm|events|session <project|topic> <id> [options]` and add help/argument validation; `REJECTED` is emitted only at progression-run boundary and the Orchestrator turn remains PlanView-shaped.
 - [ ] Add human-facing output assertions that use resource/node/component labels while retaining IDs only in machine-readable fields.
 - [ ] Run `pnpm vitest run tests/unit/orchestrator-cli.test.ts tests/unit/orchestrator-client.test.ts tests/contract/orchestrator-session.test.ts` and `pnpm run typecheck`.
 - [ ] Review backward compatibility with existing requirement/story CLI commands.
@@ -221,6 +227,7 @@
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/docs/superpowers/plans/2026-10-19-four-resource-agent-orchestrator-roadmap.md`
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/docs/e2e-agent-cli-runbook.md`
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/docs/release-checklist.md`
+- Modify: `/Users/fs/Desktop/Project/pms-ai-connector/docs/orchestrator-session-contract.md`
 - Modify: `/Users/fs/Desktop/Project/pms-backend/docs/agent-contracts/orchestrator/ai-orchestrator-v1.md`
 - Modify: `/Users/fs/Desktop/Project/pms-ai-connector/skills/pms-project-management/SKILL.md`
 - Create: `/Users/fs/Desktop/Project/pms-ai-connector/docs/orchestrator-project-topic-acceptance-report.md`
@@ -229,7 +236,8 @@
 
 - [ ] Update roadmap Task 5.1/5.2 checklist only after their focused tests and reviews pass; do not mark the milestone complete from documentation alone.
 - [ ] Add release gates for backend unit/integration tests, Connector unit/contract/typecheck/build, isolated project/topic E2E, and Markdown/static checks.
-- [ ] Document capability rollout and keep project/topic Orchestrator disabled until the isolated suite passes.
+- [ ] Document that “disabled until the isolated suite passes” is a merge/release gate, not a runtime feature flag: Tasks 4–6 remain on the feature branch, Task 7 must pass in isolation, and only after Task 8 records the gate may the project/topic allow-list merge to the release branch or deploy.
+- [ ] Run `PMS_BACKEND_ROOT=/Users/fs/Desktop/Project/pms-backend node scripts/verify-provenance-fixture-sync.mjs` as a release gate and attach its output to the acceptance record.
 - [ ] Run the full Connector suite (`pnpm test`), `pnpm run typecheck`, `pnpm run build:cli`, and the targeted backend Maven test suite.
 - [ ] Run `git diff --check` in both repositories and verify no credentials or untracked generated files are staged.
 - [ ] Perform final review against every item in this plan and the design spec.
