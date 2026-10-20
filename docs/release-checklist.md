@@ -31,9 +31,26 @@ pnpm exec vitest run tests/contract tests/unit --cache=false --maxWorkers=1 --mi
 pnpm run verify:real-pms:resource-scenario
 pnpm run verify:real-pms:node-autofill
 pnpm run verify:real-pms:story-orchestrator
+pnpm run verify:real-pms:project-orchestrator
+pnpm run verify:real-pms:topic-orchestrator
 ```
 
-资源夹具必须通过已注册的 create 命令建立，并重新读取当前节点、focused context、可写 `saveContract` 和字段版本。项目/专题节点字段写入必须完成 preview、execute、回读和相同幂等键 replay；没有可写节点时测试必须失败，不得静默跳过。
+发布前优先运行统一门禁，它会串行执行上述五条代表性链路：
+
+```bash
+pnpm run verify:real-pms:agent-suite
+```
+
+该脚本要求 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、
+`PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true` 以及数据库白名单变量，并在一次性
+隔离库中开启资源夹具。项目夹具会用已注册命令从创建态推进到第一个可写节点，
+不依赖人工预置的项目/专题 ID。资源夹具必须重新读取当前节点、focused context、
+可写 `saveContract` 和字段版本。项目/专题节点字段写入必须完成 preview、execute、
+回读和相同幂等键 replay；没有可写节点时测试必须失败，不得静默跳过。
+
+未设置真实 E2E gate 时，测试输出的 `skipped` 只能表示“未运行”，不能计入发布通过。
+“project/topic Orchestrator disabled until isolated suite passes”是合并和发布门禁，
+不是运行时 feature flag：隔离套件通过前，相关代码只能留在功能分支，不能合并或部署到默认发布分支。
 
 ## 4. Unknown write 核验
 
@@ -59,3 +76,15 @@ pnpm run verify:real-pms:story-orchestrator
 - 用一条低/中风险节点草稿完成 `plan → auto → 回读`，确认字段变化、保护字段和 operation/audit 关联可定位。
 - 用一条高风险完成请求确认会返回 `WAITING_CONFIRMATION`，缺少 `requestedCompletion=true` 会返回 `REJECTED`/`NEEDS_INPUT`，且没有 preview 或写入。
 - 保存本次发布的测试日志、requestId、previewOperationId 和隔离数据库 run-id；停止隔离环境并销毁数据库卷。
+
+## 7. 文档与跨仓库一致性
+
+- connector 与 backend 都必须包含同一份 `draft-provenance/v1` golden vector；运行
+  `node scripts/verify-provenance-fixture-sync.mjs`，输出必须确认两侧字节一致。
+- `docs/orchestrator-session-contract.md`、backend 的
+  `docs/agent-contracts/orchestrator/ai-orchestrator-v1.md`、本清单和
+  `skills/pms-project-management/SKILL.md` 的资源矩阵、状态/事件边界、版本轴、组件
+  选择和 E2E 命令必须同步。
+- Markdown 静态检查、`git diff --check`、connector typecheck/build、Connector
+  unit/contract tests、backend Orchestrator 回归测试均是发布前门禁；任何一项失败都不
+  得以“代码已提交”替代。

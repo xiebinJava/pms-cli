@@ -235,14 +235,14 @@
 
 **Interfaces:** Documentation must describe the same resource/intent table, state/event distinction, version axes, component rules, provenance binding, run-boundary `REJECTED`, and E2E commands as the implementation.
 
-- [ ] Update roadmap Task 5.1/5.2 checklist only after their focused tests and reviews pass; do not mark the milestone complete from documentation alone.
-- [ ] Add release gates for backend unit/integration tests, Connector unit/contract/typecheck/build, isolated project/topic E2E, and Markdown/static checks.
-- [ ] Document that “disabled until the isolated suite passes” is a merge/release gate, not a runtime feature flag: Tasks 4–6 remain on the feature branch, Task 7 must pass in isolation, and only after Task 8 records the gate may the project/topic allow-list merge to the release branch or deploy.
-- [ ] Run `PMS_BACKEND_ROOT=/Users/fs/Desktop/Project/pms-backend node scripts/verify-provenance-fixture-sync.mjs` as a release gate and attach its output to the acceptance record.
-- [ ] Run the full Connector suite (`pnpm test`), `pnpm run typecheck`, `pnpm run build:cli`, and the targeted backend Maven test suite.
-- [ ] Run `git diff --check` in both repositories and verify no credentials or untracked generated files are staged.
-- [ ] Perform final review against every item in this plan and the design spec.
-- [ ] Commit: `docs(orchestrator): record project topic acceptance gates`.
+- [x] Update roadmap Task 5.1/5.2 checklist only after their focused tests and reviews pass; the roadmap still leaves real isolated E2E and release readiness unchecked.
+- [x] Add release gates for backend unit/integration tests, Connector unit/contract/typecheck/build, isolated project/topic E2E, and Markdown/static checks.
+- [x] Document that “disabled until the isolated suite passes” is a merge/release gate, not a runtime feature flag: Tasks 4–6 remain on the feature branch, Task 7 must pass in isolation, and only after the gate is recorded may the project/topic allow-list merge to the release branch or deploy.
+- [x] Run `PMS_BACKEND_ROOT=/Users/fs/Desktop/Project/pms-backend node scripts/verify-provenance-fixture-sync.mjs` as a release gate and attach its output to the acceptance record.
+- [x] Run the full Connector suite (`pnpm test`), `pnpm run typecheck`, `pnpm run build:cli`, and the targeted backend Maven test suite.
+- [x] Run `git diff --check` in both repositories and verify no credentials or untracked generated files are staged. The pre-existing ignored review directory remains unstaged.
+- [x] Perform final review against every item in this plan and the design spec; real isolated E2E remains an explicit pending gate.
+- [x] Commit: `docs(orchestrator): record project topic acceptance gates`. The pending real-E2E gate is recorded explicitly and remains closed.
 
 ## Dependency Order
 

@@ -106,6 +106,56 @@ pnpm run verify:real-pms:node-autofill
 当成“没有节点场景”而跳过。项目使用实体版本作为并发版本，专题使用流程版本，均由
 focused context 实时读取，不从模板或测试代码猜测。
 
+## Project/topic Orchestrator 会话 E2E
+
+project/topic 会话复用现有 PMS Orchestrator 的 Conversation、Plan、Preview、
+Operation、Verification 和 Event 记录，不创建第二套会话模型。CLI 入口是：
+
+```bash
+pms scenario resource-orchestrator create project <project-id>
+pms scenario resource-orchestrator turn <conversation-id> \
+  --message "补充当前节点说明" \
+  --draft-json '<resource-node/v1 draft>' \
+  --node-id <node-id> [--node-version <version>] [--component <component-key>] \
+  [--context-version <snapshot-label>]
+pms scenario resource-orchestrator preview <plan-id>
+pms scenario resource-orchestrator confirm <plan-id> --idempotency-key <key>
+pms scenario resource-orchestrator events <conversation-id> --after-sequence 0
+pms scenario resource-orchestrator session <conversation-id>
+```
+
+测试草稿必须使用当前 focused context 返回的 `nodeContract`、可写
+`saveContract`、字段来源和版本；不能猜节点 ID、组件键或把 project 实体
+`context.version` 当作节点版本。preview 返回的 `expectedVersions`、
+`provenanceRef` 和 `draftDigest` 是后续 confirm 的绑定事实。恰好一个可写组件时
+可以省略 `--component`；多个组件必须显式指定，零个组件只能做只读读取并返回
+`writeCapable=false`。项目 `project-basic-info` 仍走 `project.update`，不伪装为
+节点字段写入。
+
+项目夹具模式（统一套件默认开启）会通过已注册的 `project.create` 和公开节点命令
+从创建态推进到第一个可写节点，再实时读取 focused context；不依赖固定的项目 ID。
+如果无法找到可写节点，测试必须失败并报告命令或模板缺口，不能静默跳过。专题夹具
+遵循相同规则。
+
+单独运行两条会话 E2E：
+
+```bash
+pnpm run verify:real-pms:project-orchestrator
+pnpm run verify:real-pms:topic-orchestrator
+```
+
+或运行统一五资源门禁：
+
+```bash
+pnpm run verify:real-pms:agent-suite
+```
+
+这些命令只有在真实隔离 PMS、OAuth 前端代理和一次性数据库均已准备时才会执行写入。
+默认环境下的 `skipped` 只是未运行，不是验收通过；合并/发布前必须设置
+`PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`
+并保存测试日志。统一套件通过前，project/topic Orchestrator 代码保持在功能分支，
+不进入默认发布分支。
+
 该命令还要求前面的隔离目标变量完整（`PMS_E2E_BASE_URL`、`PMS_E2E_ALLOWED_BASE_URL`、`PMS_E2E_DATABASE_NAME`、`PMS_E2E_ALLOWED_DATABASE_NAME`、`PMS_E2E_ACCOUNT_ID`、`PMS_E2E_RUN_ID`），并且必须设置 `PMS_E2E_WRITE=true` 和 `PMS_E2E_ISOLATED=true`。需求夹具不能自动清理已推进的流程节点，因此只应使用可销毁的隔离数据库；故事夹具同样随隔离数据库一起销毁。
 
 要只验证模型输出和缺失项，不写入 PMS，可以直接运行：

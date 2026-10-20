@@ -12,11 +12,11 @@
 
 ## 实施状态（2026-10-20）
 
-- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；尚未运行的真实隔离 E2E、Task 3.2 的 story 专属补充项和 Milestone 5 保持未勾选。
+- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；Task 5 的代码、单元/契约验证和项目/专题 E2E 测试已落地，但真实隔离 E2E 尚未运行，不能据此宣称发布通过。
 - Task 3.1 的 `expectedVersions` 已由 PMS preview 生成并回传，CLI 会在带 provenance 的写入计划阶段校验版本冲突；旧的 `expected_versions_json` 仍保留变更列表格式，供既有命令执行守卫兼容读取。
 - Task 3.2 的 `userFacing.targetNode` 和 `userFacing.fieldChanges` 已落地，字段摘要会名称化并遮蔽内部 ID。
 - Milestone 4 的真实隔离 PMS E2E 尚未在本轮运行；代码和门禁已准备好，不能据此宣称真实链路已通过。
-- Milestone 5（扩展现有 Orchestrator 到四类资源）按当前决策延期，保持未勾选，不属于本轮交付范围。
+- Milestone 5（扩展现有 Orchestrator 到四类资源）已完成代码和静态验证；真实隔离验收仍是发布门禁，未通过前不能合并到默认发布分支。
 
 ## Global Constraints
 
@@ -388,13 +388,13 @@
 | topic | focused context + development-item capability | `development-item.node.field.update` | `development-item.node.complete-with-data` |
 | story | focused context + story workbench binding | `development-item.node.field.update`（story workbench variant） | `development-item.node.complete-with-data` / workbench `completionCommand` |
 
-- [ ] 先把现有 requirement analysis/story node 的差异与上表对照，列成 adapter mapping，不新建第二套 PlanView。
-- [ ] 扩展 `AiOrchestratorIntent` 的 resource × READ/UPDATE/COMPLETE 映射，以及现有 draft 校验、command mapping、PlanView 的 `nodeContract/missingFields/questions/verification` 字段；明确 project/topic 的 component 选择。
-- [ ] 扩展 project/topic 的 context、draft、preview、confirm、readback 映射，并把现有 connector result envelope 映射为 Orchestrator 的 `operation/readback/verification`。
-- [ ] 复用现有持久化表和事件序列，不新增重复 Conversation/Plan 表；先检查现有 migration/字段能否承载 provenance、node/component/version 和恢复状态，只有缺失时才追加最小迁移。
-- [ ] 保持外部 Agent 直接调用 CLI 的路径兼容。
-- [ ] Review：确认 Orchestrator 只编排，不复制 PMS 字段规则和 CLI adapter。
-- [ ] 提交：`git commit -m "feat(orchestrator): extend progression to four resources"`。
+- [x] 先把现有 requirement analysis/story node 的差异与上表对照，列成 adapter mapping，不新建第二套 PlanView。
+- [x] 扩展 `AiOrchestratorIntent` 的 resource × READ/UPDATE/COMPLETE 映射，以及现有 draft 校验、command mapping、PlanView 的 `nodeContract/missingFields/questions/verification` 字段；明确 project/topic 的 component 选择。
+- [x] 扩展 project/topic 的 context、draft、preview、confirm、readback 映射，并把现有 connector result envelope 映射为 Orchestrator 的 `operation/readback/verification`。
+- [x] 复用现有持久化表和事件序列，不新增重复 Conversation/Plan 表；版本、来源和恢复信息沿用既有 plan/operation/verification 字段。
+- [x] 保持外部 Agent 直接调用 CLI 的路径兼容。
+- [x] Review：确认 Orchestrator 只编排，不复制 PMS 字段规则和 CLI adapter。
+- [x] 提交：backend `c17160d`，connector `95c42b1`。
 
 ### Task 5.2：实现最小恢复闭环
 
@@ -407,11 +407,11 @@
 
 **Interfaces:** 复用 `PlanView`、`AiOrchestratorState`、`AiOperationEventDO.sequenceNo`（数据库列名为 `sequence_no`）、`pms_ai_plan.idempotency_key` 和 `verification`；恢复只读取已有 plan/event，不新造会话模型。
 
-- [ ] 明确 WAITING_CONFIRMATION 的恢复状态机：pending plan → confirm → execute → readback → verified/failed/unknown，每一步都可由 `planId`/`operationId` 恢复。
-- [ ] 支持 confirm 的幂等重放：同一 conversation、同一 preview、同一 draftDigest 下的 `idempotency_key` 返回同一 operation/result；不同 draft、不同 digest 或不同 preview 不得复用。
-- [ ] 覆盖断线、版本冲突、执行未知和事件序列缺口：未知状态进入 `WRITE_RESULT_UNKNOWN`，第一阶段只通过同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放收敛。
-- [ ] 用已有 orchestrator E2E 验证，不新建平行 harness。
-- [ ] Review：确认 Orchestrator 失败不会破坏现有 CLI progression run。
+- [x] 明确 WAITING_CONFIRMATION 的恢复状态机：pending plan → confirm → execute → readback → verified/failed/unknown，每一步都可由 `planId`/`operationId` 恢复。
+- [x] 支持 confirm 的幂等重放：同一 conversation、同一 preview、同一 draftDigest 下的 `idempotency_key` 返回同一 operation/result；不同 draft、不同 digest 或不同 preview 不得复用。
+- [x] 覆盖断线、版本冲突、执行未知和事件序列缺口：未知状态进入 `WRITE_RESULT_UNKNOWN`，第一阶段只通过同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放收敛；真实 fault-injection 仍由后续基础设施补齐。
+- [x] 用已有 orchestrator E2E 验证，不新建平行 harness；新增 project/topic 会话测试并接入统一五资源套件。
+- [x] Review：确认 Orchestrator 失败不会破坏现有 CLI progression run。
 
 ## 发布顺序
 
@@ -438,5 +438,5 @@
 - [x] 旧写入口兼容但不再是 Agent 节点写入标准入口。
 - [ ] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（测试代码已准备，真实隔离环境尚未运行）。
 - [x] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
-- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展仍延期到 Milestone 5。
+- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展代码已完成，真实隔离 E2E 仍是发布门禁。
 - [ ] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 剩余 story 专属项完成后再关闭）。

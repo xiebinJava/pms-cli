@@ -65,6 +65,38 @@ pms scenario progression run requirement <requirement-id> \
 
 外部模型不能猜测 nodeId、字段 key、组件或版本。必须从本次 `pms context --format agent` 返回的 `NodeContract` 和 `saveContract` 中选择，并在草稿中为写入字段保留可读的 `fieldSources.sourceRefs`。字段缺失、受保护、未知、上下文过期或能力不可用时，只返回结构化状态，不要修改 PMS。
 
+## 持久化 Orchestrator 会话
+
+当任务需要跨进程恢复对话、计划、预览、确认或执行进度时，使用现有
+Orchestrator 的 `resource-orchestrator` 会话入口；它复用 PMS 的
+Conversation/Plan/Operation/Event 记录，不在 CLI 或 skill 中保存模型状态：
+
+```bash
+pms scenario resource-orchestrator create project <project-id>
+pms scenario resource-orchestrator create topic <topic-id>
+pms scenario resource-orchestrator turn <conversation-id> \
+  --message "补充当前节点说明" \
+  --draft-json '<resource-node/v1 draft>' \
+  --node-id <node-id> [--node-version <node-version>] \
+  [--component <component-key>] [--context-version <snapshot-label>]
+pms scenario resource-orchestrator preview <plan-id>
+pms scenario resource-orchestrator confirm <plan-id> --idempotency-key <key>
+pms scenario resource-orchestrator events <conversation-id> --after-sequence 0
+pms scenario resource-orchestrator session <conversation-id>
+```
+
+`progression run` 是无状态 Agent 节点写入的标准入口；`resource-orchestrator` 是
+需要持久化会话和恢复时的编排入口。两者都由 PMS 后端负责权限、版本、字段白名单、
+预览、执行、回读、幂等和审计，不调用模型 API。项目/专题会话使用
+`resource-node/v1`，需求分析和故事既有会话契约保持兼容。
+
+turn 前仍须读取当前 focused context。`nodeVersion` 只能取 `nodeContract.version`；
+`contextVersion` 在 project/topic 上只是快照标签，不能代替并发版本。preview 返回的
+`expectedVersions`、`provenanceRef` 和 `draftDigest` 是 confirm 的唯一绑定依据。
+恰好一个可写 `saveContract` 时可省略组件；多个必须显式指定，零个只读并返回
+`writeCapable=false`。`project-basic-info` 使用 `project.update`，不伪装为节点字段写入。
+会话 Plan 的 `NEEDS_INPUT` 是当前 Plan 终态；补充信息生成新 Plan，不把它当状态机回环。
+
 ## 自然语言单轮推进
 
 对需求和故事，默认把一句自然语言请求编排成一轮可验证闭环：
