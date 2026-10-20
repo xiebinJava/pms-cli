@@ -1,0 +1,44 @@
+{
+  "contractVersion": "draft-provenance/v1",
+  "resourceType": "project",
+  "resourceId": 42,
+  "nodeId": 301,
+  "componentKey": "solution-design",
+  "intent": "RESOURCE_NODE_FIELD_UPDATE",
+  "requestedCompletion": false,
+  "versionSnapshot": {
+    "nodeVersion": 6,
+    "entityVersion": 3,
+    "workflowInstanceVersion": 2,
+    "componentVersion": 4,
+    "contextVersion": 3
+  },
+  "facts": [
+    {
+      "text": "测试结果为通过",
+      "sourceRefs": [
+        "project-node:301#component:solution-design",
+        "project:42"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "inferences": [],
+  "assumptions": [],
+  "unresolvedDecisions": [],
+  "patch": {
+    "testResult": "PASS"
+  },
+  "fieldSources": {
+    "testResult": {
+      "sourceType": "pms_context",
+      "sourceRefs": [
+        "project-node:301#component:solution-design",
+        "project:42"
+      ],
+      "confidence": "high"
+    }
+  },
+  "expectedDraftDigest": "sha256:7ac3abb8bf87462f93e1e71a1e096c14ae99188e79ebf726e0c75c039c3e91af",
+  "expectedProvenanceRef": "operation:preview-op-42"
+}

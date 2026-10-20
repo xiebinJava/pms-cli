@@ -67,4 +67,50 @@ describe("story orchestrator contract", () => {
       conversationId: 10, resourceType: "story", resourceId: 34, status: "ACTIVE", latestPlan: null,
     }).resourceType).toBe("story");
   });
+
+  it("keeps existing plan schemas strict while tolerating the new optional node bindings", () => {
+    const storyPlan = {
+      planId: 30,
+      turnId: 20,
+      intent: "STORY_NODE_FIELD_UPDATE",
+      status: "PLAN_READY",
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 702,
+      nodeVersion: null,
+      componentKey: null,
+      contextVersion: 8,
+      contextSnapshot: {},
+      draft: storyDraft,
+      preview: null,
+      operation: null,
+      verification: null,
+      validationErrors: [],
+      errorCode: null,
+      errorMessage: null,
+      nodeContract,
+    };
+    expect(orchestratorPlanSchema.parse(storyPlan).nodeVersion).toBeNull();
+
+    const requirementPlan = {
+      planId: 31,
+      turnId: 21,
+      intent: "REQUIREMENT_ANALYSIS_SAVE",
+      status: "PLAN_READY",
+      resourceType: "requirement",
+      resourceId: 33,
+      nodeId: 375,
+      contextVersion: 4,
+      contextSnapshot: {},
+      draft: { contractVersion: "requirement-analysis/v1", draft: storyDraft.draft },
+      preview: null,
+      operation: null,
+      verification: null,
+      validationErrors: [],
+      errorCode: null,
+      errorMessage: null,
+      unexpectedField: "should be rejected",
+    };
+    expect(orchestratorPlanSchema.safeParse(requirementPlan).success).toBe(false);
+  });
 });

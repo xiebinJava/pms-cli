@@ -122,6 +122,8 @@ describe("AI orchestrator client contract", () => {
       "GET /integration/ai/v1/orchestrator/conversations/10/events",
     ]);
     expect(requests[1]?.body).toMatchObject({ message: "请分析并保存", contractVersion: "requirement-analysis/v1" });
+    expect(requests[1]?.body).not.toHaveProperty("nodeVersion");
+    expect(requests[1]?.body).not.toHaveProperty("componentKey");
     expect(requests[3]?.body).toEqual({ idempotencyKey: "idem-1" });
   });
 

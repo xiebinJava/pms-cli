@@ -2,6 +2,13 @@ import { z } from "zod";
 
 import { operationPreconditionSchema } from "./operation.js";
 import { analysisDraftSchema, scenarioContractVersion, storyWorkbenchContractVersion } from "./scenario.js";
+import { provenanceFieldSourcesSchema } from "./provenance.js";
+import { workflowContextFieldContractSchema } from "./query.js";
+
+export const resourceNodeContractVersion = "resource-node/v1" as const;
+
+export const orchestratorResourceTypeSchema = z.enum(["requirement", "story", "project", "topic"]);
+export type OrchestratorResourceType = z.infer<typeof orchestratorResourceTypeSchema>;
 
 const requirementOrchestratorDraftSchema = z.object({
   contractVersion: z.literal(scenarioContractVersion),
@@ -13,14 +20,32 @@ const storyOrchestratorDraftSchema = z.object({
   draft: analysisDraftSchema,
 }).strict();
 
+/**
+ * Resource-node draft shares the frozen AnalysisDraft item shape for
+ * facts/inferences/assumptions/unresolvedDecisions and adds the resource-node
+ * extensions declared by the orchestrator spec. Both extensions are optional on
+ * the wire; COMPLETE_NODE validation happens at the progression-run boundary,
+ * not in the draft schema.
+ */
+export const resourceNodeDraftSchema = analysisDraftSchema.extend({
+  requestedCompletion: z.boolean().optional(),
+  fieldSources: provenanceFieldSourcesSchema.optional(),
+}).strict();
+
+const resourceNodeOrchestratorDraftSchema = z.object({
+  contractVersion: z.literal(resourceNodeContractVersion),
+  draft: resourceNodeDraftSchema,
+}).strict();
+
 export const orchestratorDraftSchema = z.union([
   requirementOrchestratorDraftSchema,
   storyOrchestratorDraftSchema,
+  resourceNodeOrchestratorDraftSchema,
 ]);
 
 export const orchestratorConversationSchema = z.object({
   conversationId: z.number().int().positive(),
-  resourceType: z.enum(["requirement", "story"]),
+  resourceType: orchestratorResourceTypeSchema,
   resourceId: z.number().int().positive(),
   status: z.string().trim().min(1),
   latestPlan: z.lazy(() => orchestratorPlanSchema).nullable().optional(),
@@ -66,6 +91,8 @@ const orchestratorPlanBaseSchema = z.object({
   status: z.string().trim().min(1),
   resourceId: z.number().int().positive(),
   nodeId: z.number().int().positive().nullable().optional(),
+  nodeVersion: z.number().int().nonnegative().nullable().optional(),
+  componentKey: z.string().trim().min(1).max(160).nullable().optional(),
   contextVersion: z.number().int().nonnegative().nullable().optional(),
   contextSnapshot: z.unknown().nullable().optional(),
   draft: orchestratorDraftSchema,
@@ -117,9 +144,40 @@ const orchestratorStoryPlanSchema = orchestratorPlanBaseSchema.extend({
   questions: z.array(z.string().trim().min(1)).default([]),
 }).strict();
 
+/**
+ * Resource-neutral node contract projection. Only the fields every PMS
+ * resource actually declares are required; story-specific or partially
+ * declared fields stay optional so project/topic never fabricate capabilities.
+ */
+export const resourceNodeContractSchema = z.object({
+  nodeId: z.number().int().positive(),
+  key: z.string().trim().min(1),
+  label: z.string().trim().min(1),
+  version: z.number().int().nonnegative(),
+  writableFields: z.array(z.string().trim().min(1)),
+  protectedFields: z.array(z.string().trim().min(1)),
+  writeCapable: z.boolean(),
+  componentKey: z.string().trim().min(1).max(160).optional(),
+  variant: z.string().trim().min(1).optional(),
+  requiredFields: z.array(workflowContextFieldContractSchema).optional(),
+  fieldContracts: z.array(workflowContextFieldContractSchema).optional(),
+  allowedActions: z.array(z.string().trim().min(1)).optional(),
+  allowedTransitions: z.array(z.string().trim().min(1)).optional(),
+  missingInputRules: z.array(z.string().trim().min(1)).optional(),
+}).strict();
+
+const orchestratorResourceNodePlanSchema = orchestratorPlanBaseSchema.extend({
+  intent: z.enum(["RESOURCE_NODE_FIELD_UPDATE", "RESOURCE_NODE_COMPLETE"]),
+  resourceType: z.enum(["project", "topic"]),
+  nodeContract: resourceNodeContractSchema.nullable().optional(),
+  missingFields: z.array(z.string().trim().min(1)).default([]),
+  questions: z.array(z.string().trim().min(1)).default([]),
+}).strict();
+
 export const orchestratorPlanSchema = z.union([
   orchestratorRequirementPlanSchema,
   orchestratorStoryPlanSchema,
+  orchestratorResourceNodePlanSchema,
 ]);
 
 export const orchestratorEventSchema = z.object({
@@ -167,6 +225,7 @@ export const orchestratorSessionSchema = z.object({
 }).strict();
 
 export type OrchestratorDraft = z.infer<typeof orchestratorDraftSchema>;
+export type ResourceNodeDraft = z.infer<typeof resourceNodeDraftSchema>;
 export type OrchestratorConversation = z.infer<typeof orchestratorConversationSchema>;
 export type OrchestratorContextSnapshot = z.infer<typeof orchestratorContextSnapshotSchema>;
 export type OrchestratorTurn = z.infer<typeof orchestratorTurnSchema>;
@@ -176,5 +235,6 @@ export type OrchestratorOperation = z.infer<typeof orchestratorOperationSchema>;
 export type OrchestratorVerification = z.infer<typeof orchestratorVerificationSchema>;
 export type OrchestratorPlan = z.infer<typeof orchestratorPlanSchema>;
 export type OrchestratorNodeContract = z.infer<typeof orchestratorNodeContractSchema>;
+export type OrchestratorResourceNodeContract = z.infer<typeof resourceNodeContractSchema>;
 export type OrchestratorEvent = z.infer<typeof orchestratorEventSchema>;
 export type OrchestratorSession = z.infer<typeof orchestratorSessionSchema>;

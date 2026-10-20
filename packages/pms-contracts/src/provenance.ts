@@ -12,6 +12,8 @@ const provenanceIntentSchema = z.enum([
   "READ_CONTEXT",
   "UPDATE_NODE_FIELDS",
   "COMPLETE_NODE",
+  "RESOURCE_NODE_FIELD_UPDATE",
+  "RESOURCE_NODE_COMPLETE",
 ]);
 
 const provenanceVersionSchema = z.union([

@@ -17,6 +17,7 @@ import {
   orchestratorPlanSchema,
   orchestratorSessionSchema,
   orchestratorDraftSchema,
+  resourceNodeContractVersion,
   storyWorkbenchContractVersion,
   scenarioContractVersion,
   type AutomaticOperationRequest,
@@ -287,7 +288,7 @@ export class PmsHttpClient implements PmsClient {
 
   async createConversation(request: CreateConversationRequest): Promise<OrchestratorConversation> {
     const normalized = z.object({
-      resourceType: z.enum(["requirement", "story"]),
+      resourceType: z.enum(["requirement", "story", "project", "topic"]),
       resourceId: z.number().int().positive(),
     }).strict().parse(request);
     return this.requestData(
@@ -303,9 +304,15 @@ export class PmsHttpClient implements PmsClient {
     const normalized = z.object({
       conversationId: z.number().int().positive(),
       message: z.string().trim().min(1),
-      contractVersion: z.union([z.literal(scenarioContractVersion), z.literal(storyWorkbenchContractVersion)]),
+      contractVersion: z.union([
+        z.literal(scenarioContractVersion),
+        z.literal(storyWorkbenchContractVersion),
+        z.literal(resourceNodeContractVersion),
+      ]),
       draft: orchestratorDraftSchema,
       nodeId: z.number().int().positive().optional(),
+      nodeVersion: z.number().int().nonnegative().optional(),
+      componentKey: z.string().trim().min(1).max(160).optional(),
       contextVersion: z.number().int().nonnegative().optional(),
       requestId: z.string().trim().min(1).max(160).optional(),
     }).strict().parse(request);
@@ -314,6 +321,8 @@ export class PmsHttpClient implements PmsClient {
       contractVersion: normalized.contractVersion,
       draft: normalized.draft,
       ...(normalized.nodeId === undefined ? {} : { nodeId: normalized.nodeId }),
+      ...(normalized.nodeVersion === undefined ? {} : { nodeVersion: normalized.nodeVersion }),
+      ...(normalized.componentKey === undefined ? {} : { componentKey: normalized.componentKey }),
       ...(normalized.contextVersion === undefined ? {} : { contextVersion: normalized.contextVersion }),
       ...(normalized.requestId === undefined ? {} : { requestId: normalized.requestId }),
     };
