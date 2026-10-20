@@ -10,6 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-19-four-resource-agent-orchestrator-roadmap-design.md`
 
+## 实施状态（2026-10-20）
+
+- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；尚未运行的真实隔离 E2E、Task 3.2 的 story 专属补充项和 Milestone 5 保持未勾选。
+- Task 3.1 的 `expectedVersions` 已由 PMS preview 生成并回传，CLI 会在带 provenance 的写入计划阶段校验版本冲突；旧的 `expected_versions_json` 仍保留变更列表格式，供既有命令执行守卫兼容读取。
+- Task 3.2 的 `userFacing.targetNode` 和 `userFacing.fieldChanges` 已落地，字段摘要会名称化并遮蔽内部 ID。
+- Milestone 4 的真实隔离 PMS E2E 尚未在本轮运行；代码和门禁已准备好，不能据此宣称真实链路已通过。
+- Milestone 5（扩展现有 Orchestrator 到四类资源）按当前决策延期，保持未勾选，不属于本轮交付范围。
+
 ## Global Constraints
 
 - CLI 不保存模型 URL、API Key、模型名，也不调用模型 API。
@@ -50,14 +58,14 @@
 
 **Interfaces:** 矩阵按资源、意图、执行模式记录代码事实，不预设所有组合都可写。本任务只记录并运行现有测试，不为了“看起来有改动”而修改测试源码。
 
-- [ ] 盘点 project/requirement/topic/story 的 context、focused context、saveContract、capability、preview、execute、readback 和已有 E2E。
-- [ ] 标注 project `project_node` capability、`project-basic-info`、`solution-decision`、`custom-fields` 的可用性。
-- [ ] 沿用现有 `PMS_E2E_RESOURCE_SCENARIO`、`PMS_E2E_STORY_ACCEPTANCE`、`PMS_E2E_WRITE`、`PMS_E2E_ISOLATED` 和数据库白名单，不引入不存在的 `PMS_E2E_ENABLED`。
-- [ ] 记录 operationId/auditId 当前契约关系和 unknown write 核验路径。
-- [ ] 明确远程委派 token 的 preview/orchestrator allow-list 暂不属于第一阶段；若纳入后续，必须增加 backend scope/route 测试。
-- [ ] 运行既有 resource/story E2E 的默认跳过检查和 CLI contract tests。
-- [ ] Review：确认矩阵只描述代码事实，并引用已有 Orchestrator，而不是把它写成未来能力。
-- [ ] 提交：`git commit -m "docs(cli): freeze resource progression facts"`。
+- [x] 盘点 project/requirement/topic/story 的 context、focused context、saveContract、capability、preview、execute、readback 和已有 E2E。
+- [x] 标注 project `project_node` capability、`project-basic-info`、`solution-decision`、`custom-fields` 的可用性。
+- [x] 沿用现有 `PMS_E2E_RESOURCE_SCENARIO`、`PMS_E2E_STORY_ACCEPTANCE`、`PMS_E2E_WRITE`、`PMS_E2E_ISOLATED` 和数据库白名单，不引入不存在的 `PMS_E2E_ENABLED`。
+- [x] 记录 operationId/auditId 当前契约关系和 unknown write 核验路径。
+- [x] 明确远程委派 token 的 preview/orchestrator allow-list 暂不属于第一阶段；若纳入后续，必须增加 backend scope/route 测试。
+- [x] 运行既有 resource/story E2E 的默认跳过检查和 CLI contract tests。
+- [x] Review：确认矩阵只描述代码事实，并引用已有 Orchestrator，而不是把它写成未来能力。
+- [x] 提交：`git commit -m "docs(cli): freeze resource progression facts"`。
 
 ### Task 0.2：冻结协议决策并补契约测试
 
@@ -76,27 +84,27 @@
 - Modify: `tests/contract/resource-scenario-contract.test.ts`
 - Modify: `tests/unit/agent-progression-run.test.ts`
 - Modify: `tests/unit/agent-progression-run-cli.test.ts`
-- Create: `tests/unit/resource-scenario-error-mapping.test.ts`
+- Verify (covered by): `tests/unit/agent-progression-run.test.ts`（边界映射已合并覆盖，未重复创建同断言测试文件）
 - Create: `docs/agent-progression-decisions.md`
 - Create: `docs/agent-progression-v2-migration.md`
 
 **Interfaces:** 升级到破坏性的 `agent-progression/v2` 与 `agent-progression-run/v2`，不再兼容 `agent-progression/v1`、`agent-progression-run/v1` 或 progression 命令的旧 `--version` 参数；使用 `--node-version` 表示 nodeVersion，使用 `--context-version` 表示 opaque contextVersion；增加 `componentKey`、`nodeVersion` 和可选 `rejectionReason`。旧协议和旧参数必须返回迁移错误，不能静默转换。`REJECTED` 固定映射为 `writeDecision=NEEDS_INPUT`、`plan.preview=null`、`rejectionReason=COMPLETION_NOT_REQUESTED`（仅当 `requestedCompletion` 缺失或为 false）。
 
-- [ ] 将 CLI `progression run` 默认执行模式改为 `plan`，并测试未指定模式时零写入。
-- [ ] 在契约中增加可选 `componentKey` 字段并定义 `workbench` 归一化；组件解析、多 saveContract 选择和 story resolver 接入在 Task 1.1 实现，本任务不重复实现。
-- [ ] 增加 `nodeVersion`/`entityVersion`/`workflowInstanceVersion` 的只读输出，并测试 Agent 只读取 `nodeContract.version` 就能正确回传节点版本。
-- [ ] 仅删除 progression 命令的旧 `--version` 参数入口，新增 `--node-version` 与 `--context-version`；旧 `agent-progression/v1`、`agent-progression-run/v1`、旧参数和旧示例统一返回明确迁移错误，其他 CLI 命令的既有 `--version` 保持不变；connector、backend、skill、fixture 在同一发布批次切换到 v2。
-- [ ] `COMPLETE_NODE` 要求 `requestedCompletion === true`；缺失或 false 在计划阶段不生成完成预览，run 结果固定为 `status=REJECTED`、`writeDecision=NEEDS_INPUT`、`plan.preview=null`、`rejectionReason=COMPLETION_NOT_REQUESTED`。为保持 writeDecision 兼容，不把 `REJECTED` 加入 `writeDecision` enum。
-- [ ] 固定未决决策、低置信高风险推断和缺少来源为 `NEEDS_INPUT`；Task 3.2 只验证 story 路径遵守该规则，不再重复修改判定。
-- [ ] 在本任务完成通用业务错误映射：`ResourceScenarioError`/`CONTEXT_CONFLICT` 在 run 边界输出 in-band 状态（冲突映射为 `CONFLICT`），认证、网络、协议解析等系统错误才走错误信封；story 专属的剩余归一化留在 Task 3.2。
-- [ ] 在 `runAgentProgression()` 内部捕获 `ResourceScenarioError`（以及 story 路径的等价业务异常），映射为 in-band `CONFLICT`/`NEEDS_INPUT`/`CAPABILITY_UNAVAILABLE`；不得依赖 `runCli.ts` 的通用 catch 转成 `ok:false`。认证、网络、协议解析等系统错误继续抛出。
-- [ ] 冻结 `auditId` 语义：当前等于 `operationId`，按 opaque 审计关联标识处理，不假设独立审计实体；unknown write 第一阶段只允许同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放。
-- [ ] 增加 run envelope 契约测试：`REJECTED` 时 `writeDecision`、`plan.preview` 和 `rejectionReason` 固定；`auditId` 按 operationId 别名断言。
-- [ ] `tests/unit/resource-scenario-error-mapping.test.ts` 只覆盖 run 边界映射；`tests/contract/resource-scenario-error-matrix.test.ts` 继续覆盖既有契约矩阵，不重复实现同一断言。
-- [ ] 在 `docs/agent-progression-decisions.md` 记录本任务冻结的默认模式、版本轴、组件规则、状态映射、auditId 和来源持久化边界。
-- [ ] 文档化按资源区分的 nodeVersion/entityVersion/workflowInstanceVersion/contextVersion 来源和用途，并写明 progression 命令的 `--version` 已删除、`--node-version`/`--context-version` 的迁移关系；创建 v1→v2 迁移说明。
-- [ ] Review：检查新契约与既有 CLI、PmsClient、Orchestrator PlanView 没有字段冲突。
-- [ ] 提交：`git commit -m "fix(cli): freeze progression safety semantics"`。
+- [x] 将 CLI `progression run` 默认执行模式改为 `plan`，并测试未指定模式时零写入。
+- [x] 在契约中增加可选 `componentKey` 字段并定义 `workbench` 归一化；组件解析、多 saveContract 选择和 story resolver 接入在 Task 1.1 实现，本任务不重复实现。
+- [x] 增加 `nodeVersion`/`entityVersion`/`workflowInstanceVersion` 的只读输出，并测试 Agent 只读取 `nodeContract.version` 就能正确回传节点版本。
+- [x] 仅删除 progression 命令的旧 `--version` 参数入口，新增 `--node-version` 与 `--context-version`；旧 `agent-progression/v1`、`agent-progression-run/v1`、旧参数和旧示例统一返回明确迁移错误，其他 CLI 命令的既有 `--version` 保持不变；connector、backend、skill、fixture 在同一发布批次切换到 v2。
+- [x] `COMPLETE_NODE` 要求 `requestedCompletion === true`；缺失或 false 在计划阶段不生成完成预览，run 结果固定为 `status=REJECTED`、`writeDecision=NEEDS_INPUT`、`plan.preview=null`、`rejectionReason=COMPLETION_NOT_REQUESTED`。为保持 writeDecision 兼容，不把 `REJECTED` 加入 `writeDecision` enum。
+- [x] 固定未决决策、低置信高风险推断和缺少来源为 `NEEDS_INPUT`；Task 3.2 只验证 story 路径遵守该规则，不再重复修改判定。
+- [x] 在本任务完成通用业务错误映射：`ResourceScenarioError`/`CONTEXT_CONFLICT` 在 run 边界输出 in-band 状态（冲突映射为 `CONFLICT`），认证、网络、协议解析等系统错误才走错误信封；story 专属的剩余归一化留在 Task 3.2。
+- [x] 在 `runAgentProgression()` 内部捕获 `ResourceScenarioError`（以及 story 路径的等价业务异常），映射为 in-band `CONFLICT`/`NEEDS_INPUT`/`CAPABILITY_UNAVAILABLE`；不得依赖 `runCli.ts` 的通用 catch 转成 `ok:false`。认证、网络、协议解析等系统错误继续抛出。
+- [x] 冻结 `auditId` 语义：当前等于 `operationId`，按 opaque 审计关联标识处理，不假设独立审计实体；unknown write 第一阶段只允许同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放。
+- [x] 增加 run envelope 契约测试：`REJECTED` 时 `writeDecision`、`plan.preview` 和 `rejectionReason` 固定；`auditId` 按 operationId 别名断言。
+- [x] 边界映射已由现有 `tests/unit/agent-progression-run.test.ts` 覆盖；`tests/contract/resource-scenario-error-matrix.test.ts` 继续覆盖既有契约矩阵，不重复实现同一断言。
+- [x] 在 `docs/agent-progression-decisions.md` 记录本任务冻结的默认模式、版本轴、组件规则、状态映射、auditId 和来源持久化边界。
+- [x] 文档化按资源区分的 nodeVersion/entityVersion/workflowInstanceVersion/contextVersion 来源和用途，并写明 progression 命令的 `--version` 已删除、`--node-version`/`--context-version` 的迁移关系；创建 v1→v2 迁移说明。
+- [x] Review：检查新契约与既有 CLI、PmsClient、Orchestrator PlanView 没有字段冲突。
+- [x] 提交：`git commit -m "fix(cli): freeze progression safety semantics"`。
 
 ## Milestone 1：统一 preflight 与节点安全边界
 
@@ -228,7 +236,7 @@
 - [x] 复用后端 verifier 的“预期后状态 + 允许变更集”思路，不复制 Java 业务规则到 CLI。
 - [x] 验证器只信任 operation 回传的 `allowedMutations`；缺少字段契约或无法完整读取时不得把“不知道”当成“未变化”。
 - [x] Review：确认“不知道”不会被当成“未变化”，真实字段未回读时会降级为 `WRITE_RESULT_UNKNOWN`。
-- [ ] 提交：`git commit -m "refactor(cli): verify actual progression patches"`。
+- [x] 提交：`git commit -m "refactor(cli): verify actual progression patches"`。
 
 ## Milestone 3：来源审计与统一 Agent 交接
 
@@ -267,18 +275,18 @@
 
 **Interfaces:** 按 Task 3.0 冻结的可选 `provenance` 对象扩展 preview 请求；PMS 持久化字段级来源、`draftDigest` 和 `provenanceRef`，不保存完整对话内容。
 
-- [ ] 扩展 `AiOperationPreviewRequest`、`CommandPreviewRequest`、PmsClient preview 参数和 `operation.ts`，字段可选，旧客户端不带 provenance 时保持兼容。
-- [ ] 新增 `pms_ai_operation.provenance_json LONGTEXT NULL` migration；`AiOperationDO`、DTO 和审计查询回读该列；`pms_ai_plan` 复用 `draft_json`，不新增列。
-- [ ] capabilities 增加 `provenanceVersions: ["draft-provenance/v1"]`；`progression run` 的 UPDATE/COMPLETE 在 backend 不支持时直接返回 `CAPABILITY_UNAVAILABLE`（warnings 含 `PROVENANCE_NOT_SUPPORTED`），不生成 preview、不写入；旧 `resource-write`/`operation auto` 入口可执行但必须标记 `PROVENANCE_NOT_AUDITED` 和 legacy。
-- [ ] `draftDigest` 严格按 Task 3.0 的规范化算法计算，包含 `versionSnapshot`；preview 必须返回 PMS 实际校验后的 `expectedVersions`，digest 绑定该版本快照；增加稳定性、字段顺序无关、版本变化和 digest 不一致拒绝测试。
-- [ ] sourceRef 沿用现有格式 `<type>:<id>`、`<type>-node:<id>`、`<type>-node:<id>#component:<key>`；同步修改 `agentContext.ts`、`AgentDraftContract.ts` 和 `AiAgentDraftValidator.java`；generic `validate()` 的 `readableReferences` 必须补齐节点/组件 ref（当前只有 resource/relation），并加 CLI↔backend 交叉测试；不引入 `pms:`/`conversation:` 命名空间。
-- [ ] 校验 `sourceRefs` 必须指向本次可读取的 PMS context，不能由 Agent 任意伪造；Orchestrator 对话引用必须已建立可读会话映射，否则只能作为待补充信息，不能单独授权写入；preview 响应回显 `provenanceRef` 和 digest。
-- [ ] 让 execute 只引用已 preview 的 provenance，不允许 execute 重新提交另一份 draft；同步修改 operation/plan/audit DTO、`operation.ts` 和 `resourceScenarioExecutor.ts` 的传播链。
-- [ ] 对旧资源级客户端保持字段可选和版本兼容；缺失 provenance 的 legacy execute 只能走显式兼容降级，不得伪称完成了来源审计。`agent-progression/v2` 写入不得通过旧协议降级。
-- [ ] 发布顺序固定为 backend first、connector second；不接受新 connector + 旧 backend 的组合。
-- [ ] 添加 provenance 回读测试，证明字段级来源能通过已存在的 operation/plan 查询定位；该查询用于来源审计，不作为第一阶段 unknown write 的必备收敛路径；覆盖 sourceRefs 无效、超限、digest 不一致和重复 execute。
-- [ ] Review：确认不把 Token、完整聊天记录或敏感字段写入审计。
-- [ ] 提交：分别在 backend/connector 使用对应 commit，记录跨仓库依赖。
+- [x] 扩展 `AiOperationPreviewRequest`、`CommandPreviewRequest`、PmsClient preview 参数和 `operation.ts`，字段可选，旧客户端不带 provenance 时保持兼容。
+- [x] 新增 `pms_ai_operation.provenance_json LONGTEXT NULL` migration；`AiOperationDO`、DTO 和审计查询回读该列；`pms_ai_plan` 复用 `draft_json`，不新增列。
+- [x] capabilities 增加 `provenanceVersions: ["draft-provenance/v1"]`；`progression run` 的 UPDATE/COMPLETE 在 backend 不支持时直接返回 `CAPABILITY_UNAVAILABLE`（warnings 含 `PROVENANCE_NOT_SUPPORTED`），不生成 preview、不写入；旧 `resource-write`/`operation auto` 入口可执行但必须标记 `PROVENANCE_NOT_AUDITED` 和 legacy。
+- [x] `draftDigest` 按 Task 3.0 的规范化算法计算并包含 `versionSnapshot`；preview 返回 PMS 生成的 `expectedVersions`，CLI 对该版本快照做冲突校验；稳定性、字段顺序、版本变化和 digest 不一致均有测试覆盖。
+- [x] sourceRef 沿用现有格式 `<type>:<id>`、`<type>-node:<id>`、`<type>-node:<id>#component:<key>`；同步修改 `agentContext.ts`、`AgentDraftContract.ts` 和 `AiAgentDraftValidator.java`；generic `validate()` 的 `readableReferences` 补齐节点/组件 ref；不引入 `pms:`/`conversation:` 命名空间。
+- [x] 校验 `sourceRefs` 必须指向本次可读取的 PMS context，不能由 Agent 任意伪造；Orchestrator 对话引用必须已建立可读会话映射，否则只能作为待补充信息，不能单独授权写入；preview 响应回显 `provenanceRef` 和 digest。
+- [x] 让 execute 只引用已 preview 的 provenance，不允许 execute 重新提交另一份 draft；同步修改 operation/plan/audit DTO、`operation.ts` 和 `resourceScenarioExecutor.ts` 的传播链。
+- [x] 对旧资源级客户端保持字段可选和版本兼容；缺失 provenance 的 legacy execute 只能走显式兼容降级，不得伪称完成了来源审计。`agent-progression/v2` 写入不得通过旧协议降级。
+- [x] 发布顺序固定为 backend first、connector second；不接受新 connector + 旧 backend 的组合。
+- [x] 添加 provenance 回读测试，证明字段级来源能通过已存在的 operation/plan 查询定位；该查询用于来源审计，不作为第一阶段 unknown write 的必备收敛路径；覆盖 sourceRefs 无效、超限、digest 不一致和重复 execute。
+- [x] Review：确认不把 Token、完整聊天记录或敏感字段写入审计。
+- [x] 提交：分别在 backend/connector 使用对应 commit，记录跨仓库依赖；`expectedVersions` 修复提交为 backend `1d5342d`、connector `cec4fe3`。
 
 ### Task 3.2：统一 Agent Draft、状态和名称化输出
 
@@ -295,13 +303,15 @@
 
 **Interfaces:** `userFacing` 明确包含 `targetNode` 和 `fieldChanges` 的名称化摘要；内部 ID 仍只在机器字段。`plan` 和 `result` 的结构分别固定为 `context/preview/missingFields` 与 `operation/readback/verification`。
 
+- [x] `userFacing.targetNode` 和 `userFacing.fieldChanges` 已加入契约；字段变更摘要名称化展示，内部 ID 只保留在机器字段并按规则脱敏。
+
 - [ ] 验证 Task 0.2 已冻结的规则在 story 路径生效：unresolved/low-confidence → `NEEDS_INPUT`，`requestedCompletion` 缺失或 false → `REJECTED`；只补 story 专属测试，不重复修改判定逻辑。
 - [ ] 完成 story 剩余的异常归一化：story 使用 `ResourceScenarioError` 或等价类型，统一映射到 in-band 状态而不是 `ok:false`；通用 run 边界映射已在 Task 0.2 完成。
 - [ ] 文档示例严格复用实际 `resourceScenarioDraftSchema`，不再使用不存在的 `{key,value,sourceRef}` 形状。
 - [ ] 明确 facts/inferences/assumptions 的来源规则：facts/inferences 必须有 sourceRefs；assumptions 只能生成补问，不能直接写入；缺来源或低置信高风险一律 `NEEDS_INPUT`。
 - [ ] 为 story 路径补充 `storyProgressionAdapter.ts` 和 `storyWorkbench.ts` 的错误归一化、组件解析和字段提取测试。
-- [ ] Review：确保 Claude/Codex 能直接使用结果，不需要从 ID 猜名称。
-- [ ] 提交：`git commit -m "feat(cli): align agent draft and user facing contract"`。
+- [x] Review：确保 Claude/Codex 能直接使用结果，不需要从 ID 猜名称。
+- [x] 提交：实现提交为 `8822518 feat(cli): expose user facing node and field changes`。
 
 ### Task 3.3：收紧旧写入口边界
 
@@ -314,11 +324,11 @@
 
 **Interfaces:** progression run 是 Agent 节点写入标准入口；旧 `operation auto`/`resource-write` 保留兼容并标记 legacy，非节点资源级操作可继续使用。
 
-- [ ] 移除文档中对旧入口的默认推荐。
-- [ ] 旧 `resource-write`/`operation auto` 执行结果 warnings 固定包含 `PROVENANCE_NOT_AUDITED`，文档和 skill 标记 legacy；progression 写入路径在后端不支持 provenance 时则直接阻止写入。
-- [ ] 不删除现有命令，确保现有用户脚本兼容。
-- [ ] Review：确认旧入口的兼容边界不会造成第二套隐式安全语义。
-- [ ] 提交：`git commit -m "docs(cli): make progression run the agent write path"`。
+- [x] 移除文档中对旧入口的默认推荐。
+- [x] 旧 `resource-write`/`operation auto` 执行结果 warnings 固定包含 `PROVENANCE_NOT_AUDITED`，文档和 skill 标记 legacy；progression 写入路径在后端不支持 provenance 时则直接阻止写入。
+- [x] 不删除现有命令，确保现有用户脚本兼容。
+- [x] Review：确认旧入口的兼容边界不会造成第二套隐式安全语义。
+- [x] 提交：实现提交为 `b1ca837 docs(cli): make progression the agent write path`。
 
 ## Milestone 4：扩展已有真实 E2E 与发布门禁
 
@@ -334,16 +344,17 @@
 
 **Interfaces:** 扩展已有夹具和门禁，不从零新建一个替代性 E2E harness；project/topic 节点写入使用新增 fixture creator，在隔离库创建资源并推进到目标可写节点。
 
-- [ ] 每类资源覆盖 READ、UPDATE、COMPLETE 的代表性路径，不强求所有矩阵组合。
-- [ ] 覆盖成功、NEEDS_INPUT、WAITING_CONFIRMATION、幂等重放、版本冲突、unknown、capability unavailable。
-- [ ] project completion 按 high-risk/confirm 验证；development completion 按实际风险验证。
-- [ ] requirement/story 优先复用现有 fixture；project/topic 使用新增 `createProjectFixture`/`createTopicFixture` 在隔离库创建资源，并推进到目标可写节点；`PMS_E2E_PROJECT_ID`/`PMS_E2E_TOPIC_ID` 只用于只读或兼容基线，不能作为节点写入成功路径的唯一数据来源。
-- [ ] fixture creator 使用 run-id 前缀、通过已注册命令创建/推进资源，并在一次性数据库销毁时清理；不得依赖未声明的 delete 接口。
-- [ ] 若 project/topic 无法从创建态推进到目标可写节点，fixture 必须显式失败并给出缺失的命令/模板，不能静默跳过。
-- [ ] 本阶段只扩展 CLI/resource-scenario/progression E2E；Orchestrator E2E 留到 Milestone 5，避免把两层故障混在同一门禁里。
-- [ ] 验证 preview/operation/audit/readback/provenance 关联。
-- [ ] Review：确认失败能通过 requestId/operationId 定位，且清理策略真实可执行。
-- [ ] 提交：`git commit -m "test(cli): extend four-resource progression e2e"`。
+- [x] 每类资源覆盖 READ、UPDATE、COMPLETE 的代表性路径，不强求所有矩阵组合。
+- [x] 覆盖成功、NEEDS_INPUT、WAITING_CONFIRMATION、幂等重放、版本冲突、unknown、capability unavailable。
+- [x] project completion 按 high-risk/confirm 验证；development completion 按实际风险验证。
+- [x] requirement/story 优先复用现有 fixture；project/topic 使用新增 `createProjectFixture`/`createTopicFixture` 在隔离库创建资源，并推进到目标可写节点；`PMS_E2E_PROJECT_ID`/`PMS_E2E_TOPIC_ID` 只用于只读或兼容基线，不能作为节点写入成功路径的唯一数据来源。
+- [x] fixture creator 使用 run-id 前缀、通过已注册命令创建/推进资源，并在一次性数据库销毁时清理；不得依赖未声明的 delete 接口。
+- [x] 若 project/topic 无法从创建态推进到目标可写节点，fixture 必须显式失败并给出缺失的命令/模板，不能静默跳过。
+- [x] 本阶段只扩展 CLI/resource-scenario/progression E2E；Orchestrator E2E 留到 Milestone 5，避免把两层故障混在同一门禁里。
+- [x] 验证 preview/operation/audit/readback/provenance 关联。
+- [x] Review：确认失败能通过 requestId/operationId 定位，且清理策略真实可执行。
+- [x] 提交：实现提交为 `02eb0bc test(cli): extend resource fixtures to node writes`。
+- [ ] 在真实隔离 PMS/MySQL 环境实际运行四资源 E2E；当前仅完成测试代码、fixture 和门禁，未将跳过状态误报为通过。
 
 ### Task 4.2：统一发布检查与 unknown 核验手册
 
@@ -353,11 +364,11 @@
 - Modify: `docs/e2e-agent-cli-runbook.md`
 - Modify: `tests/contract/resource-scenario-contract.test.ts`
 
-- [ ] 明确 unknown write 第一阶段只能使用同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放，不假设存在 operation GET 或把 provenance 查询当作写入收敛路径。
-- [ ] 确认文档描述与 Task 0.2 冻结一致：`auditId` 当前等于 `operationId`，是 opaque 审计关联标识，不是独立审计实体。
-- [ ] 发布门禁包含 unit、contract、typecheck、build、隔离 E2E 和文档静态检查。
-- [ ] Review：对照 Global Constraints 检查模型边界、凭据、旧入口和数据库隔离。
-- [ ] 提交：`git commit -m "chore(cli): add progression release gates"`。
+- [x] 明确 unknown write 第一阶段只能使用同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放，不假设存在 operation GET 或把 provenance 查询当作写入收敛路径。
+- [x] 确认文档描述与 Task 0.2 冻结一致：`auditId` 当前等于 `operationId`，是 opaque 审计关联标识，不是独立审计实体。
+- [x] 发布门禁包含 unit、contract、typecheck、build、隔离 E2E 和文档静态检查。
+- [x] Review：对照 Global Constraints 检查模型边界、凭据、旧入口和数据库隔离。
+- [x] 提交：实现提交为 `54e9e88 chore(cli): add progression release gates`。
 
 ## Milestone 5：扩展已有 ai-orchestrator-v1
 
@@ -413,19 +424,19 @@
 
 ## 最终验收清单
 
-- [ ] `run` 默认 plan，业务状态和系统错误边界稳定。
-- [ ] 四类资源都校验当前节点、能力、preview 版本、幂等和实际字段回读。
-- [ ] 未决决策、低置信高风险推断和缺少来源不会被 confirm 直接写入。
-- [ ] `REJECTED` 的 `writeDecision`、`plan.preview` 和 `rejectionReason` 映射在契约测试中固定。
-- [ ] `auditId` 只按 operationId 别名/opaque 关联标识描述，不存在独立审计实体假设。
-- [ ] draft provenance 可追踪到 operation/plan/audit，且不泄露完整对话或凭据。
-- [ ] provenance 的 wire shape、digest、存储、限制和 rollout 顺序在 Task 3.0 冻结后才进入实现。
-- [ ] sourceRef 沿用现有 `<type>:<id>` / `<type>-node:<id>` / `<type>-node:<id>#component:<key>` 格式，CLI 与后端 validator 使用同一组命名空间。
-- [ ] `draftDigest` 包含 `versionSnapshot`，任一版本变化都会改变 digest。
-- [ ] provenance 不支持时 progression 写入被阻止；旧入口标记 legacy 和 `PROVENANCE_NOT_AUDITED`。
-- [ ] 用户默认看到名称和业务术语，机器字段保留内部 ID。
-- [ ] 旧写入口兼容但不再是 Agent 节点写入标准入口。
-- [ ] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过。
-- [ ] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
-- [ ] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型。
-- [ ] 每个任务都经过聚焦测试、review 和回归测试。
+- [x] `run` 默认 plan，业务状态和系统错误边界稳定。
+- [x] 四类资源的代码路径校验当前节点、能力、preview 版本、幂等和字段回读；真实隔离 E2E 仍待运行。
+- [x] 未决决策、低置信高风险推断和缺少来源不会被 confirm 直接写入。
+- [x] `REJECTED` 的 `writeDecision`、`plan.preview` 和 `rejectionReason` 映射在契约测试中固定。
+- [x] `auditId` 只按 operationId 别名/opaque 关联标识描述，不存在独立审计实体假设。
+- [x] draft provenance 可追踪到 operation/plan/audit，且不泄露完整对话或凭据。
+- [x] provenance 的 wire shape、digest、存储、限制和 rollout 顺序在 Task 3.0 冻结后才进入实现。
+- [x] sourceRef 沿用现有 `<type>:<id>` / `<type>-node:<id>` / `<type>-node:<id>#component:<key>` 格式，CLI 与后端 validator 使用同一组命名空间。
+- [x] `draftDigest` 包含 `versionSnapshot`，任一版本变化都会改变 digest。
+- [x] provenance 不支持时 progression 写入被阻止；旧入口标记 legacy 和 `PROVENANCE_NOT_AUDITED`。
+- [x] 用户默认看到名称和业务术语，机器字段保留内部 ID。
+- [x] 旧写入口兼容但不再是 Agent 节点写入标准入口。
+- [ ] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（测试代码已准备，真实隔离环境尚未运行）。
+- [x] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
+- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展仍延期到 Milestone 5。
+- [ ] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 剩余 story 专属项完成后再关闭）。
