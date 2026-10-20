@@ -10,13 +10,13 @@ import "../../apps/pms-cli/src/commands/scenarios/requirementScenarioAdapter.js"
 import "../../apps/pms-cli/src/commands/scenarios/topicScenarioAdapter.js";
 import "../../apps/pms-cli/src/commands/scenarios/projectScenarioAdapter.js";
 import { resourceScenarioContractVersion, type ResourceScenarioResourceType } from "../../packages/pms-contracts/src/index.js";
-import { auditOperations } from "./support/operationAudit.js";
+import { auditOperationsInWindow } from "./support/operationAudit.js";
 import {
   assertIsolatedE2EConfig,
   expectedViewerId,
   isolatedE2EEnabled,
 } from "./support/isolatedSession.js";
-import { createProjectFixture, type ProjectFixture } from "./support/projectFixture.js";
+import { createProjectFixture, type ProjectFixture, type WritableNodeFixture } from "./support/projectFixture.js";
 import { createTopicFixture } from "./support/topicFixture.js";
 import type { TopicFixture } from "./support/topicFixture.js";
 
@@ -69,13 +69,13 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
       }
 
       await runUpdateScenario(client, "requirement", requirementId, "requirement.update", {
-        title: `${await titleOf(client, "requirement", requirementId)} [AI-E2E-${config.runId}]`,
+        title: `AI-E2E-需求-${config.runId}`,
       }, `resource-requirement-${config.runId}`);
       await runUpdateScenario(client, "topic", topicId, "topic.update", {
-        title: `${await titleOf(client, "topic", topicId)} [AI-E2E-${config.runId}]`,
+        title: `AI-E2E-专题-${config.runId}`,
       }, `resource-topic-${config.runId}`);
       await runUpdateScenario(client, "project", projectId, "project.update", {
-        name: `${await titleOf(client, "project", projectId)} [AI-E2E-${config.runId}]`,
+        name: `AI-E2E-项目-${config.runId}`,
       }, `resource-project-${config.runId}`);
 
       if (project?.node) {
@@ -95,16 +95,20 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
           "development-item.node.complete-with-data", `resource-topic-complete-${config.runId}`)
         : false;
 
-      const audit = await auditOperations(config.runId, startedAt);
+      const audit = await auditOperationsInWindow(startedAt);
       const commands = audit.map((record) => record.commandName.toLowerCase());
       expect(commands.some((command) => command.includes("requirement.update"))).toBe(true);
       expect(commands.some((command) => command.includes("topic.update"))).toBe(true);
       expect(commands.some((command) => command.includes("project.update"))).toBe(true);
       if (createFixtures) {
-        expect(commands.some((command) => command.includes("development-item.node.field.update"))).toBe(true);
-        expect(commands).toContain("node.field.update");
-        if (projectCompletionExecuted) expect(commands).toContain("node.complete-with-data");
-        if (topicCompletionExecuted) expect(commands).toContain("development-item.node.complete-with-data");
+        if (topic?.node) {
+          expect(commands.some((command) => command.includes("development-item.node.field.update"))).toBe(true);
+          if (topicCompletionExecuted) expect(commands).toContain("development-item.node.complete-with-data");
+        }
+        if (project?.node) {
+          expect(commands).toContain("node.field.update");
+          if (projectCompletionExecuted) expect(commands).toContain("node.complete-with-data");
+        }
       }
     } finally {
       if (session) await auth.logout(session.account);
@@ -137,6 +141,8 @@ async function runUpdateScenario(
   });
   expect(plan.phase).toBe("plan");
   expect(plan.preview.command).toBe(operation);
+  const updatedField = resourceType === "project" ? "name" : "title";
+  const expectedPatch = { [updatedField]: argumentsValue[updatedField] };
 
   const afterPlanResource = await client.get({ type: resourceType, id: resourceId });
   expect(afterPlanResource.entityVersion).toBe(beforeResource.entityVersion);
@@ -146,6 +152,7 @@ async function runUpdateScenario(
     resourceType,
     resourceId,
     operation,
+    expectedPatch,
     previewOperationId: plan.preview.operationId,
     idempotencyKey,
   });
@@ -164,12 +171,12 @@ async function runUpdateScenario(
     resourceType,
     resourceId,
     operation,
+    expectedPatch,
     previewOperationId: plan.preview.operationId,
     idempotencyKey,
   });
   expect(replay.status).toBe("SUCCEEDED");
   expect(replay.operation.operationId).toBe(first.operation.operationId);
-  const updatedField = resourceType === "project" ? "name" : "title";
   expect(replay.readback.resource?.details[updatedField]).toBe(argumentsValue[updatedField]);
   if (beforeResource.entityVersion !== null && replay.readback.resource?.entityVersion !== null) {
     expect(replay.readback.resource?.entityVersion).not.toBe(beforeResource.entityVersion);
@@ -180,7 +187,7 @@ async function runNodeUpdateScenario(
   client: PmsHttpClient,
   resourceType: "project" | "topic",
   resourceId: number,
-  node: ProjectFixture["node"] | TopicFixture["node"],
+  node: WritableNodeFixture,
   operation: "node.field.update" | "development-item.node.field.update",
   idempotencyKey: string,
 ): Promise<void> {
@@ -246,19 +253,19 @@ async function runNodeCompletionScenario(
   client: PmsHttpClient,
   resourceType: "project" | "topic",
   resourceId: number,
-  node: ProjectFixture["node"] | TopicFixture["node"],
+  node: WritableNodeFixture,
   operation: "node.complete-with-data" | "development-item.node.complete-with-data",
   idempotencyKey: string,
 ): Promise<boolean> {
   const argumentsValue = resourceType === "project"
     ? {
-      fields: { [node.fieldKey]: node.fieldValue },
+      fields: { ...node.requiredFieldValues, [node.fieldKey]: node.fieldValue },
       ownerId: node.ownerId,
       startDate: "2026-10-10",
       endDate: "2026-10-20",
     }
     : {
-      fieldValues: { [node.fieldKey]: node.fieldValue },
+      fieldValues: { ...node.requiredFieldValues, [node.fieldKey]: node.fieldValue },
       ownerId: node.ownerId,
       startDate: "2026-10-10",
       endDate: "2026-10-20",

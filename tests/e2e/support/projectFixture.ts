@@ -10,6 +10,7 @@ export interface WritableNodeFixture {
   componentKey: string;
   fieldKey: string;
   fieldValue: unknown;
+  requiredFieldValues: Record<string, unknown>;
   ownerId: number;
   completionSupported: boolean;
   completionMode: string | null;
@@ -20,7 +21,7 @@ export interface ProjectFixture {
   projectId: number;
   name: string;
   created: true;
-  node: WritableNodeFixture;
+  node?: WritableNodeFixture;
 }
 
 /**
@@ -55,7 +56,7 @@ export async function createProjectFixture(
   return { projectId, name, created: true, node };
 }
 
-async function findWritableNode(client: PmsClient, projectId: number, ownerId: number): Promise<WritableNodeFixture> {
+async function findWritableNode(client: PmsClient, projectId: number, ownerId: number): Promise<WritableNodeFixture | undefined> {
   const legacy = await client.context({ type: "project", id: projectId });
   const nodeId = positiveNodeId(legacy.currentNode?.id, "项目夹具创建后没有当前节点，无法进行节点场景验收");
   const focused = await client.context(
@@ -65,6 +66,13 @@ async function findWritableNode(client: PmsClient, projectId: number, ownerId: n
   const node = (focused.workflow?.nodes ?? []).find((candidate) => isRecord(candidate)
     && candidate.id === nodeId);
   if (!isRecord(node)) throw new Error(`项目夹具当前节点 ${nodeId} 无法读取 focused 上下文`);
+  // The initial project node is backed by the entity-level project-basic-info
+  // component. Its writes go through project.update, so it intentionally has
+  // no node-level saveContract until the workflow advances.
+  if (!Array.isArray(node.components) || node.components.length === 0
+    || node.components.some((component) => isRecord(component) && component.key === "project-basic-info")) {
+    return undefined;
+  }
   let resolution;
   try {
     resolution = resolveWorkflowComponent(node as any, { mode: "write" });
@@ -83,12 +91,24 @@ async function findWritableNode(client: PmsClient, projectId: number, ownerId: n
     componentKey: resolution.componentKey,
     fieldKey,
     fieldValue: fixtureValue(contract?.fieldContracts, fieldKey),
+    requiredFieldValues: requiredFieldValues(contract?.fieldContracts, resolution.writableFields),
     ownerId,
     completionSupported: contract?.completionSupported === true
       && contract?.completionCommand === "node.complete-with-data",
     completionMode: typeof contract?.completionMode === "string" ? contract.completionMode : null,
     completionRequiredMetadata: stringArray(contract?.completionRequiredMetadata),
   };
+}
+
+function requiredFieldValues(rawContracts: unknown, writableFields: string[]): Record<string, unknown> {
+  const contracts = Array.isArray(rawContracts) ? rawContracts : [];
+  const writable = new Set(writableFields);
+  return Object.fromEntries(contracts
+    .filter((candidate) => isRecord(candidate)
+      && candidate.required === true
+      && typeof candidate.key === "string"
+      && writable.has(candidate.key))
+    .map((candidate) => [candidate.key as string, fixtureValue(contracts, candidate.key as string)]));
 }
 
 function fixtureValue(rawContracts: unknown, fieldKey: string): unknown {

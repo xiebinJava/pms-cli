@@ -58,19 +58,41 @@ async function findWritableNode(client: PmsClient, topicId: number, ownerId: num
   if (!fieldKey || !resolution.componentKey) {
     throw new Error(`专题夹具当前节点 ${nodeId} 没有不受保护的可写字段`);
   }
+  const requiredValues = requiredFieldValues(contract?.fieldContracts, resolution.writableFields);
+  // topic-research has conditional business validation that is stricter than
+  // the generic workflow field contract: YES requires goal and reportUrl.
+  if (resolution.componentKey === "topic-research") {
+    requiredValues.needed = "YES";
+    requiredValues.goal = `AI-E2E-${topicId}-research-goal`;
+    requiredValues.reportUrl = `AI-E2E-${topicId}-research-report`;
+  }
   return {
     nodeId,
     nodeVersion: readInteger(contract?.version ?? node.version, `专题节点 ${nodeId} 缺少节点版本`),
     contextVersion: readInteger(focused.version, `专题 ${topicId} 缺少流程版本`),
     componentKey: resolution.componentKey,
     fieldKey,
-    fieldValue: fixtureValue(contract?.fieldContracts, fieldKey),
+    fieldValue: resolution.componentKey === "topic-research" && fieldKey === "needed"
+      ? "YES"
+      : fixtureValue(contract?.fieldContracts, fieldKey),
+    requiredFieldValues: requiredValues,
     ownerId,
     completionSupported: contract?.completionSupported === true
       && contract?.completionCommand === "development-item.node.complete-with-data",
     completionMode: typeof contract?.completionMode === "string" ? contract.completionMode : null,
     completionRequiredMetadata: stringArray(contract?.completionRequiredMetadata),
   };
+}
+
+function requiredFieldValues(rawContracts: unknown, writableFields: string[]): Record<string, unknown> {
+  const contracts = Array.isArray(rawContracts) ? rawContracts : [];
+  const writable = new Set(writableFields);
+  return Object.fromEntries(contracts
+    .filter((candidate) => isRecord(candidate)
+      && candidate.required === true
+      && typeof candidate.key === "string"
+      && writable.has(candidate.key))
+    .map((candidate) => [candidate.key as string, fixtureValue(contracts, candidate.key as string)]));
 }
 
 function fixtureValue(rawContracts: unknown, fieldKey: string): unknown {
