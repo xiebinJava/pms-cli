@@ -58,15 +58,33 @@ MySQL 查询使用 `scripts/e2e-mysql-client.sh` 在指定容器内执行；未�
 
 ## 四类资源统一验收
 
-`scripts/verify-real-pms-agent-suite.sh` 是需求、专题、项目、故事的统一真实验收入口：资源场景测试覆盖需求/专题/项目，需求 Orchestrator 测试覆盖需求会话，故事 Orchestrator 测试覆盖故事会话。脚本在同一个一次性数据库中自动创建四类夹具，串行执行三个 E2E 文件，不需要人工预置资源 ID。
+`scripts/verify-real-pms-agent-suite.sh` 是需求、专题、项目、故事的统一真实验收入口：资源场景测试覆盖需求/专题/项目，四类 Orchestrator 测试分别覆盖需求、故事、项目和专题会话。脚本串行执行五个 E2E 文件。
 
-它要求 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`，并要求目标 URL、数据库白名单、账号、run ID、`PMS_E2E_DB_URL` 等隔离配置齐全。推荐通过 package script 执行：
+它要求 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`，并要求目标 URL、数据库白名单、账号、run ID、`PMS_E2E_DB_URL` 等隔离配置齐全。项目 Orchestrator 会在一次性数据库自动创建项目，并通过已注册的项目/节点命令推进实体级 `project-basic-info`，再从 PMS 发现第一个可写 `saveContract`；也可以关闭创建夹具后用 `PMS_E2E_PROJECT_ID` 指向隔离库中的可写项目。专题 Orchestrator 可设置 `PMS_E2E_CREATE_TOPIC_ORCHESTRATOR_FIXTURE=true` 自动创建专题夹具。推荐通过 package script 执行：
 
 ```bash
 pnpm run verify:real-pms:agent-suite
 ```
 
 脚本只负责安全门禁、夹具模式和串行调度；具体的上下文、preview、execute、回读、幂等、冲突、恢复和审计断言仍由各领域 E2E 自己负责。测试结束后应使用对应的 `pms-backend/scripts/stop-ai-e2e.sh` 销毁一次性数据库和服务。
+
+## 项目/专题 Orchestrator 节点验收
+
+`tests/e2e/orchestrator-project-node.e2e.test.ts` 和
+`tests/e2e/orchestrator-topic-node.e2e.test.ts` 使用同一套 `resource-node/v1`
+会话协议，验证 focused context、节点/组件绑定、字段草稿、PMS preview 的
+`expectedVersions`/`provenanceRef`/`draftDigest`、confirm、回读、相同幂等键恢复、
+缺省 `requestedCompletion` 不隐式推进、错误 `nodeVersion` 冲突和非法 provenance 来源拒绝。
+专题断言实际使用 `development-item.node.field.update`；项目断言使用项目节点命令。
+
+默认运行安全地跳过。隔离环境中可分别运行：
+
+```bash
+PMS_E2E_PROJECT_ID=<隔离库中的可写项目 ID> pnpm run verify:real-pms:project-orchestrator
+PMS_E2E_TOPIC_ID=<已有专题 ID> pnpm run verify:real-pms:topic-orchestrator
+```
+
+测试从 focused context 的 `saveContract` 解析节点版本、组件和字段，禁止在代码中写死节点 ID 或组件数组位置。非法 provenance 用例在 Connector 请求校验层拒绝；`WRITE_RESULT_UNKNOWN` 的故障注入仍由已有 unit/contract 覆盖，当前真实 E2E 不新增 operation GET 端点或人为伪造 PMS 故障。
 
 ## 场景级闭环验收
 

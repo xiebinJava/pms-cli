@@ -20,13 +20,16 @@ export interface WritableNodeFixture {
 export interface ProjectFixture {
   projectId: number;
   name: string;
-  created: true;
+  created: boolean;
   node?: WritableNodeFixture;
 }
 
 /**
  * Creates a project in the disposable E2E database using the registered
- * project.create command. There is no implicit cleanup here: the fixture is
+ * project.create command. If PMS starts the project at the entity-level
+ * project-basic-info node, the fixture completes that setup node through the
+ * registered project/node commands and then discovers the first real writable
+ * workflow component. There is no implicit cleanup here: the fixture is
  * intentionally scoped to the disposable database teardown.
  */
 export async function createProjectFixture(
@@ -52,8 +55,39 @@ export async function createProjectFixture(
   if (readback.resourceId !== projectId) throw new Error("项目夹具回读资源 ID 不一致");
   const ownerId = capabilities.viewer?.id;
   if (!ownerId) throw new Error("项目夹具能力目录缺少当前用户 ID，无法完成节点验收");
-  const node = await findWritableNode(client, projectId, ownerId);
+  let node = await findWritableNode(client, projectId, ownerId);
+  if (!node) {
+    await advanceProjectToWritableNode(client, projectId, ownerId, runId);
+    node = await findWritableNode(client, projectId, ownerId);
+    if (!node) throw new Error("项目夹具推进后仍没有可写 saveContract 节点");
+  }
   return { projectId, name, created: true, node };
+}
+
+/**
+ * Reads an existing project from the isolated database and derives its
+ * current writable node entirely from focused context/saveContract. The
+ * helper deliberately does not accept a node ID: project entity versions and
+ * workflow node versions are separate axes and the latter must come from PMS.
+ */
+export async function existingProjectFixture(
+  client: PmsClient,
+  projectId: number,
+): Promise<ProjectFixture> {
+  const capabilities = await client.capabilities();
+  const ownerId = capabilities.viewer?.id;
+  if (!ownerId) throw new Error("项目夹具能力目录缺少当前用户 ID，无法解析节点");
+  const resource = await client.get({ type: "project", id: projectId });
+  const node = await findWritableNode(client, projectId, ownerId);
+  if (!node) {
+    throw new Error(
+      `项目 ${projectId} 当前没有可写节点 saveContract；请在一次性隔离库中准备一个非 project-basic-info 节点`,
+    );
+  }
+  const name = typeof resource.details.name === "string"
+    ? resource.details.name
+    : `project-${projectId}`;
+  return { projectId, name, created: false, node };
 }
 
 async function findWritableNode(client: PmsClient, projectId: number, ownerId: number): Promise<WritableNodeFixture | undefined> {
@@ -98,6 +132,89 @@ async function findWritableNode(client: PmsClient, projectId: number, ownerId: n
     completionMode: typeof contract?.completionMode === "string" ? contract.completionMode : null,
     completionRequiredMetadata: stringArray(contract?.completionRequiredMetadata),
   };
+}
+
+/**
+ * The built-in project template intentionally keeps project-basic-info on the
+ * entity-level project.update path. Prepare that node through public commands
+ * until the next node publishes a real workbench saveContract. No node ID or
+ * component position is guessed; every iteration re-reads focused context.
+ */
+async function advanceProjectToWritableNode(
+  client: PmsClient,
+  projectId: number,
+  ownerId: number,
+  runId: string,
+): Promise<void> {
+  const initial = await client.context({ type: "project", id: projectId });
+  const entityVersion = initial.entityVersion ?? initial.version;
+  if (entityVersion === null || entityVersion === undefined) {
+    throw new Error(`项目 ${projectId} 缺少实体版本，无法准备首节点`);
+  }
+  const startDate = new Date().toISOString().slice(0, 10);
+  const endDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  await executePreviewed(client, "project.update", `${runId}-project-profile`, {
+    arguments: {
+      projectId,
+      description: `AI-E2E 项目夹具 ${runId}`,
+      priority: 1,
+      projectLevel: 1,
+      startDate,
+      endDate,
+      projectManagerId: ownerId,
+    },
+    context: { id: `project:${projectId}`, version: String(entityVersion) },
+  });
+  await executePreviewed(client, "follower.add", `${runId}-project-follower`, {
+    arguments: { projectId, userId: ownerId },
+    context: { id: `project:${projectId}`, version: String(entityVersion) },
+  });
+
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const context = await client.context({ type: "project", id: projectId });
+    const nodeId = positiveNodeId(context.currentNode?.id, `项目 ${projectId} 没有可推进的当前节点`);
+    const focused = await client.context(
+      { type: "project", id: projectId }, { nodeId, view: "focused" },
+    );
+    if (await findWritableNode(client, projectId, ownerId)) return;
+    readNodeVersion(focused, nodeId);
+    await executePreviewed(client, "node.owner.update", `${runId}-project-owner-${attempt}`, {
+      arguments: { projectId, nodeId, ownerId },
+      context: { id: "global:pms", version: "v1" },
+    });
+    await executePreviewed(client, "node.schedule.update", `${runId}-project-schedule-${attempt}`, {
+      arguments: { projectId, nodeId, startDate, endDate },
+      context: { id: "global:pms", version: "v1" },
+    });
+    const completed = await executePreviewed(client, "node.complete", `${runId}-project-node-${attempt}`, {
+      arguments: { projectId, nodeId },
+      context: { id: "global:pms", version: "v1" },
+    });
+    if (completed.status !== "SUCCEEDED") {
+      throw new Error(`项目夹具首节点推进未成功: ${completed.message ?? completed.status}`);
+    }
+  }
+  throw new Error(`项目夹具推进 8 步后仍未发现可写 saveContract 节点 (project=${projectId})`);
+}
+
+async function executePreviewed(
+  client: PmsClient,
+  operation: string,
+  idempotencyKey: string,
+  options: Parameters<typeof operationPreview>[2],
+) {
+  const preview = await operationPreview(client, operation, options);
+  return operationExecutePreview(client, preview.operationId, idempotencyKey);
+}
+
+function readNodeVersion(context: Awaited<ReturnType<PmsClient["context"]>>, nodeId: number): number {
+  const node = (context.workflow?.nodes ?? []).find((candidate) => isRecord(candidate)
+    && candidate.id === nodeId);
+  const version = isRecord(node) ? node.version : undefined;
+  if (typeof version !== "number" || !Number.isSafeInteger(version) || version < 0) {
+    throw new Error(`项目节点 ${nodeId} 缺少节点版本，无法推进`);
+  }
+  return version;
 }
 
 function requiredFieldValues(rawContracts: unknown, writableFields: string[]): Record<string, unknown> {

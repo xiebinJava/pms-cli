@@ -7,7 +7,7 @@ import type { WritableNodeFixture } from "./projectFixture.js";
 export interface TopicFixture {
   topicId: number;
   title: string;
-  created: true;
+  created: boolean;
   node: WritableNodeFixture;
 }
 
@@ -35,6 +35,22 @@ export async function createTopicFixture(
   if (!ownerId) throw new Error("专题夹具能力目录缺少当前用户 ID，无法完成节点验收");
   const node = await findWritableNode(client, topicId, ownerId);
   return { topicId, title, created: true, node };
+}
+
+/** Reads a topic's current writable node from PMS without guessing IDs. */
+export async function existingTopicFixture(
+  client: PmsClient,
+  topicId: number,
+): Promise<TopicFixture> {
+  const viewer = (await client.capabilities()).viewer;
+  const ownerId = viewer?.id;
+  if (!ownerId) throw new Error("专题夹具能力目录缺少当前用户 ID，无法解析节点");
+  const resource = await client.get({ type: "topic", id: topicId });
+  const node = await findWritableNode(client, topicId, ownerId);
+  const title = typeof resource.details.title === "string"
+    ? resource.details.title
+    : `topic-${topicId}`;
+  return { topicId, title, created: false, node };
 }
 
 async function findWritableNode(client: PmsClient, topicId: number, ownerId: number): Promise<WritableNodeFixture> {
