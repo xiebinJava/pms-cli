@@ -138,7 +138,7 @@ requirement | story | project | topic
 }
 ```
 
-`nodeId`、`componentKey` 和版本绑定由 turn 请求传递，但服务端必须再次从 focused context 解析并校验，不能信任 Agent 直接提供的节点版本。项目/专题 turn 增加 `componentKey` 和 `nodeVersion`；现有 `contextVersion` 字段为 requirement/story 的兼容字段及上下文快照标签，不能被解释为 project 的节点版本，也不能作为唯一并发锁。真正的写入守卫来自 preview 返回的 PMS `expectedVersions`。
+`nodeId`、`componentKey` 和版本绑定由 turn 请求传递，但服务端必须再次从 focused context 解析并校验，不能信任 Agent 直接提供的节点版本。项目/专题 turn 增加 `componentKey` 和 `nodeVersion`；`contextVersion` 沿用 requirement/story 的既有语义，但在 project/topic 上只作上下文快照标签，不能被解释为节点版本，也不能作为唯一并发锁。真正的写入守卫来自 preview 返回的 PMS `expectedVersions`。
 
 `nodeVersion` 的来源固定为：project 使用当前组件 `saveContract.nodeVersion`（与 workflow node version 一致），topic 使用 selected node/nodeContract 的版本；未知值用 `null`，不得用 project 的 `context.version` 代替。`context.version` 在 project 上表示 project entity version，单独记录为版本快照中的 `contextVersion`/`entityVersion`，不参与节点版本比较。Draft 中的 `patch` 不得携带 `ownerId`、状态、资源 ID、节点 ID 或其他保护字段。
 
@@ -214,6 +214,7 @@ RECEIVED
 - 缺少业务必填字段、来源或用户补充信息：`NEEDS_INPUT`；
 - 零个可写 saveContract、多个可写组件未选择、或指定组件不可写：`CAPABILITY_UNAVAILABLE`；
 - `RESOURCE_NODE_COMPLETE` 缺失或提供 `requestedCompletion=false` 时，在 `agent-progression-run/v2` 结果信封中固定映射为 `status=REJECTED`、`writeDecision=NEEDS_INPUT`、`plan.preview=null`、`rejectionReason=COMPLETION_NOT_REQUESTED`，并要求调用方改用字段更新补齐信息；这不是新增 `AiOrchestratorState=REJECTED`，Orchestrator 内部仍按现有 `NEEDS_INPUT`/Plan 语义持久化；
+- turn 响应仍在 `PlanView` 中表达，`REJECTED` 语义只在 `progression-run` 边界展开；不得把该结果枚举加入 `AiOrchestratorState` 或内部 Plan 状态；
 - 非法或超限 provenance：在 `agent-progression-run/v2` 结果信封中返回 `REJECTED`，分别使用 `PROVENANCE_INVALID` 或 `PROVENANCE_TOO_LARGE`；这同样不新增 Orchestrator 状态；
 - PMS preview/execute 返回失败：保留 PMS operation 状态和错误码；
 - 执行结果未知：进入 `WRITE_RESULT_UNKNOWN`，只允许使用原会话、原 preview 和原幂等键恢复；
