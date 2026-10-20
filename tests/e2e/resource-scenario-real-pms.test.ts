@@ -19,6 +19,7 @@ import {
 import { createProjectFixture, type ProjectFixture, type WritableNodeFixture } from "./support/projectFixture.js";
 import { createTopicFixture } from "./support/topicFixture.js";
 import type { TopicFixture } from "./support/topicFixture.js";
+import { createRequirementFixture } from "./support/requirementFixture.js";
 
 const requested = process.env.PMS_E2E_RESOURCE_SCENARIO === "true";
 const createFixtures = process.env.PMS_E2E_CREATE_RESOURCE_FIXTURES === "true";
@@ -61,7 +62,10 @@ describe.skipIf(!enabled)("PMS resource-scenario isolated E2E", () => {
       const topic = createFixtures
         ? await createTopicFixture(client, config.runId)
         : null;
-      const requirementId = config.requirementId;
+      const requirement = createFixtures
+        ? await createRequirementFixture(client, `${config.runId}-resource`)
+        : null;
+      const requirementId = requirement?.requirementId ?? config.requirementId;
       const topicId = topic?.topicId ?? config.topicId;
       const projectId = project?.projectId ?? config.projectId;
       if (requirementId === null || topicId === null || projectId === null) {
@@ -371,7 +375,7 @@ function assertResourceScenarioConfig(env: NodeJS.ProcessEnv) {
   if (!env.PMS_E2E_DB_URL?.trim()) throw new Error("真实资源场景验收缺少 PMS_E2E_DB_URL");
   const projectId = createFixtures ? null : positiveEnvNumber(env.PMS_E2E_PROJECT_ID, "PMS_E2E_PROJECT_ID");
   const topicId = createFixtures ? null : positiveEnvNumber(env.PMS_E2E_TOPIC_ID, "PMS_E2E_TOPIC_ID");
-  const requirementId = positiveEnvNumber(env.PMS_E2E_REQUIREMENT_ID, "PMS_E2E_REQUIREMENT_ID");
+  const requirementId = createFixtures ? null : positiveEnvNumber(env.PMS_E2E_REQUIREMENT_ID, "PMS_E2E_REQUIREMENT_ID");
   return { ...config, projectId, topicId, requirementId };
 }
 

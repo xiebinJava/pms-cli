@@ -56,6 +56,18 @@ pnpm run verify:real-pms:story-orchestrator
 verification、业务字段回读和相同幂等键重放。运行使用一次性数据库和专用账号，未修改开发环境中的业务库。
 MySQL 查询使用 `scripts/e2e-mysql-client.sh` 在指定容器内执行；未配置隔离 gate、账号或数据库时，显式运行该 E2E 会失败并说明缺失项。
 
+## 四类资源统一验收
+
+`scripts/verify-real-pms-agent-suite.sh` 是需求、专题、项目、故事的统一真实验收入口：资源场景测试覆盖需求/专题/项目，需求 Orchestrator 测试覆盖需求会话，故事 Orchestrator 测试覆盖故事会话。脚本在同一个一次性数据库中自动创建四类夹具，串行执行三个 E2E 文件，不需要人工预置资源 ID。
+
+它要求 `PMS_E2E_WRITE=true`、`PMS_E2E_ISOLATED=true`、`PMS_E2E_DATABASE_CLEANUP_CONFIRMED=true`，并要求目标 URL、数据库白名单、账号、run ID、`PMS_E2E_DB_URL` 等隔离配置齐全。推荐通过 package script 执行：
+
+```bash
+pnpm run verify:real-pms:agent-suite
+```
+
+脚本只负责安全门禁、夹具模式和串行调度；具体的上下文、preview、execute、回读、幂等、冲突、恢复和审计断言仍由各领域 E2E 自己负责。测试结束后应使用对应的 `pms-backend/scripts/stop-ai-e2e.sh` 销毁一次性数据库和服务。
+
 ## 场景级闭环验收
 
 场景级 CLI 将两个自然语言工作台场景固定为可演示步骤：
