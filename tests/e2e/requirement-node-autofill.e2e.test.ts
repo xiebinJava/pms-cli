@@ -96,6 +96,8 @@ function draftForContext(context: any, runId: string) {
   }
   const patch: Record<string, unknown> = {};
   const fieldSources: Record<string, unknown> = {};
+  const nodeId = context.currentNode?.id;
+  if (!nodeId) throw new Error("需求测试上下文缺少当前节点");
   for (const field of contract.fieldContracts ?? []) {
     if (!field.required || !contract.writableFields.includes(field.key)) continue;
     patch[field.key] = Array.isArray(field.options) && field.options.length > 0
@@ -105,13 +107,13 @@ function draftForContext(context: any, runId: string) {
       : field.type === "array" ? [`AI-E2E-${runId}`]
       : `AI-E2E-${runId}`;
     fieldSources[field.key] = {
-      sourceType: "conversation",
-      sourceRefs: [`conversation:${runId}`],
+      sourceType: "pms_context",
+      sourceRefs: [`requirement-node:${nodeId}#component:${component.key}`],
       confidence: "high",
     };
   }
   return {
-    facts: [{ text: "需求节点来自隔离 PMS 上下文", sourceRefs: [`requirement:${runId}`], confidence: "high" as const }],
+    facts: [{ text: "需求节点来自隔离 PMS 上下文", sourceRefs: [`requirement:${context.resource.id}`], confidence: "high" as const }],
     inferences: [],
     assumptions: [],
     unresolvedDecisions: [],
