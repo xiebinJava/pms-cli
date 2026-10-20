@@ -231,7 +231,11 @@ function versionSnapshot(
       : typeof versions?.node === "number"
         ? versions.node
         : typeof saveContract?.version === "number" ? saveContract.version : null,
-    contextVersion: context.meta?.contextVersion ?? context.version ?? null,
+    // PMS preview expectedVersions.contextVersion is bound to the same
+    // writable context version sent in the operation request. The readable
+    // meta.contextVersion is an audit label (for example
+    // "requirement:33:entity:4"), not the optimistic-lock version.
+    contextVersion: context.version ?? null,
   };
 }
 

@@ -54,9 +54,11 @@
   "entityVersion": 3,
   "workflowInstanceVersion": 8,
   "componentVersion": 2,
-  "contextVersion": "requirement:24:entity:3"
+  "contextVersion": 4
 }
 ```
+
+这里的 `contextVersion` 对应 PMS 当前可写上下文的版本（即 `context.version`，通常是当前节点版本），用于和 preview 返回的 `expectedVersions.contextVersion` 做并发校验。`meta.contextVersion` 形如 `requirement:24:entity:3`，是可读的审计标签，不参与这个版本轴的比较。
 
 未知版本必须写 `null`。对象 key 递归按字典序排序；只有 `sourceRefs` 数组排序，其他数组保留顺序；用无空白 UTF-8 JSON 做 SHA-256，并加 `sha256:` 前缀。版本变化、patch 变化或字段来源变化都会使 digest 变化。
 

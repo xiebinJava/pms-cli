@@ -42,7 +42,7 @@ describe("PMS-owned expected version binding", () => {
       nodeVersion: 3,
       workflowInstanceVersion: 9,
       componentVersion: 2,
-      contextVersion: "story:34:v7",
+      contextVersion: 7,
     }, context, 387, "story-node-workbench")).toBeNull();
   });
 
@@ -52,10 +52,22 @@ describe("PMS-owned expected version binding", () => {
       nodeVersion: 3,
       workflowInstanceVersion: 9,
       componentVersion: 2,
-      contextVersion: "story:34:v7",
+      contextVersion: 7,
     }, context, 387, "story-node-workbench")).toEqual({
       code: "CONTEXT_CONFLICT",
       message: "CONTEXT_CONFLICT: preview 的 entityVersion 与当前 PMS 上下文不一致",
     });
+  });
+
+  it("treats meta.contextVersion as an audit label, not the write version", () => {
+    expect(validatePmsExpectedVersions({
+      entityVersion: 4,
+      nodeVersion: 3,
+      workflowInstanceVersion: 9,
+      componentVersion: 2,
+      contextVersion: "story:34:entity:4",
+    }, context, 387, "story-node-workbench")?.message).toBe(
+      "CONTEXT_CONFLICT: preview 的 contextVersion 与当前 PMS 上下文不一致",
+    );
   });
 });

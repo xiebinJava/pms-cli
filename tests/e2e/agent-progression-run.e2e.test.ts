@@ -76,6 +76,7 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
       if (before.version === null || before.currentNode?.id !== nodeId) {
         throw new Error("Agent progression E2E 目标节点没有可用版本或不是当前节点");
       }
+      const selectedComponentKey = componentKeyForContext(before);
       const draft = draftForContext(before, config.runId);
       const provenance = provenanceForContext(before, draft);
       const base = {
@@ -83,6 +84,7 @@ describe.skipIf(!enabled)("PMS Agent progression run isolated E2E", () => {
         resourceType: "requirement" as const,
         resourceId: requirementId,
         nodeId,
+        componentKey: selectedComponentKey,
         contextVersion: before.version,
         intent: "UPDATE_NODE_FIELDS" as const,
         executeMode: "auto" as const,
@@ -163,6 +165,15 @@ function draftForContext(context: WorkflowContext, runId: string) {
   };
 }
 
+function componentKeyForContext(context: WorkflowContext): string {
+  const node = (context.workflow?.nodes ?? []).find((candidate) => isRecord(candidate)
+    && candidate.id === context.currentNode?.id);
+  const component = isRecord(node) && Array.isArray(node.components)
+    ? node.components.find((candidate) => isRecord(candidate) && isRecord(candidate.saveContract))
+    : undefined;
+  return componentKey(component);
+}
+
 function provenanceForContext(
   context: WorkflowContext,
   draft: ReturnType<typeof draftForContext>,
@@ -189,10 +200,7 @@ function provenanceForContext(
       : typeof versions?.node === "number"
         ? versions.node
         : typeof saveContract?.version === "number" ? saveContract.version : null,
-    contextVersion: typeof context.meta?.contextVersion === "string"
-      || typeof context.meta?.contextVersion === "number"
-      ? context.meta.contextVersion
-      : context.version,
+    contextVersion: context.version,
   } as const;
   const digestInput = {
     contractVersion: "draft-provenance/v1" as const,
