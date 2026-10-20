@@ -46,6 +46,51 @@ const plan = {
   errorMessage: null,
 };
 
+const resourceNodePlan = {
+  planId: 31,
+  turnId: 21,
+  intent: "RESOURCE_NODE_FIELD_UPDATE",
+  status: "PLAN_READY",
+  resourceType: "project",
+  resourceId: 42,
+  nodeId: 301,
+  nodeVersion: 6,
+  componentKey: "solution-design",
+  contextVersion: 3,
+  contextSnapshot: {},
+  draft: {
+    contractVersion: "resource-node/v1" as const,
+    draft: {
+      facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+      patch: { evidence: "通过" }, requestedCompletion: false,
+      fieldSources: {
+        evidence: {
+          sourceType: "pms_context",
+          sourceRefs: ["project-node:301#component:solution-design"],
+          confidence: "high",
+        },
+      },
+    },
+  },
+  preview: null,
+  operation: null,
+  verification: null,
+  validationErrors: [],
+  errorCode: null,
+  errorMessage: null,
+  nodeContract: {
+    nodeId: 301,
+    key: "solution-design",
+    label: "方案设计",
+    version: 6,
+    writableFields: ["evidence"],
+    protectedFields: [],
+    writeCapable: true,
+  },
+  missingFields: [],
+  questions: [],
+};
+
 describe("AI orchestrator client contract", () => {
   it("maps the conversation lifecycle to the documented routes and bodies", async () => {
     const requests: Array<{ url: string; method: string; body?: unknown }> = [];
@@ -146,5 +191,42 @@ describe("AI orchestrator client contract", () => {
     expect(error).toBeInstanceOf(PmsClientError);
     expect((error as PmsClientError).kind).toBe("conflict");
     expect(attempts).toBe(1);
+  });
+
+  it("serializes project resource-node turn bindings", async () => {
+    const requests: Array<{ url: string; body?: unknown }> = [];
+    const client = new PmsHttpClient({
+      baseUrl: "https://pms.example.test",
+      auth: new StaticTokenProvider("token"),
+      clientId: "pms-cli",
+      requestIdFactory: () => "resource-request-1",
+      fetchImpl: async (input, init) => {
+        requests.push({ url: String(input), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        return requests.length === 1 ? envelope({
+          conversationId: 12, resourceType: "project", resourceId: 42, status: "ACTIVE", latestPlan: null,
+        }) : envelope(resourceNodePlan);
+      },
+    });
+
+    const conversation = await client.createConversation({ resourceType: "project", resourceId: 42 });
+    const result = await client.appendTurn({
+      conversationId: conversation.conversationId,
+      message: "补充项目节点",
+      contractVersion: "resource-node/v1",
+      draft: resourceNodePlan.draft,
+      nodeId: 301,
+      nodeVersion: 6,
+      componentKey: "solution-design",
+      contextVersion: 3,
+    });
+
+    expect(result.resourceType).toBe("project");
+    expect(requests[1]?.body).toMatchObject({
+      nodeId: 301,
+      nodeVersion: 6,
+      componentKey: "solution-design",
+      contextVersion: 3,
+      contractVersion: "resource-node/v1",
+    });
   });
 });

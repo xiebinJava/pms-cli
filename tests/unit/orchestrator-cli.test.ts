@@ -62,4 +62,52 @@ describe("requirement analysis orchestrator CLI", () => {
     expect(client.confirmPlan).toHaveBeenCalledWith(expect.objectContaining({ planId: 30, idempotencyKey: "idem-1" }));
     expect(harness.stderr).toEqual([]);
   });
+
+  it("creates a project resource orchestrator conversation", async () => {
+    const client = {
+      createConversation: vi.fn(async (request) => ({
+        conversationId: 40, resourceType: request.resourceType, resourceId: request.resourceId,
+        status: "ACTIVE", latestPlan: null,
+      })),
+    } as unknown as PmsClient;
+    const harness = deps(client);
+
+    await runCli(["scenario", "resource-orchestrator", "create", "project", "42"], harness.deps);
+
+    expect(client.createConversation).toHaveBeenCalledWith({ resourceType: "project", resourceId: 42 });
+    expect(JSON.parse(harness.stdout[0] ?? "{}").data.resourceType).toBe("project");
+  });
+
+  it("submits a resource-node turn with node and component bindings", async () => {
+    const client = {
+      appendTurn: vi.fn(async () => ({ planId: 41, turnId: 31, status: "PLAN_READY" })),
+    } as unknown as PmsClient;
+    const harness = deps(client);
+    const draft = {
+      facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+      patch: { evidence: "已完成" }, requestedCompletion: false,
+      fieldSources: {
+        evidence: { sourceType: "pms_context", sourceRefs: ["project-node:301#component:solution-design"], confidence: "high" },
+      },
+    };
+
+    await runCli([
+      "scenario", "resource-orchestrator", "turn", "40",
+      "--message", "请补充项目节点", "--draft-json", JSON.stringify(draft),
+      "--node-id", "301", "--node-version", "6", "--component", "solution-design",
+      "--context-version", "3",
+    ], harness.deps);
+
+    expect(client.appendTurn).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 40,
+      message: "请补充项目节点",
+      contractVersion: "resource-node/v1",
+      nodeId: 301,
+      nodeVersion: 6,
+      componentKey: "solution-design",
+      contextVersion: 3,
+      draft: { contractVersion: "resource-node/v1", draft },
+    }));
+    expect(harness.stderr).toEqual([]);
+  });
 });

@@ -4,6 +4,7 @@ import {
   resourceScenarioContractVersion,
   agentProgressionContractVersion,
   agentProgressionDraftSchema,
+  resourceNodeDraftSchema,
   type AgentProgressionExecuteMode,
   type AgentProgressionIntent,
   type AgentProgressionResourceType,
@@ -65,6 +66,15 @@ import {
   readStoryNodeSession,
 } from "../commands/scenarios/storyOrchestrator.js";
 import {
+  appendResourceOrchestratorTurn,
+  confirmResourceOrchestratorPlan,
+  createResourceOrchestratorConversation,
+  previewResourceOrchestratorPlan,
+  readResourceOrchestratorEvents,
+  readResourceOrchestratorSession,
+  type ResourceOrchestratorResourceType,
+} from "../commands/scenarios/resourceOrchestrator.js";
+import {
   executeStoryWorkbenchScenario,
   planStoryWorkbenchScenario,
   runStoryWorkbenchScenario,
@@ -124,6 +134,9 @@ const HELP = [
   "  pms scenario requirement-analysis plan|execute <id> --node-id <id> --version <version> --draft-json <draft-json> [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms scenario requirement-analysis orchestrate create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario story-orchestrator create|turn|preview|confirm|events|session <id> [options]",
+  "  pms scenario resource-orchestrator create <project|topic> <id>",
+  "  pms scenario resource-orchestrator turn <conversation-id> --message <text> --draft-json <json> --node-id <id> [--node-version <version>] [--component <key>] [--context-version <version>]",
+  "  pms scenario resource-orchestrator preview|confirm|events|session <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock]",
   "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--complete --owner-id <id> --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>] [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
@@ -550,6 +563,55 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
         : readStoryNodeSession(runtime.client, conversationId, afterSequence);
     }
     throw new CliArgumentError("story-orchestrator 需要 create、turn、preview、confirm、events 或 session");
+  }
+  if (invocation.group === "scenario" && invocation.command === "resource-orchestrator") {
+    const action = invocation.positionals[0];
+    if (action === "create") {
+      const resourceType = requireResourceOrchestratorType(invocation.positionals[1]);
+      const resourceId = requireId(invocation.positionals[2]);
+      const runtime = await deps.createRuntime(requestId);
+      return createResourceOrchestratorConversation(runtime.client, resourceType, resourceId);
+    }
+    if (action === "turn") {
+      const conversationId = requireId(invocation.positionals[1]);
+      const nodeId = positiveInteger(requiredOption(invocation.options, "node-id"), "node-id");
+      const message = requiredOption(invocation.options, "message");
+      const draft = parseResourceNodeDraftJson(requiredOption(invocation.options, "draft-json"));
+      const rawNodeVersion = invocation.options["node-version"];
+      const rawContextVersion = invocation.options["context-version"] ?? invocation.options.version;
+      const runtime = await deps.createRuntime(requestId);
+      return appendResourceOrchestratorTurn(runtime.client, {
+        conversationId,
+        message,
+        draft,
+        nodeId,
+        ...(rawNodeVersion === undefined ? {} : { nodeVersion: nonNegativeInteger(rawNodeVersion, "node-version") }),
+        ...(invocation.options.component === undefined ? {} : { componentKey: invocation.options.component }),
+        ...(rawContextVersion === undefined ? {} : { contextVersion: nonNegativeInteger(rawContextVersion, "context-version") }),
+        requestId,
+      });
+    }
+    if (action === "preview") {
+      const planId = requireId(invocation.positionals[1]);
+      const runtime = await deps.createRuntime(requestId);
+      return previewResourceOrchestratorPlan(runtime.client, planId, requestId);
+    }
+    if (action === "confirm") {
+      const planId = requireId(invocation.positionals[1]);
+      const idempotencyKey = requiredOption(invocation.options, "idempotency-key");
+      const runtime = await deps.createRuntime(requestId);
+      return confirmResourceOrchestratorPlan(runtime.client, planId, idempotencyKey, requestId);
+    }
+    if (action === "events" || action === "session") {
+      const conversationId = requireId(invocation.positionals[1]);
+      const afterSequence = invocation.options["after-sequence"] === undefined
+        ? 0 : nonNegativeInteger(invocation.options["after-sequence"], "after-sequence");
+      const runtime = await deps.createRuntime(requestId);
+      return action === "events"
+        ? readResourceOrchestratorEvents(runtime.client, conversationId, afterSequence)
+        : readResourceOrchestratorSession(runtime.client, conversationId, afterSequence);
+    }
+    throw new CliArgumentError("resource-orchestrator 需要 create、turn、preview、confirm、events 或 session");
   }
   if (invocation.group === "scenario" && invocation.command === "story-workbench") {
     const phase = invocation.positionals[0];
@@ -1049,6 +1111,14 @@ function optionalAgentDraft(options: Record<string, string>) {
   }
 }
 
+function parseResourceNodeDraftJson(raw: string) {
+  try {
+    return resourceNodeDraftSchema.parse(JSON.parse(raw));
+  } catch (error) {
+    throw new CliArgumentError(error instanceof Error ? error.message : "--draft-json 不是有效的 resource-node/v1 草稿");
+  }
+}
+
 function draftFromPatch(patch: Record<string, unknown>): AnalysisDraft {
   return {
     facts: [],
@@ -1091,6 +1161,13 @@ function requireId(raw: string | undefined): number {
   const value = Number(raw);
   if (!Number.isSafeInteger(value)) throw new CliArgumentError("ID 超出 JavaScript 安全整数范围");
   return value;
+}
+
+function requireResourceOrchestratorType(raw: string | undefined): ResourceOrchestratorResourceType {
+  if (raw !== "project" && raw !== "topic") {
+    throw new CliArgumentError("resource-orchestrator 仅支持 project 或 topic");
+  }
+  return raw;
 }
 
 function positiveInteger(raw: string, name: string): number {
