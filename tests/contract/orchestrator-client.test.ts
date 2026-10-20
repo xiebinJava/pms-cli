@@ -55,6 +55,9 @@ describe("AI orchestrator client contract", () => {
       envelope({ ...plan, status: "WAITING_CONFIRMATION", preview: {
         operationId: "op-1", command: "requirement.analysis.save", expiresAt: "2026-10-15T12:00:00Z",
         contextVersion: "4", warnings: [], changes: [], refreshScopes: ["requirement-detail"],
+        expectedVersions: { contextVersion: 4, requirementVersion: 7 },
+        provenanceRef: "operation:op-1",
+        draftDigest: "sha256:deadbeef",
         preconditions: [{
           code: "CONTEXT_CURRENT",
           message: "上下文仍然有效",
@@ -65,6 +68,7 @@ describe("AI orchestrator client contract", () => {
       } }),
       envelope({ ...plan, status: "SUCCEEDED", operation: {
         operationId: "op-1", status: "SUCCEEDED", message: "已保存", data: {}, refreshScopes: [], auditId: "audit-1",
+        warnings: [],
       }, verification: {
         resourceReadback: true, contextReadback: true, protectedFieldsUnchanged: true,
         patchApplied: true, status: "SUCCEEDED", message: "写入并回读验证成功",
@@ -101,6 +105,9 @@ describe("AI orchestrator client contract", () => {
     expect(created.conversationId).toBe(10);
     expect(prepared.turnId).toBe(20);
     expect(previewed.preview?.operationId).toBe("op-1");
+    expect(previewed.preview?.expectedVersions).toEqual({ contextVersion: 4, requirementVersion: 7 });
+    expect(previewed.preview?.provenanceRef).toBe("operation:op-1");
+    expect(previewed.preview?.draftDigest).toBe("sha256:deadbeef");
     expect(previewed.preview?.preconditions[0]?.code).toBe("CONTEXT_CURRENT");
     expect(confirmed.verification?.status).toBe("SUCCEEDED");
     expect(confirmed.operation?.auditId).toBe("audit-1");
