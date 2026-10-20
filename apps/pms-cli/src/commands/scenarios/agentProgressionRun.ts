@@ -218,6 +218,7 @@ function baseResult(
       resourceType: input.resourceType,
       context: result?.readback?.context ?? plan?.context,
       resourceDetails: result?.readback?.resource?.details,
+      fieldChanges: plan?.fieldChanges,
       operationStatus: result?.status ?? status,
       actualChange: actualChangeFor(status),
       blockers: overrides.warnings,

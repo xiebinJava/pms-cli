@@ -109,6 +109,7 @@ export async function planAgentProgression(
         userFacing: buildUserFacingDisplay({
           resourceType: parsed.resourceType,
           context: preflightContext,
+          fieldChanges: [],
           operationStatus: "REJECTED",
           actualChange: "来源审计校验未通过，尚未生成写入预览",
           blockers: [provenanceIssue.message],
@@ -152,6 +153,7 @@ export async function planAgentProgression(
       userFacing: buildUserFacingDisplay({
         resourceType: parsed.resourceType,
         context: preflightContext,
+        fieldChanges: draftPlan.fieldChanges,
         operationStatus: draftPlan.writeDecision,
         actualChange: "缺少必填信息，尚未生成写入预览",
         blockers: progressionWarnings(draftPlan),
@@ -183,6 +185,7 @@ export async function planAgentProgression(
       userFacing: buildUserFacingDisplay({
         resourceType: parsed.resourceType,
         context: preflightContext,
+        fieldChanges: draftPlan?.fieldChanges,
         operationStatus: "CAPABILITY_UNAVAILABLE",
         actualChange: "PMS 未提供来源审计能力，尚未生成写入预览",
         blockers: ["PROVENANCE_NOT_SUPPORTED: PMS 未声明 draft-provenance/v1"],
@@ -213,6 +216,7 @@ export async function planAgentProgression(
       userFacing: buildUserFacingDisplay({
         resourceType: parsed.resourceType,
         context: preflightContext,
+        fieldChanges: draftPlan?.fieldChanges,
         operationStatus: "NEEDS_INPUT",
         actualChange: "缺少来源审计信息，尚未生成写入预览",
         blockers: ["PROVENANCE_NOT_PROVIDED: 请补充字段来源和 draftDigest"],
@@ -266,6 +270,7 @@ export async function planAgentProgression(
     userFacing: buildUserFacingDisplay({
       resourceType: parsed.resourceType,
       context: resourcePlan.context?.snapshot,
+      fieldChanges: draftPlan?.fieldChanges,
       operationStatus: "PREVIEWED",
       actualChange: "已生成待执行预览",
       blockers: [...resourcePlan.warnings, ...(blockedByPrecondition ? ["PMS preview 返回阻塞前置条件"] : [])],

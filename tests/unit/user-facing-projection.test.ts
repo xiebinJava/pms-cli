@@ -20,8 +20,10 @@ describe("user-facing resource display", () => {
       resourceName: "PMS 项目管理系统",
       resourceStatus: "ACTIVE",
       currentNode: "交付中",
+      targetNode: "交付中",
       operationStatus: "SUCCEEDED",
       actualChange: "写入已完成并通过回读验证",
+      fieldChanges: [],
       blockers: [],
     });
     expect(JSON.stringify(display)).not.toContain("7");
@@ -69,5 +71,28 @@ describe("user-facing resource display", () => {
 
     expect(display.resourceName).toBe("名称未返回");
     expect(JSON.stringify(display)).not.toContain("19");
+  });
+
+  it("projects the target node and named field changes without exposing identifier values", () => {
+    const display = buildUserFacingDisplay({
+      resourceType: "story",
+      context: {
+        resource: { type: "story", id: 34 },
+        resourceDetails: { title: "项目管理标准", status: "IN_PROGRESS" },
+        currentNode: { id: 387, key: "testing", label: "测试中" },
+      },
+      fieldChanges: [
+        { key: "ownerId", label: "负责人", from: 11, to: 12 },
+        { key: "testResult", label: "测试结果", from: "未测试", to: "通过" },
+      ],
+    });
+
+    expect(display.targetNode).toBe("测试中");
+    expect(display.fieldChanges).toEqual([
+      { field: "负责人", from: "已设置", to: "已设置" },
+      { field: "测试结果", from: "未测试", to: "通过" },
+    ]);
+    expect(JSON.stringify(display)).not.toContain("11");
+    expect(JSON.stringify(display)).not.toContain("12");
   });
 });

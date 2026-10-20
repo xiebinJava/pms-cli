@@ -1,7 +1,16 @@
 import type {
   UserFacingDisplay,
+  UserFacingFieldChange,
   UserFacingResourceType,
 } from "../../../../packages/pms-contracts/src/index.js";
+
+export interface UserFacingFieldChangeInput {
+  key?: unknown;
+  field?: unknown;
+  label?: unknown;
+  from?: unknown;
+  to?: unknown;
+}
 
 export interface UserFacingDisplayInput {
   resourceType: UserFacingResourceType;
@@ -9,6 +18,8 @@ export interface UserFacingDisplayInput {
   resourceDetails?: unknown;
   operationStatus?: string | null;
   actualChange?: string | null;
+  targetNode?: unknown;
+  fieldChanges?: readonly UserFacingFieldChangeInput[];
   blockers?: string[];
 }
 
@@ -28,6 +39,7 @@ export function buildUserFacingDisplay(input: UserFacingDisplayInput): UserFacin
     ?? asRecord(asRecord(context?.snapshot)?.currentNode);
   const meta = asRecord(context?.meta)
     ?? asRecord(asRecord(context?.snapshot)?.meta);
+  const currentNodeLabel = firstString(currentNode, ["label", "name", "title"]);
   const blockers = input.blockers
     ?? warningMessages(meta)
     ?? warningMessages(context)
@@ -37,11 +49,51 @@ export function buildUserFacingDisplay(input: UserFacingDisplayInput): UserFacin
     resourceType: input.resourceType,
     resourceName: resourceName(input.resourceType, details),
     resourceStatus: resourceStatus(details, meta),
-    currentNode: firstString(currentNode, ["label", "name", "title"]),
+    currentNode: currentNodeLabel,
+    targetNode: displayNode(input.targetNode)
+      ?? displayNode(context?.targetNode)
+      ?? currentNodeLabel,
     operationStatus: input.operationStatus ?? null,
     actualChange: input.actualChange ?? null,
+    fieldChanges: normalizeFieldChanges(input.fieldChanges),
     blockers: blockers.map(safeBlocker).filter((value): value is string => value !== null),
   };
+}
+
+export function normalizeFieldChanges(
+  changes: readonly UserFacingFieldChangeInput[] | undefined,
+): UserFacingFieldChange[] {
+  if (!changes) return [];
+  return changes.flatMap((change) => {
+    const record = asRecord(change);
+    if (!record) return [];
+    const field = firstString(record, ["label", "field", "key"]);
+    if (!field) return [];
+    const key = firstString(record, ["key", "field", "label"]) ?? field;
+    return [{
+      field,
+      from: displayFieldValue(record.from, key),
+      to: displayFieldValue(record.to, key),
+    }];
+  });
+}
+
+function displayNode(value: unknown): string | null {
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  const record = asRecord(value);
+  return firstString(record, ["label", "name", "title"]);
+}
+
+function displayFieldValue(value: unknown, key: string): string | null {
+  if (value === null || value === undefined) return null;
+  if (/(^|_)(id|ids)$|id$/i.test(key)) return "已设置";
+  if (typeof value === "string") return value.trim() || null;
+  if (typeof value === "number" || typeof value === "bigint") return String(value);
+  if (typeof value === "boolean") return value ? "是" : "否";
+  const record = asRecord(value);
+  if (record) return firstString(record, ["name", "title", "label", "displayName"]) ?? "已更新";
+  if (Array.isArray(value)) return value.length === 0 ? "空" : "已更新";
+  return "已更新";
 }
 
 function resourceStatus(
