@@ -148,6 +148,7 @@ describe("PMS HTTP client", () => {
           command: "project.update",
           expiresAt: "2099-01-01T00:00:00Z",
           contextVersion: "v1",
+          expectedVersions: { contextVersion: "v1", entityVersion: 4 },
           warnings: [],
           changes: [],
           refreshScopes: [],
@@ -172,6 +173,7 @@ describe("PMS HTTP client", () => {
     expect(preview).toMatchObject({
       provenanceRef: "operation:preview-1",
       draftDigest: provenance.draftDigest,
+      expectedVersions: { contextVersion: "v1", entityVersion: 4 },
     });
   });
 

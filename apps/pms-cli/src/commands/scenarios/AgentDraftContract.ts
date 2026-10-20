@@ -74,6 +74,39 @@ export type ProgressionProvenanceIssue = {
   message: string;
 };
 
+export type ExpectedVersionsIssue = {
+  code: "CONTEXT_CONFLICT";
+  message: string;
+};
+
+/**
+ * Compares the PMS-owned preview snapshot with the context used to build the
+ * draft. An empty snapshot is accepted for older PMS servers; once PMS
+ * advertises expectedVersions, an unknown local value is a conflict rather
+ * than an implicit match.
+ */
+export function validatePmsExpectedVersions(
+  expectedVersions: Record<string, unknown> | undefined,
+  context: WorkflowContext | null,
+  nodeId?: number,
+  componentKey?: string,
+): ExpectedVersionsIssue | null {
+  if (!expectedVersions || Object.keys(expectedVersions).length === 0 || !context) return null;
+  const local = versionSnapshot(context, nodeId, componentKey);
+  for (const key of ["entityVersion", "nodeVersion", "workflowInstanceVersion", "componentVersion", "contextVersion"] as const) {
+    const expected = expectedVersions[key];
+    if (expected === undefined || expected === null) continue;
+    const actual = local[key];
+    if (actual === null || actual === undefined || String(actual) !== String(expected)) {
+      return {
+        code: "CONTEXT_CONFLICT",
+        message: `CONTEXT_CONFLICT: preview 的 ${key} 与当前 PMS 上下文不一致`,
+      };
+    }
+  }
+  return null;
+}
+
 /**
  * Checks that provenance points at the context that was actually read for this
  * progression and that its digest is bound to the same draft/version snapshot.

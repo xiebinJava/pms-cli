@@ -11,8 +11,10 @@ import {
   type ResourceScenarioPlan,
   type ResourceScenarioResult,
   type ResourceScenarioSnapshot,
+  type WorkflowContext,
 } from "../../../../../packages/pms-contracts/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
+import { validatePmsExpectedVersions } from "./AgentDraftContract.js";
 import { operationExecutePreview, operationPreview } from "../core/operation.js";
 import { buildUserFacingDisplay } from "../../output/userFacing.js";
 import {
@@ -54,6 +56,17 @@ export async function planResourceScenario(
       "CAPABILITY_UNAVAILABLE",
       "PMS preview 未返回与本次 draft 匹配的 provenanceRef/draftDigest",
     );
+  }
+  if (parsed.provenance) {
+    const versionIssue = validatePmsExpectedVersions(
+      preview.expectedVersions,
+      (context?.snapshot as WorkflowContext | undefined) ?? (context as unknown as WorkflowContext | null),
+      parsed.nodeId,
+      parsed.componentKey,
+    );
+    if (versionIssue) {
+      throw new ResourceScenarioError("CONTEXT_CONFLICT", versionIssue.message);
+    }
   }
   return {
     scenario: "resource-scenario",

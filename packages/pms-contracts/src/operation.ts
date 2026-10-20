@@ -83,6 +83,8 @@ export const operationPreviewSchema = z.object({
   command: z.string().trim().min(1),
   expiresAt: z.string().trim().min(1),
   contextVersion: z.string().trim().min(1),
+  /** Version snapshot generated and validated by PMS during preview. */
+  expectedVersions: z.record(z.string(), z.unknown()).optional(),
   warnings: z.array(z.string()).default([]),
   changes: z.array(z.record(z.string(), z.unknown())).default([]),
   refreshScopes: z.array(z.string()).default([]),
