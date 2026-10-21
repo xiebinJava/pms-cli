@@ -18,8 +18,8 @@
 - Task 1 已完成：隔离 run `codex20261021matrix4` 通过需求、故事、项目、专题和资源场景矩阵，且已清理数据库卷和网络。
 - Task 2 已完成：connector `327e265`，skill/runbook 和外部 Agent 边界契约已落地。
 - Task 3 已完成：connector `f341061`、`b82f383`，项目隔离 run `codex20261021resume2` 验证 `resume` 的只读恢复动作。
-- Task 4 的文档同步已完成：backend `d16b411`，connector `6f7e731`、`79c3351`、`4bc1588`、`0a542db`。provenance fixture 同步门禁通过；完整 Maven 测试仍需 Docker 可用环境，当前不能宣称全量通过。
-- 当前未完成项是发布前环境门禁：roadmap Task 3.2 的 story 专属测试已完成；完整 Maven 仍需在 Docker 可用环境执行，门禁关闭前不应合并默认发布分支。
+- Task 4 的代码、文档和发布门禁已完成：backend `d16b411`、`198a7dd`，connector `6f7e731`、`79c3351`、`4bc1588`、`0a542db`、`6c1bb89`。provenance fixture 同步门禁通过；完整 Maven 测试已在 Colima Docker 环境通过。
+- 当前发布基线已闭环：roadmap Task 3.2 的 story 专属测试、四资源隔离 E2E、只读 resume 恢复、Connector 回归和 backend 全量回归均已完成。未执行推送或合并，等待发布操作决策。
 
 ## Global Constraints
 
@@ -167,14 +167,14 @@
 
 **Interfaces:** Documentation must match the implementation from Tasks 0–3: four resource types, `resource-node/v1`, `agent-progression/v2`, `nodeVersion/contextVersion` separation, provenance, state/event distinction, auto/confirm rules, `resume` and E2E commands.
 
-- [ ] **Step 1: Update the release checklist.** Add the exact backend, Connector, contract, build, E2E, fixture-sync and `git diff --check` commands. State that project/topic capability is a merge/release gate, not a runtime flag.
-- [ ] **Step 2: Update the runbook and skill references.** Remove stale commands and examples; ensure all write examples use current v2 flags and name-first reporting.
-- [ ] **Step 3: Record the acceptance report.** Include commit hashes, test counts, E2E run IDs, resource types covered, cleanup evidence, known limitations and any intentionally skipped capability.
-- [ ] **Step 4: Run the final gate.**
+- [x] **Step 1: Update the release checklist.** Add the exact backend, Connector, contract, build, E2E, fixture-sync and `git diff --check` commands. State that project/topic capability is a merge/release gate, not a runtime flag.
+- [x] **Step 2: Update the runbook and skill references.** Remove stale commands and examples; ensure all write examples use current v2 flags and name-first reporting.
+- [x] **Step 3: Record the acceptance report.** Include commit hashes, test counts, E2E run IDs, resource types covered, cleanup evidence, known limitations and any intentionally skipped capability.
+- [x] **Step 4: Run the final gate.**
 
   ```bash
   mvn -q -DskipTests package
-  mvn -q test
+  DOCKER_HOST=unix:///Users/fs/.colima/fsclaw/docker.sock TESTCONTAINERS_RYUK_DISABLED=true mvn -q test
   pnpm test
   pnpm typecheck
   pnpm run build:cli
@@ -182,10 +182,10 @@
   git diff --check
   ```
 
-  Expected: all commands exit 0; the isolated suite creates and removes its own database; no credentials appear in output or staged files.
-- [ ] **Step 5: Final review.** Compare the acceptance report to every Review Focus item and mark the roadmap only after the real suite passes.
-- [ ] **Step 6: Commit docs independently.** Backend: `docs(orchestrator): sync four resource release contract`; Connector: `docs(release): record four resource acceptance`.
-- [ ] **Step 7: Stop and hand off.** Do not push or merge automatically. Provide the two commit hashes and ask whether to push the reviewed commits.
+  Expected: all commands exit 0; the isolated suite creates and removes its own database; no credentials appear in output or staged files. On the current Colima profile, the Docker socket and `TESTCONTAINERS_RYUK_DISABLED=true` variables above are required.
+- [x] **Step 5: Final review.** Compare the acceptance report to every Review Focus item and mark the roadmap only after the real suite passes.
+- [x] **Step 6: Commit docs independently.** Backend: `docs(orchestrator): sync four resource release contract`; Connector: `docs(release): record four resource acceptance`.
+- [x] **Step 7: Stop and hand off.** Do not push or merge automatically. Provide the two commit hashes and ask whether to push the reviewed commits.
 
 ## Dependency Order
 

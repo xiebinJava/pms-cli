@@ -12,11 +12,11 @@
 
 ## 实施状态（2026-10-21）
 
-- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；四资源 Orchestrator 代码、恢复投影、故事专属安全测试和真实隔离 E2E 已完成。发布仍受最终回归门禁约束。
+- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；四资源 Orchestrator 代码、恢复投影、故事专属安全测试、真实隔离 E2E 和最终回归门禁均已完成。
 - Task 3.1 的 `expectedVersions` 已由 PMS preview 生成并回传，CLI 会在带 provenance 的写入计划阶段校验版本冲突；旧的 `expected_versions_json` 仍保留变更列表格式，供既有命令执行守卫兼容读取。
 - Task 3.2 的 `userFacing.targetNode` 和 `userFacing.fieldChanges` 已落地，字段摘要会名称化并遮蔽内部 ID。
 - Milestone 4 的四资源真实隔离 PMS E2E 已在 `codex20261021matrix4` 运行通过；项目 `resume` 恢复闭环在 `codex20261021resume2` 运行通过。两次运行均使用容器内 MySQL 客户端，结束后销毁隔离数据库卷和网络。
-- Milestone 5（扩展现有 Orchestrator 到四类资源）已完成代码、静态验证和最小恢复闭环；发布前仍需保留隔离 E2E、契约和构建门禁。
+- Milestone 5（扩展现有 Orchestrator 到四类资源）已完成代码、静态验证、最小恢复闭环和发布门禁；backend 全量 Maven 在 Colima Docker 环境通过 1,309 个测试，0 失败、0 错误、5 个跳过。
 
 ## Global Constraints
 
@@ -426,7 +426,7 @@
 ## 最终验收清单
 
 - [x] `run` 默认 plan，业务状态和系统错误边界稳定。
-- [x] 四类资源的代码路径校验当前节点、能力、preview 版本、幂等和字段回读；真实隔离 E2E 仍待运行。
+- [x] 四类资源的代码路径校验当前节点、能力、preview 版本、幂等和字段回读；真实隔离 E2E 已在 `codex20261021matrix4` 运行通过。
 - [x] 未决决策、低置信高风险推断和缺少来源不会被 confirm 直接写入。
 - [x] `REJECTED` 的 `writeDecision`、`plan.preview` 和 `rejectionReason` 映射在契约测试中固定。
 - [x] `auditId` 只按 operationId 别名/opaque 关联标识描述，不存在独立审计实体假设。
@@ -439,5 +439,5 @@
 - [x] 旧写入口兼容但不再是 Agent 节点写入标准入口。
 - [x] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（`codex20261021matrix4`；项目恢复投影另由 `codex20261021resume2` 验证）。
 - [x] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
-- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展和只读恢复投影已完成，真实隔离 E2E 仍是发布门禁。
-- [x] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 story 专属项已完成；完整 Maven 门禁仍按发布环境单独执行）。
+- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展、只读恢复投影和真实隔离 E2E 已完成。
+- [x] 每个任务都经过聚焦测试、review 和回归测试；完整 Maven 门禁已在 Colima Docker 环境执行通过。

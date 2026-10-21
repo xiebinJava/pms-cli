@@ -7,8 +7,8 @@
 四类资源已经复用现有 `ai-orchestrator-v1` 的 Conversation、Plan、Preview、
 Operation、Verification 和事件序列。需求、故事、项目、专题的真实隔离链路均已
 通过；项目会话额外验证了 CLI 的只读 `resume` 投影。故事专属的缺来源、未决决策、
-低置信高风险推断、完成请求拒绝和预览冲突测试也已补齐。当前可以进入发布候选回归，
-但仍须通过完整发布门禁后再合并默认发布分支。
+低置信高风险推断、完成请求拒绝和预览冲突测试也已补齐。完整 Connector 和 backend
+回归门禁均已通过，当前达到发布候选基线。
 
 ## 代码与文档范围
 
@@ -21,6 +21,8 @@ Operation、Verification 和事件序列。需求、故事、项目、专题的�
 | connector | `327e265` | 四资源自然语言模板、外部模型与 CLI 边界 |
 | connector | `f341061` | 增加只读 `resource-orchestrator resume` 和 cursor 会话契约 |
 | connector | `b82f383` | 在真实 project E2E 中覆盖恢复投影，避免额外写入 |
+| connector | `6c1bb89` | 补齐 story 专属安全归一化、名称化输出和契约测试 |
+| backend | `198a7dd` | 对齐 HealthController 测试夹具与最新 V73 迁移 |
 
 模型仍由 Claude、Codex、DeepSeek 等外部 Agent 持有；CLI 只传输结构化 Draft、
 调用 PMS 契约并呈现结果。CLI 和 backend 均不保存模型 URL、API Key 或完整聊天
@@ -65,16 +67,18 @@ pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n
 成功或取消返回 `NO_ACTION`。动作建议不替代 PMS 状态机、preview 前置条件或权限
 校验，也不单独授权写入。
 
-## 发布前剩余门禁
+## 发布门禁结果
 
-1. backend 编译、完整 Maven 测试和 Orchestrator 回归测试。
-2. connector `pnpm test`、`pnpm typecheck`、`pnpm run build:cli`、`git diff --check`。
-3. 跨仓库 provenance golden vector 字节同步检查。
-4. 完整 Maven 测试需要在 Docker 可用的 CI 或开发环境中重新执行；本机当前只完成
-   package 和 Orchestrator 定向测试。
+1. backend `mvn -q -DskipTests package` 通过；三个 Orchestrator 定向测试通过。
+2. backend 在 Colima Docker 环境执行
+   `DOCKER_HOST=unix:///Users/fs/.colima/fsclaw/docker.sock TESTCONTAINERS_RYUK_DISABLED=true mvn -q test`，
+   共 1,309 个测试，0 失败、0 错误、5 个跳过。
+3. connector `pnpm test` 通过（79 个文件，406 个通过、15 个跳过），并通过
+   `pnpm typecheck`、`pnpm run build:cli` 和 `git diff --check`。
+4. 跨仓库 provenance golden vector 字节同步检查通过，SHA 为
+   `9bb35388f55cc98138b9dd9ca917731b21373d5ab8e681d8bca0ea9472c0facb`。
 
-本轮门禁实测结果：backend `mvn -q -DskipTests package` 通过，三个
-Orchestrator 定向测试通过；完整 `mvn -q test` 启动到 Spring 集成测试时因本机
-Testcontainers 找不到 Docker socket 而终止（1,267 个测试中 1 个失败、66 个错误，
-均由该环境根因引起）。这不是代码通过声明；需要在 Docker 可用的 CI 或开发环境中
-重新执行完整 Maven 门禁后才能关闭发布阻塞项。
+第一次 Maven 全量尝试暴露了 Colima socket/Ryuk 环境差异；按仓库文档关闭 Ryuk
+后重新执行通过。健康检查测试中的旧迁移版本 71 夹具已更新为当前 V73，并由 backend
+提交 `198a7dd` 固化。上述命令是当前本机 Colima 的复现基线；CI 应替换为自身 Docker
+socket，并保留与其运行器相匹配的 Testcontainers/Ryuk 配置。

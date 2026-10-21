@@ -103,3 +103,14 @@ pnpm run verify:real-pms:agent-suite
 - `resume` 的用户可见命令是：
   `pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n>]`。
   它只读会话和事件，不生成 turn、preview、execute 或新的幂等键。
+
+## 9. 最终回归结果（2026-10-21）
+
+- backend package 和 Orchestrator 定向测试通过。
+- backend 全量测试使用当前 Colima profile 的 Docker socket 和 Ryuk 设置：
+  `DOCKER_HOST=unix:///Users/fs/.colima/fsclaw/docker.sock TESTCONTAINERS_RYUK_DISABLED=true mvn -q test`；
+  结果为 1,309 个测试、0 失败、0 错误、5 个跳过。
+- connector 全量测试结果为 79 个文件、406 个通过、15 个跳过；typecheck、CLI build、
+  provenance fixture 同步和 `git diff --check` 均通过。
+- 故事专属安全测试已由 connector 提交 `6c1bb89` 固化；backend 健康测试夹具由
+  `198a7dd` 对齐到 V73。未执行推送或合并，发布操作仍需明确的仓库流程决定。
