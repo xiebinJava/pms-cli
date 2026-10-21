@@ -94,6 +94,47 @@ export PMS_E2E_CREATE_STORY_FIXTURE=false  # 创建夹具时改为 true
 pnpm run verify:real-pms:node-autofill
 ```
 
+## Claude/Codex/DeepSeek 自然语言调用约定
+
+自然语言由外部 Agent（Claude、Codex 或 DeepSeek）理解，模型在对话侧生成
+`agent-progression/v2` 或 `resource-node/v1` 草稿；`pms-cli` 只读取 PMS 能力和上下文，
+调用预览/执行，并回读验证。模型 endpoint、API Key 和 PMS Token 都不配置在 CLI 中。
+
+四类资源都使用同一个顺序：
+
+```text
+名称精确解析 → capabilities/context → 外部模型草稿 → 字段来源校验
+→ progression plan/auto/confirm → focused readback → 名称优先汇报
+```
+
+外部 Agent 可以把下面的用户话术映射到对应的 CLI 入口：
+
+| 用户话术 | Agent 行为 | 写入边界 |
+| --- | --- | --- |
+| “分析需求《<名称>》当前状态和阻塞，只读” | `resolve` 后执行 `context --format agent` 和 `get` | 只读，不生成幂等键 |
+| “补齐专题《<名称>》当前节点并推进” | focused context → 草稿 → `progression run` | 仅使用当前 `saveContract` 字段；缺少不可推断信息返回 `NEEDS_INPUT` |
+| “故事《<名称>》测试通过，推进验收中” | 读取测试字段、来源和完成前置条件后生成 `requestedCompletion` 草稿 | 测试结果、构建版本、报告地址和遗留问题必须有 `fieldSources` |
+| “更新项目《<名称>》当前节点详情” | focused context → 取 `nodeContract.version` → 节点字段更新 | `context.version` 只作快照标签；`project-basic-info` 走 `project.update` |
+
+低/中风险且用户已经明确表达写入意图时，Agent 可使用 `--execute-mode auto`；业务评审、
+验收、删除、归档、批量或成员权限变更使用 `plan` 后等待确认，再以同一草稿和幂等键
+执行 `confirm`。一次自然语言请求只生成一个幂等键，版本冲突或回读异常时复用该键，
+不要自动创建第二个写入意图。
+
+### 对话恢复和错误下一步
+
+- `NEEDS_INPUT`：只返回后端声明的 `missingFields` 和最小问题；用户补充后由 Agent
+  发起新一轮，不猜测字段或默认值。
+- `WRITE_RESULT_UNKNOWN`：停止写入，先读取原操作、会话事件和 focused context，确认是否
+  已生效后再决定下一步；不要盲目重试。
+- 版本冲突：重新读取 `capabilities/context`，使用新的节点/实体版本重新生成草稿；原幂等键
+  只用于确认同一业务请求，不能把旧版本强行写回。
+- `CAPABILITY_UNAVAILABLE` 或多个可写组件未指定组件：报告缺少的能力/组件选择，不猜测
+  `nodeId`、`componentKey` 或字段 key。
+
+自然语言回复优先展示资源名称、节点名称、状态、实际变更和阻塞；内部 ID 只保留在机器
+可读 JSON，除非用户明确要求技术排查信息。
+
 资源场景的 project/topic 更新 E2E 支持同样的隔离夹具模式：设置
 `PMS_E2E_RESOURCE_SCENARIO=true`、`PMS_E2E_CREATE_RESOURCE_FIXTURES=true`，
 测试会用 `project.create` 和 `topic.create` 在本轮数据库内创建资源；此模式下不需要

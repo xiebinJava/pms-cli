@@ -46,5 +46,13 @@ describe("requirement analysis Skill contract", () => {
     expect(skill).toContain("PROVENANCE_NOT_AUDITED");
     expect(skill).toContain("只作为兼容入口");
     expect(skill).toContain("不要用旧入口承载 Agent 节点写入");
+    expect(skill).toContain("自然语言到 CLI 的四类资源模板");
+    expect(skill).toContain("需求：读取当前节点并分析");
+    expect(skill).toContain("专题：补齐当前节点字段并推进");
+    expect(skill).toContain("故事：完成测试节点并推进验收");
+    expect(skill).toContain("项目：读取 focused context 后更新节点详情");
+    expect(skill).toContain("`WRITE_RESULT_UNKNOWN` 时只读恢复");
+    expect(skill).toContain("`NEEDS_INPUT` → `PROVIDE_INPUT`");
+    expect(skill).toContain("模型生成草稿，CLI 执行 PMS 契约");
   });
 });

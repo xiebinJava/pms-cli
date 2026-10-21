@@ -108,6 +108,17 @@ turn 前仍须读取当前 focused context。`nodeVersion` 只能取 `nodeContra
 
 用户只表达“分析、补齐并推进”时，先补齐当前节点 `saveContract` 声明的字段，再根据风险选择 `auto` 或 `confirm`；不要把节点状态改成功后再另起一次请求补字段。缺失信息不能安全推断时，返回缺失字段和需要用户补充的最小问题，不要猜测或写入默认值。
 
+### 自然语言到 CLI 的四类资源模板
+
+下面的模板描述的是外部 Agent 如何把自然语言翻译成 CLI 调用，具体节点、组件、字段和版本必须由本轮 `capabilities/context` 返回值决定：
+
+- **需求：读取当前节点并分析**：先解析需求名称，读取 `context --format agent` 和 `get`；只读请求输出事实、推断、假设、阻塞和下一步，除非用户明确要求保存，否则不要调用写入命令。
+- **专题：补齐当前节点字段并推进**：读取 focused context，使用当前 `saveContract` 生成带 `fieldSources` 的草稿，缺少不可推断字段时返回 `NEEDS_INPUT`，信息齐全且用户已明确写入时调用 `progression run --execute-mode auto` 或 `confirm`。
+- **故事：完成测试节点并推进验收**：先读取节点必填字段和完成前置条件；测试结论、构建版本、报告地址和遗留问题都必须有来源，使用 `requestedCompletion` 表达是否真的请求完成，完成后回读节点详情和状态。
+- **项目：读取 focused context 后更新节点详情**：项目节点版本只取 `nodeContract.version`，实体 `context.version` 只作快照标签；恰好一个可写组件时可省略组件，多个组件必须明确指定，`project-basic-info` 走 `project.update`。
+
+四类模板都遵守同一条边界：模型生成草稿，CLI 执行 PMS 契约。`NEEDS_INPUT` → `PROVIDE_INPUT`，补充信息后由外部 Agent 发起新一轮；`WRITE_RESULT_UNKNOWN` 时只读恢复，先读取会话、操作和 focused context 再决定核验，不盲目重试写入。自然语言结果先使用资源名称和节点名称，内部 ID 只保留在机器可读字段。
+
 ### Claude/Codex 单轮执行规则
 
 - 用户明确要求写入时，不重复询问 AUTO_CONFIRM 节点；直接使用当前上下文生成草稿，并调用 `progression run --execute-mode auto`。这不等于绕过 PMS 校验，服务端仍会检查权限、字段、版本、前置条件、幂等和审计。
