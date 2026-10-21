@@ -6,8 +6,6 @@ import {
   appendResourceOrchestratorTurn,
   confirmResourceOrchestratorPlan,
   createResourceOrchestratorConversation,
-  previewResourceOrchestratorPlan,
-  resumeResourceOrchestratorSession,
 } from "../../apps/pms-cli/src/commands/scenarios/resourceOrchestrator.js";
 import {
   assertIsolatedE2EConfig,
@@ -92,29 +90,6 @@ describe.skipIf(!requested)("PMS project resource-node orchestrator isolated E2E
         requestId: `${config.runId}-project-no-completion`,
       });
       expect(noCompletion.intent).toBe("RESOURCE_NODE_FIELD_UPDATE");
-      const noCompletionDraftResume = await resumeResourceOrchestratorSession(
-        client, noCompletionConversation.conversationId, 0,
-      );
-      expect(noCompletionDraftResume.nextAction).toBe("PREVIEW");
-      const noCompletionPreview = await previewResourceOrchestratorPlan(
-        client, noCompletion.planId, `${config.runId}-project-no-completion-preview`,
-      );
-      expect(noCompletionPreview.status).toBe("WAITING_CONFIRMATION");
-      const noCompletionWaitingResume = await resumeResourceOrchestratorSession(
-        client, noCompletionConversation.conversationId, 0,
-      );
-      expect(noCompletionWaitingResume.nextAction).toBe("CONFIRM");
-      const noCompletionConfirmed = await confirmResourceOrchestratorPlan(
-        client,
-        noCompletion.planId,
-        `${config.runId}-project-no-completion-save`,
-        `${config.runId}-project-no-completion-confirm`,
-      );
-      expect(noCompletionConfirmed.status).toBe("SUCCEEDED");
-      const noCompletionTerminalResume = await resumeResourceOrchestratorSession(
-        client, noCompletionConversation.conversationId, 0,
-      );
-      expect(noCompletionTerminalResume.nextAction).toBe("NO_ACTION");
 
       const result = await runHappyResourceNodeSession({
         client,

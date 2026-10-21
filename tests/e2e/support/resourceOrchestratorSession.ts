@@ -6,6 +6,7 @@ import {
   createResourceOrchestratorConversation,
   previewResourceOrchestratorPlan,
   readResourceOrchestratorSession,
+  resumeResourceOrchestratorSession,
 } from "../../../apps/pms-cli/src/commands/scenarios/resourceOrchestrator.js";
 import type { WritableNodeFixture } from "./projectFixture.js";
 
@@ -121,12 +122,30 @@ export async function runHappyResourceNodeSession(input: {
     contextVersion: input.node.contextVersion,
     requestId: `${input.runId}-turn`,
   });
+  const preparedResume = await resumeResourceOrchestratorSession(
+    input.client, conversation.conversationId, 0,
+  );
+  if (preparedResume.nextAction !== "PREVIEW") {
+    throw new Error(`预览前恢复动作不正确: ${preparedResume.nextAction}`);
+  }
   const preview = await previewResourceOrchestratorPlan(
     input.client, prepared.planId, `${input.runId}-preview`,
   );
+  const previewResume = await resumeResourceOrchestratorSession(
+    input.client, conversation.conversationId, 0,
+  );
+  if (previewResume.nextAction !== "CONFIRM") {
+    throw new Error(`确认前恢复动作不正确: ${previewResume.nextAction}`);
+  }
   const confirmed = await confirmResourceOrchestratorPlan(
     input.client, prepared.planId, `${input.runId}-save`, `${input.runId}-confirm`,
   );
+  const confirmedResume = await resumeResourceOrchestratorSession(
+    input.client, conversation.conversationId, 0,
+  );
+  if (confirmedResume.nextAction !== "NO_ACTION") {
+    throw new Error(`完成后恢复动作不正确: ${confirmedResume.nextAction}`);
+  }
   const session = await readResourceOrchestratorSession(
     input.client, conversation.conversationId, 0,
   );
