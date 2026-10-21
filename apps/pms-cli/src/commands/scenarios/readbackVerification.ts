@@ -155,9 +155,12 @@ export function compareProtectedFields(
   if (!before) return { known: true, matches: true, mismatches: [] };
   if (!after) return unknownComparison("保护字段缺少回读快照");
   const allowed = mutationKeys(allowedMutations);
+  // A protected field can be introduced by a focused component projection
+  // after the write (for example projectId/nodeId metadata). Without a
+  // before-state value there is no mutation to compare, so only fields that
+  // were observable before the operation participate in the invariant.
   const observable = protectedFields.filter((key) =>
-    Object.prototype.hasOwnProperty.call(before, key)
-    || Object.prototype.hasOwnProperty.call(after, key));
+    Object.prototype.hasOwnProperty.call(before, key));
   const mismatches: string[] = [];
   let known = true;
   for (const key of observable) {
@@ -255,6 +258,19 @@ function valuesEqual(left: unknown, right: unknown, contract?: Record<string, un
     return Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && leftNumber === rightNumber;
   }
   if (type === "boolean") return normalizeBoolean(left) === normalizeBoolean(right);
+  // PMS may enrich a structured field on write (for example, scope items get
+  // generated IDs). Compare the caller's expected shape as a subset while
+  // keeping array cardinality and order strict, so readback still proves that
+  // the complete list was replaced rather than merely containing the patch.
+  if (Array.isArray(right)) {
+    return Array.isArray(left)
+      && left.length === right.length
+      && left.every((value, index) => valuesEqual(value, right[index]));
+  }
+  if (isRecord(right)) {
+    return isRecord(left)
+      && Object.entries(right).every(([key, value]) => valuesEqual(left[key], value));
+  }
   return stringify(left) === stringify(right);
 }
 

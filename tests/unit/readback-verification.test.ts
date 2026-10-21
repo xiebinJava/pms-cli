@@ -139,6 +139,20 @@ describe("shared readback verification", () => {
     )).toMatchObject({ known: true, matches: true });
   });
 
+  it("accepts PMS-generated metadata on structured list fields", () => {
+    expect(comparePatchedFields(
+      { scopeItems: [{ direction: "IN", title: "范围项", sort: 0 }] },
+      { scopeItems: [{ id: 701, direction: "IN", title: "范围项", sort: 0, createdBy: 1 }] },
+      { scopeItems: [{ direction: "IN", title: "范围项", sort: 0 }] },
+    )).toEqual({ known: true, matches: true, mismatches: [] });
+
+    expect(comparePatchedFields(
+      {},
+      { scopeItems: [{ id: 701, direction: "IN", title: "范围项", sort: 0 }] },
+      { scopeItems: [{ direction: "IN", title: "另一项", sort: 0 }] },
+    )).toMatchObject({ known: true, matches: false });
+  });
+
   it("does not treat missing protected fields or component content as unchanged", () => {
     expect(compareProtectedFields(
       { status: "ACTIVE" },

@@ -19,7 +19,7 @@ export function resourceNodeDraft(
 ): ResourceNodeDraft {
   const patch = {
     ...node.requiredFieldValues,
-    [node.fieldKey]: marker,
+    [node.fieldKey]: markerValue(node.fieldValue, marker),
   };
   const nodeRef = `${resourceType}-node:${node.nodeId}#component:${node.componentKey}`;
   const fieldSources = options.fieldSources ?? Object.fromEntries(
@@ -44,6 +44,26 @@ export function resourceNodeDraft(
       : { requestedCompletion: options.requestedCompletion }),
     fieldSources: fieldSources as ResourceNodeDraft["fieldSources"],
   };
+}
+
+/** Keeps structured PMS workbench fields in their declared DTO shape. */
+function markerValue(value: unknown, marker: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (!isRecord(item)) return marker;
+      if (Object.prototype.hasOwnProperty.call(item, "title")) return { ...item, title: marker };
+      if (Object.prototype.hasOwnProperty.call(item, "name")) {
+        return { ...item, name: marker, description: marker, acceptanceCriteria: marker };
+      }
+      return { ...item, value: marker };
+    });
+  }
+  if (isRecord(value)) {
+    if (Object.prototype.hasOwnProperty.call(value, "title")) return { ...value, title: marker };
+    if (Object.prototype.hasOwnProperty.call(value, "name")) return { ...value, name: marker };
+    return { ...value, value: marker };
+  }
+  return marker;
 }
 
 /** Finds the selected component in a focused context without assuming array order. */

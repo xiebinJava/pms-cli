@@ -124,8 +124,8 @@ async function findWritableNode(client: PmsClient, projectId: number, ownerId: n
     contextVersion: readInteger(focused.entityVersion ?? focused.version, `项目 ${projectId} 缺少实体版本`),
     componentKey: resolution.componentKey,
     fieldKey,
-    fieldValue: fixtureValue(contract?.fieldContracts, fieldKey),
-    requiredFieldValues: requiredFieldValues(contract?.fieldContracts, resolution.writableFields),
+    fieldValue: fixtureValue(contract?.fieldContracts, fieldKey, resolution.componentKey),
+    requiredFieldValues: requiredFieldValues(contract?.fieldContracts, resolution.writableFields, resolution.componentKey),
     ownerId,
     completionSupported: contract?.completionSupported === true
       && contract?.completionCommand === "node.complete-with-data",
@@ -217,7 +217,11 @@ function readNodeVersion(context: Awaited<ReturnType<PmsClient["context"]>>, nod
   return version;
 }
 
-function requiredFieldValues(rawContracts: unknown, writableFields: string[]): Record<string, unknown> {
+function requiredFieldValues(
+  rawContracts: unknown,
+  writableFields: string[],
+  componentKey?: string,
+): Record<string, unknown> {
   const contracts = Array.isArray(rawContracts) ? rawContracts : [];
   const writable = new Set(writableFields);
   return Object.fromEntries(contracts
@@ -225,10 +229,30 @@ function requiredFieldValues(rawContracts: unknown, writableFields: string[]): R
       && candidate.required === true
       && typeof candidate.key === "string"
       && writable.has(candidate.key))
-    .map((candidate) => [candidate.key as string, fixtureValue(contracts, candidate.key as string)]));
+    .map((candidate) => [candidate.key as string, fixtureValue(contracts, candidate.key as string, componentKey)]));
 }
 
-function fixtureValue(rawContracts: unknown, fieldKey: string): unknown {
+function fixtureValue(rawContracts: unknown, fieldKey: string, componentKey?: string): unknown {
+  // Project workbench contracts currently expose writableFields without
+  // fieldContracts. Keep the fixture payload typed to the registered PMS DTO
+  // instead of falling back to a string for structured fields.
+  if (componentKey === "requirement-scope") {
+    if (fieldKey === "scopeItems") {
+      return [{ direction: "IN", title: "AI-E2E-范围项", sort: 0 }];
+    }
+    if (fieldKey === "requirements") {
+      return [{
+        code: "AI-E2E-REQ-001",
+        name: "AI-E2E-需求",
+        description: "隔离验收夹具需求",
+        type: "FUNCTIONAL",
+        priority: 1,
+        acceptanceCriteria: "夹具可被 PMS 读取并验证",
+        status: 1,
+        sort: 0,
+      }];
+    }
+  }
   const contracts = Array.isArray(rawContracts) ? rawContracts : [];
   const contract = contracts.find((candidate) => isRecord(candidate) && candidate.key === fieldKey);
   if (!isRecord(contract)) return `AI-E2E-${fieldKey}`;
