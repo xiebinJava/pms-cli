@@ -193,6 +193,34 @@ describe("AI orchestrator client contract", () => {
     expect(attempts).toBe(1);
   });
 
+  it("reads a session cursor without exposing a write route", async () => {
+    const requests: Array<{ url: string; method: string }> = [];
+    const client = new PmsHttpClient({
+      baseUrl: "https://pms.example.test",
+      auth: new StaticTokenProvider("token"),
+      clientId: "pms-cli",
+      fetchImpl: async (input, init) => {
+        requests.push({ url: String(input), method: init?.method ?? "GET" });
+        return envelope({
+          sessionId: 10,
+          conversation,
+          latestPlan: null,
+          events: [],
+          afterSequence: 3,
+          nextSequence: 4,
+        });
+      },
+    });
+
+    const session = await client.getOrchestratorSession(10, 3);
+
+    expect(session.nextSequence).toBe(4);
+    expect(requests).toEqual([{
+      method: "GET",
+      url: "https://pms.example.test/integration/ai/v1/orchestrator/conversations/10/session?afterSequence=3",
+    }]);
+  });
+
   it("serializes project resource-node turn bindings", async () => {
     const requests: Array<{ url: string; body?: unknown }> = [];
     const client = new PmsHttpClient({

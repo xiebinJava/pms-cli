@@ -9,6 +9,19 @@ import type { ResourceNodeDraft } from "../../../../../packages/pms-contracts/sr
 
 export type ResourceOrchestratorResourceType = "project" | "topic";
 
+export type ResourceOrchestratorNextAction =
+  | "READ_CONTEXT"
+  | "PROVIDE_INPUT"
+  | "PREVIEW"
+  | "CONFIRM"
+  | "RETRY_SAME_IDEMPOTENCY"
+  | "READ_RESULT"
+  | "NO_ACTION";
+
+export interface ResourceOrchestratorSessionResume extends OrchestratorSession {
+  nextAction: ResourceOrchestratorNextAction;
+}
+
 export function createResourceOrchestratorConversation(
   client: PmsClient,
   resourceType: ResourceOrchestratorResourceType,
@@ -70,4 +83,35 @@ export function readResourceOrchestratorSession(
   afterSequence = 0,
 ): Promise<OrchestratorSession> {
   return client.getOrchestratorSession(conversationId, afterSequence);
+}
+
+/**
+ * Read-only recovery projection for an external Agent. It deliberately uses
+ * the existing session endpoint and never creates a turn, preview, execute
+ * operation, or idempotency key.
+ */
+export async function resumeResourceOrchestratorSession(
+  client: PmsClient,
+  conversationId: number,
+  afterSequence = 0,
+): Promise<ResourceOrchestratorSessionResume> {
+  const session = await client.getOrchestratorSession(conversationId, afterSequence);
+  return { ...session, nextAction: deriveResourceOrchestratorNextAction(session) };
+}
+
+export function deriveResourceOrchestratorNextAction(
+  session: OrchestratorSession,
+): ResourceOrchestratorNextAction {
+  const plan = session.latestPlan;
+  const status = plan?.status ?? session.conversation.status;
+  if (!plan) return status === "SUCCEEDED" ? "NO_ACTION" : "READ_CONTEXT";
+  if (status === "NEEDS_INPUT") return "PROVIDE_INPUT";
+  if (status === "WAITING_CONFIRMATION") return "CONFIRM";
+  if (status === "WRITE_RESULT_UNKNOWN") return "RETRY_SAME_IDEMPOTENCY";
+  if (status === "SUCCEEDED" || status === "CANCELLED") return "NO_ACTION";
+  if (status === "DRAFT_VALIDATED" || status === "PLAN_READY") return "PREVIEW";
+  if (status === "PREVIEWED") return plan.preview ? "CONFIRM" : "PREVIEW";
+  if (status === "EXECUTING" || status === "VERIFYING") return "READ_RESULT";
+  if (status === "CONFLICT" || status === "FAILED") return "READ_CONTEXT";
+  return "READ_CONTEXT";
 }

@@ -72,6 +72,7 @@ import {
   previewResourceOrchestratorPlan,
   readResourceOrchestratorEvents,
   readResourceOrchestratorSession,
+  resumeResourceOrchestratorSession,
   type ResourceOrchestratorResourceType,
 } from "../commands/scenarios/resourceOrchestrator.js";
 import {
@@ -136,7 +137,7 @@ const HELP = [
   "  pms scenario story-orchestrator create|turn|preview|confirm|events|session <id> [options]",
   "  pms scenario resource-orchestrator create <project|topic> <id>",
   "  pms scenario resource-orchestrator turn <conversation-id> --message <text> --draft-json <json> --node-id <id> [--node-version <version>] [--component <key>] [--context-version <version>]",
-  "  pms scenario resource-orchestrator preview|confirm|events|session <id> [options]",
+  "  pms scenario resource-orchestrator preview|confirm|events|session|resume <id> [options]",
   "  pms scenario requirement-analysis shadow <id> --cases-file <path> [--provider mock]",
   "  pms scenario story-workbench draft|plan|execute <id> --node-id <id> --version <version> --variant <variant> --patch-json <json> [--complete --owner-id <id> --start-date <YYYY-MM-DD> --end-date <YYYY-MM-DD>] [--idempotency-key <key>] [--preview-operation-id <id>]",
   "  pms workflow action <resourceType> <id> <action> --arguments-json <json> --preview-operation-id <id> --idempotency-key <key>",
@@ -602,16 +603,19 @@ async function dispatch(invocation: CliInvocation, deps: CliDependencies, reques
       const runtime = await deps.createRuntime(requestId);
       return confirmResourceOrchestratorPlan(runtime.client, planId, idempotencyKey, requestId);
     }
-    if (action === "events" || action === "session") {
+    if (action === "events" || action === "session" || action === "resume") {
       const conversationId = requireId(invocation.positionals[1]);
       const afterSequence = invocation.options["after-sequence"] === undefined
         ? 0 : nonNegativeInteger(invocation.options["after-sequence"], "after-sequence");
       const runtime = await deps.createRuntime(requestId);
+      if (action === "resume") {
+        return resumeResourceOrchestratorSession(runtime.client, conversationId, afterSequence);
+      }
       return action === "events"
         ? readResourceOrchestratorEvents(runtime.client, conversationId, afterSequence)
         : readResourceOrchestratorSession(runtime.client, conversationId, afterSequence);
     }
-    throw new CliArgumentError("resource-orchestrator 需要 create、turn、preview、confirm、events 或 session");
+    throw new CliArgumentError("resource-orchestrator 需要 create、turn、preview、confirm、events、session 或 resume");
   }
   if (invocation.group === "scenario" && invocation.command === "story-workbench") {
     const phase = invocation.positionals[0];
