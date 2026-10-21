@@ -6,6 +6,7 @@ import {
   agentProgressionContractVersion,
   computeDraftDigest,
 } from "../../packages/pms-contracts/src/index.js";
+import { PmsClientError } from "../../packages/pms-client/src/index.js";
 
 type Risk = "low" | "medium" | "high";
 
@@ -104,6 +105,83 @@ function requirementClient(risk: Risk = "medium") {
     executePreview,
     get,
   } as any;
+}
+
+function storyClient(options: { previewError?: PmsClientError } = {}) {
+  const context = {
+    resource: { type: "story" as const, id: 34 },
+    version: 6,
+    entityVersion: 8,
+    currentNode: { id: 384, key: "development", label: "开发中" },
+    resourceDetails: { title: "项目管理标准", status: "IN_PROGRESS" },
+    workflow: {
+      nodes: [{
+        id: 384,
+        key: "development",
+        label: "开发中",
+        version: 6,
+        components: [{
+          key: "story-node-workbench",
+          content: { acceptanceConclusion: "" },
+          saveContract: {
+            command: "development-item.node.field.update",
+            completionCommand: "development-item.node.complete-with-data",
+            completionSupported: true,
+            completionRequiredMetadata: [],
+            itemType: "STORY",
+            itemId: 34,
+            nodeId: 384,
+            version: 6,
+            componentKey: "story-node-workbench",
+            variant: "development",
+            fieldValuesPath: "__components.story-node-workbench",
+            writableFields: ["acceptanceConclusion"],
+            protectedFields: ["status"],
+            fieldContracts: [{ key: "acceptanceConclusion", label: "验收结论", required: false }],
+          },
+        }],
+      }],
+    },
+    relations: [],
+    allowedActions: ["development-item.node.field.update", "development-item.node.complete-with-data"],
+  };
+  const capabilities = vi.fn(async () => ({
+    version: "ai-v1",
+    resources: [{
+      type: "story",
+      actions: [{
+        name: "development-item.node.field.update",
+        label: "更新故事节点",
+        description: "更新故事节点",
+        mode: "automatic" as const,
+        risk: "medium" as const,
+        scopes: [],
+        inputSchema: {},
+        requiresContext: true,
+        refreshScopes: [],
+      }],
+    }],
+    scopes: [],
+    workflowTypes: [],
+  }));
+  const client = {
+    context: vi.fn(async () => context),
+    capabilities,
+    preview: vi.fn(async () => {
+      if (options.previewError) throw options.previewError;
+      return {
+        operationId: "preview-story-node",
+        command: "development-item.node.field.update",
+        expiresAt: "2099-01-01T00:00:00Z",
+        contextVersion: "3",
+        warnings: [],
+        changes: [],
+        refreshScopes: [],
+        preconditions: [],
+      };
+    }),
+  } as any;
+  return { client, context };
 }
 
 function projectClient(options: { withCompletion?: boolean } = {}) {
@@ -305,6 +383,161 @@ describe("agent progression run", () => {
     expect(result.status).toBe("CONFLICT");
     expect(result.plan).toBeNull();
     expect(result.warnings.join(" ")).toContain("CONTEXT_CONFLICT");
+  });
+
+  it("maps story drafts with missing evidence to NEEDS_INPUT before preview", async () => {
+    const { client } = storyClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 384,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "plan",
+      draft: {
+        facts: [{ text: "故事当前在开发中", sourceRefs: [] }],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { acceptanceConclusion: "PASS" },
+        fieldSources: {
+          acceptanceConclusion: {
+            sourceType: "conversation",
+            sourceRefs: ["conversation:latest"],
+            confidence: "high",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("NEEDS_INPUT");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.plan?.preview).toBeNull();
+    expect(result.warnings.join(" ")).toContain("facts[0]");
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("maps a low-confidence story inference to NEEDS_INPUT instead of confirmation", async () => {
+    const { client } = storyClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 384,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "auto",
+      idempotencyKey: "story-low-confidence-1",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { acceptanceConclusion: "PASS" },
+        fieldSources: {
+          acceptanceConclusion: {
+            sourceType: "inference",
+            sourceRefs: ["story-node:384#component:story-node-workbench"],
+            confidence: "low",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("NEEDS_INPUT");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.plan?.preview).toBeNull();
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("keeps unresolved story decisions in NEEDS_INPUT until the Agent supplies an answer", async () => {
+    const { client } = storyClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 384,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "plan",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [{ text: "验收结论是否需要产品确认", sourceRefs: [] }],
+        patch: { acceptanceConclusion: "PASS" },
+        fieldSources: {
+          acceptanceConclusion: {
+            sourceType: "conversation",
+            sourceRefs: ["story-node:384#component:story-node-workbench"],
+            confidence: "high",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("NEEDS_INPUT");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.plan?.preview).toBeNull();
+    expect(result.warnings.join(" ")).toContain("验收结论是否需要产品确认");
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("rejects story completion without an explicit completion request", async () => {
+    const { client } = storyClient();
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 384,
+      intent: "COMPLETE_NODE",
+      executeMode: "auto",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { acceptanceConclusion: "PASS" },
+        requestedCompletion: false,
+      },
+    });
+
+    expect(result.status).toBe("REJECTED");
+    expect(result.writeDecision).toBe("NEEDS_INPUT");
+    expect(result.rejectionReason).toBe("COMPLETION_NOT_REQUESTED");
+    expect(result.plan?.preview).toBeNull();
+    expect(client.context).not.toHaveBeenCalled();
+    expect(client.preview).not.toHaveBeenCalled();
+  });
+
+  it("maps a story preview conflict to in-band CONFLICT", async () => {
+    const { client } = storyClient({
+      previewError: new PmsClientError("conflict", "故事节点已被其他人修改", { status: 409 }),
+    });
+    const result = await runAgentProgression(client, {
+      contractVersion: agentProgressionContractVersion,
+      resourceType: "story",
+      resourceId: 34,
+      nodeId: 384,
+      intent: "UPDATE_NODE_FIELDS",
+      executeMode: "plan",
+      draft: {
+        facts: [],
+        inferences: [],
+        assumptions: [],
+        unresolvedDecisions: [],
+        patch: { acceptanceConclusion: "PASS" },
+        fieldSources: {
+          acceptanceConclusion: {
+            sourceType: "conversation",
+            sourceRefs: ["story-node:384#component:story-node-workbench"],
+            confidence: "high",
+          },
+        },
+      },
+    });
+
+    expect(result.status).toBe("CONFLICT");
+    expect(result.plan).toBeNull();
+    expect(result.warnings.join(" ")).toContain("故事节点已被其他人修改");
   });
 
   it("previews and executes a complete medium-risk draft in auto mode", async () => {

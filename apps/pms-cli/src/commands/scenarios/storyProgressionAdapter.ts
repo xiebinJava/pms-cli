@@ -10,7 +10,7 @@ import {
   agentProgressionContractVersion,
   agentProgressionResultSchema,
 } from "../../../../../packages/pms-contracts/src/index.js";
-import type { PmsClient } from "../../../../../packages/pms-client/src/index.js";
+import { PmsClientError, type PmsClient } from "../../../../../packages/pms-client/src/index.js";
 import { CapabilityResolver } from "../../capabilities/CapabilityResolver.js";
 import {
   executeStoryWorkbenchScenario,
@@ -139,9 +139,20 @@ export async function planStoryProgression(
       warnings: [warning],
     };
   }
-  const plan = await planStoryWorkbenchScenario(client, workbenchInput, {
-    provenance: input.provenance,
-  });
+  let plan;
+  try {
+    plan = await planStoryWorkbenchScenario(client, workbenchInput, {
+      provenance: input.provenance,
+    });
+  } catch (error) {
+    if (error instanceof PmsClientError && error.kind === "conflict") {
+      throw new ResourceScenarioError("CONTEXT_CONFLICT", error.message);
+    }
+    if (error instanceof PmsClientError && ["validation", "forbidden", "not_found"].includes(error.kind)) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
+    }
+    throw error;
+  }
   const preconditions = plan.preview.preconditions ?? [];
   const blockedByPrecondition = preconditions.some((value) => isRecord(value) && value.blocking === true);
   const draftDecision = draftPlan?.writeDecision;

@@ -19,7 +19,7 @@
 - Task 2 已完成：connector `327e265`，skill/runbook 和外部 Agent 边界契约已落地。
 - Task 3 已完成：connector `f341061`、`b82f383`，项目隔离 run `codex20261021resume2` 验证 `resume` 的只读恢复动作。
 - Task 4 的文档同步已完成：backend `d16b411`，connector `6f7e731`、`79c3351`、`4bc1588`、`0a542db`。provenance fixture 同步门禁通过；完整 Maven 测试仍需 Docker 可用环境，当前不能宣称全量通过。
-- 当前未完成项是发布前环境门禁和 roadmap Task 3.2 中保留的 story 专属测试；这些项目关闭前不应合并默认发布分支。
+- 当前未完成项是发布前环境门禁：roadmap Task 3.2 的 story 专属测试已完成；完整 Maven 仍需在 Docker 可用环境执行，门禁关闭前不应合并默认发布分支。
 
 ## Global Constraints
 

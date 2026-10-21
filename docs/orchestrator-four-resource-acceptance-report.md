@@ -6,9 +6,9 @@
 
 四类资源已经复用现有 `ai-orchestrator-v1` 的 Conversation、Plan、Preview、
 Operation、Verification 和事件序列。需求、故事、项目、专题的真实隔离链路均已
-通过；项目会话额外验证了 CLI 的只读 `resume` 投影。当前可以进入发布候选回归，
-但仍须通过完整发布门禁，并完成 Task 3.2 中保留的 story 专属测试项后再合并默认
-发布分支。
+通过；项目会话额外验证了 CLI 的只读 `resume` 投影。故事专属的缺来源、未决决策、
+低置信高风险推断、完成请求拒绝和预览冲突测试也已补齐。当前可以进入发布候选回归，
+但仍须通过完整发布门禁后再合并默认发布分支。
 
 ## 代码与文档范围
 
@@ -70,9 +70,8 @@ pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n
 1. backend 编译、完整 Maven 测试和 Orchestrator 回归测试。
 2. connector `pnpm test`、`pnpm typecheck`、`pnpm run build:cli`、`git diff --check`。
 3. 跨仓库 provenance golden vector 字节同步检查。
-4. 完成 roadmap Task 3.2 中 story 专属 `NEEDS_INPUT`、`REJECTED` 和异常归一化
-   测试；这些是已知的发布前剩余项，不影响本报告已通过的四资源真实矩阵和项目
-   恢复链路。
+4. 完整 Maven 测试需要在 Docker 可用的 CI 或开发环境中重新执行；本机当前只完成
+   package 和 Orchestrator 定向测试。
 
 本轮门禁实测结果：backend `mvn -q -DskipTests package` 通过，三个
 Orchestrator 定向测试通过；完整 `mvn -q test` 启动到 Spring 集成测试时因本机

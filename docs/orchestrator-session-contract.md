@@ -78,7 +78,7 @@ pms scenario story-orchestrator session 20 --after-sequence 0
 pms scenario resource-orchestrator create project 42
 pms scenario resource-orchestrator turn 61 \
   --message "补充当前节点说明" \
-  --draft-json '{"contractVersion":"resource-node/v1","resourceType":"project","intent":"UPDATE_NODE_FIELDS","nodeId":"node-123","nodeVersion":7,"fieldChanges":[{"fieldKey":"description","value":"...","sourceRefs":["project:42"]}],"requestedCompletion":false}'
+  --draft-json '{"contractVersion":"resource-node/v1","draft":{"facts":[{"text":"当前节点需要补充说明","sourceRefs":["project-node:301"]}],"inferences":[],"assumptions":[],"unresolvedDecisions":[],"patch":{"description":"..."},"fieldSources":{"description":{"sourceType":"conversation","sourceRefs":["project-node:301"],"confidence":"high"}},"requestedCompletion":false}}'
 pms scenario resource-orchestrator preview 88
 pms scenario resource-orchestrator confirm 88 --idempotency-key project-42-node-123-1
 pms scenario resource-orchestrator events 61 --after-sequence 0

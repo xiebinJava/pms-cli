@@ -343,6 +343,8 @@ export function planAgentProgressionDraft(
         .map((key) => ({ key, label: completionLabel(key), reason: "完成节点需要提供该信息" }))
     : [];
   const allMissing = [...missingFields, ...completionMissing];
+  const hasLowConfidenceHighRiskInference = diagnostics.unresolvedDecisions.some((reason) =>
+    reason.includes("低置信度推断不能自动写入高风险业务结论"));
   let writeDecision: AgentProgressionPlanDetails["writeDecision"] = "READY";
   if (contract.writableFields.length === 0 || !contract.command) writeDecision = "CAPABILITY_UNAVAILABLE";
   else if (diagnostics.unknownFields.length > 0 || diagnostics.protectedFields.length > 0) {
@@ -351,9 +353,11 @@ export function planAgentProgressionDraft(
     allMissing.length > 0
     || diagnostics.missingSources.length > 0
     || draft.assumptions.length > 0
+    || hasLowConfidenceHighRiskInference
+    || diagnostics.unresolvedDecisions.length > 0
   ) {
     writeDecision = "NEEDS_INPUT";
-  } else if (diagnostics.unresolvedDecisions.length > 0 || executionMode === "confirmation") {
+  } else if (executionMode === "confirmation") {
     writeDecision = "WAITING_CONFIRMATION";
   } else if (intent === "COMPLETE_NODE" && contract.completionMode === "REQUIRES_DOMAIN_CONFIRMATION") {
     writeDecision = "WAITING_CONFIRMATION";

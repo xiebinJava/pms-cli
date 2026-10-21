@@ -76,6 +76,41 @@ describe("agent progression run contract", () => {
     expect(parsed.result).toBeNull();
   });
 
+  it("keeps story user-facing node and field summaries separate from machine identifiers", () => {
+    const parsed = agentProgressionRunResultSchema.parse({
+      contractVersion: agentProgressionRunContractVersion,
+      phase: "run",
+      status: "NEEDS_INPUT",
+      resourceType: "story",
+      resourceId: 34,
+      intent: "UPDATE_NODE_FIELDS",
+      writeDecision: "NEEDS_INPUT",
+      plan: null,
+      result: null,
+      previewOperationId: null,
+      operationId: null,
+      auditId: null,
+      readback: null,
+      verification: null,
+      warnings: ["缺少验收结论"],
+      userFacing: {
+        resourceType: "story",
+        resourceName: "项目管理标准",
+        resourceStatus: "IN_PROGRESS",
+        currentNode: "开发中",
+        targetNode: "验收中",
+        operationStatus: "NEEDS_INPUT",
+        actualChange: "缺少必填信息，尚未执行写入",
+        fieldChanges: [{ field: "验收结论", from: null, to: "通过" }],
+        blockers: ["缺少验收结论"],
+      },
+    });
+
+    expect(parsed.userFacing?.targetNode).toBe("验收中");
+    expect(parsed.userFacing?.fieldChanges[0]?.field).toBe("验收结论");
+    expect(JSON.stringify(parsed.userFacing)).not.toContain("384");
+  });
+
   it("accepts a project run result for shared context and field-update flows", () => {
     const parsed = agentProgressionRunResultSchema.parse({
       contractVersion: agentProgressionRunContractVersion,

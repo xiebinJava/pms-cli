@@ -12,7 +12,7 @@
 
 ## 实施状态（2026-10-21）
 
-- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；四资源 Orchestrator 代码、恢复投影和真实隔离 E2E 已完成。发布仍受 Task 3.2 剩余 story 专属测试和最终回归门禁约束。
+- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；四资源 Orchestrator 代码、恢复投影、故事专属安全测试和真实隔离 E2E 已完成。发布仍受最终回归门禁约束。
 - Task 3.1 的 `expectedVersions` 已由 PMS preview 生成并回传，CLI 会在带 provenance 的写入计划阶段校验版本冲突；旧的 `expected_versions_json` 仍保留变更列表格式，供既有命令执行守卫兼容读取。
 - Task 3.2 的 `userFacing.targetNode` 和 `userFacing.fieldChanges` 已落地，字段摘要会名称化并遮蔽内部 ID。
 - Milestone 4 的四资源真实隔离 PMS E2E 已在 `codex20261021matrix4` 运行通过；项目 `resume` 恢复闭环在 `codex20261021resume2` 运行通过。两次运行均使用容器内 MySQL 客户端，结束后销毁隔离数据库卷和网络。
@@ -305,11 +305,11 @@
 
 - [x] `userFacing.targetNode` 和 `userFacing.fieldChanges` 已加入契约；字段变更摘要名称化展示，内部 ID 只保留在机器字段并按规则脱敏。
 
-- [ ] 验证 Task 0.2 已冻结的规则在 story 路径生效：unresolved/low-confidence → `NEEDS_INPUT`，`requestedCompletion` 缺失或 false → `REJECTED`；只补 story 专属测试，不重复修改判定逻辑。
-- [ ] 完成 story 剩余的异常归一化：story 使用 `ResourceScenarioError` 或等价类型，统一映射到 in-band 状态而不是 `ok:false`；通用 run 边界映射已在 Task 0.2 完成。
-- [ ] 文档示例严格复用实际 `resourceScenarioDraftSchema`，不再使用不存在的 `{key,value,sourceRef}` 形状。
-- [ ] 明确 facts/inferences/assumptions 的来源规则：facts/inferences 必须有 sourceRefs；assumptions 只能生成补问，不能直接写入；缺来源或低置信高风险一律 `NEEDS_INPUT`。
-- [ ] 为 story 路径补充 `storyProgressionAdapter.ts` 和 `storyWorkbench.ts` 的错误归一化、组件解析和字段提取测试。
+- [x] 验证 Task 0.2 已冻结的规则在 story 路径生效：unresolved/low-confidence → `NEEDS_INPUT`，`requestedCompletion` 缺失或 false → `REJECTED`；只补 story 专属测试，不重复修改判定逻辑。
+- [x] 完成 story 剩余的异常归一化：story 使用 `ResourceScenarioError` 或等价类型，统一映射到 in-band 状态而不是 `ok:false`；通用 run 边界映射已在 Task 0.2 完成。
+- [x] 文档示例严格复用实际 `resourceScenarioDraftSchema`，不再使用不存在的 `{key,value,sourceRef}` 形状。
+- [x] 明确 facts/inferences/assumptions 的来源规则：facts/inferences 必须有 sourceRefs；assumptions 只能生成补问，不能直接写入；缺来源或低置信高风险一律 `NEEDS_INPUT`。
+- [x] 为 story 路径补充 `storyProgressionAdapter.ts` 和 `storyWorkbench.ts` 的错误归一化、组件解析和字段提取测试。
 - [x] Review：确保 Claude/Codex 能直接使用结果，不需要从 ID 猜名称。
 - [x] 提交：实现提交为 `8822518 feat(cli): expose user facing node and field changes`。
 
@@ -440,4 +440,4 @@
 - [x] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（`codex20261021matrix4`；项目恢复投影另由 `codex20261021resume2` 验证）。
 - [x] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
 - [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展和只读恢复投影已完成，真实隔离 E2E 仍是发布门禁。
-- [ ] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 剩余 story 专属项完成后再关闭）。
+- [x] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 story 专属项已完成；完整 Maven 门禁仍按发布环境单独执行）。

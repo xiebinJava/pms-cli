@@ -89,6 +89,11 @@ pms scenario progression run requirement 33 \
 
 字段必须来自当前 `saveContract.writableFields`。`protectedFields`、未知字段、缺少来源、低置信度高风险推断和未决问题都会阻止写入，并返回 `NEEDS_INPUT` 或 `CAPABILITY_UNAVAILABLE`。
 
+故事路径也遵守同一条规则：`facts`/`inferences` 必须带当前 focused context 中可读取的
+`sourceRefs`；`assumptions` 只会生成补问，不会直接写入；低置信度的高风险业务结论返回
+`NEEDS_INPUT`，不会降级成一次确认就写入。故事预览发生版本冲突时，run 信封返回
+`CONFLICT`，而不是通用的 `ok:false` 错误。
+
 ## 结果处理
 
 `agent-progression-run/v2` 返回一个稳定 JSON。progression 命令使用 `--node-version` 传递节点版本，使用 `--context-version` 传递会话/审计关联信息；旧的 `--version` 参数会返回迁移错误：
