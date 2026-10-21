@@ -73,3 +73,9 @@ pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n
 4. 完成 roadmap Task 3.2 中 story 专属 `NEEDS_INPUT`、`REJECTED` 和异常归一化
    测试；这些是已知的发布前剩余项，不影响本报告已通过的四资源真实矩阵和项目
    恢复链路。
+
+本轮门禁实测结果：backend `mvn -q -DskipTests package` 通过，三个
+Orchestrator 定向测试通过；完整 `mvn -q test` 启动到 Spring 集成测试时因本机
+Testcontainers 找不到 Docker socket 而终止（1,267 个测试中 1 个失败、66 个错误，
+均由该环境根因引起）。这不是代码通过声明；需要在 Docker 可用的 CI 或开发环境中
+重新执行完整 Maven 门禁后才能关闭发布阻塞项。
