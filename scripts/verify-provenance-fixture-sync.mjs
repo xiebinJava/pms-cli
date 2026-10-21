@@ -1,53 +1,29 @@
-#!/usr/bin/env node
-/**
- * Verifies that the Connector and backend copies of the provenance golden
- * vector are byte-for-byte identical. The Connector copy under
- * tests/fixtures/provenance/draft-provenance-v1.json is the canonical
- * authoring location; the backend copy under
- * src/test/resources/fixtures/provenance/draft-provenance-v1.json is a
- * checked-in test-resource duplicate used by Java digest tests.
- *
- * Usage:
- *   node scripts/verify-provenance-fixture-sync.mjs
- *   PMS_BACKEND_ROOT=/path/to/pms-backend node scripts/verify-provenance-fixture-sync.mjs
- */
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import process from "node:process";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const connectorRoot = process.cwd();
-const backendRoot = process.env.PMS_BACKEND_ROOT ?? "/Users/fs/Desktop/Project/pms-backend";
+const connectorRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const backendRoot = resolve(
+  process.env.PMS_BACKEND_ROOT?.trim() || resolve(connectorRoot, "../pms-backend"),
+);
+const connectorFixture = resolve(
+  connectorRoot,
+  "tests/fixtures/provenance/draft-provenance-v1.json",
+);
+const backendFixture = resolve(
+  backendRoot,
+  "src/test/resources/fixtures/provenance/draft-provenance-v1.json",
+);
 
-const connectorFixture = path.join(connectorRoot, "tests/fixtures/provenance/draft-provenance-v1.json");
-const backendFixture = path.join(backendRoot, "src/test/resources/fixtures/provenance/draft-provenance-v1.json");
-
-const sha256 = (buffer) => createHash("sha256").update(buffer).digest("hex");
-
-const [connectorBytes, backendBytes] = await Promise.all([
-  readFile(connectorFixture).catch((error) => {
-    console.error(`无法读取 Connector golden vector: ${connectorFixture}`);
-    throw error;
-  }),
-  readFile(backendFixture).catch((error) => {
-    console.error(`无法读取 backend golden vector: ${backendFixture}`);
-    throw error;
-  }),
-]);
-
-const connectorHash = sha256(connectorBytes);
-const backendHash = sha256(backendBytes);
-
-if (connectorHash !== backendHash) {
-  console.error("provenance golden vector 不一致");
-  console.error(`  connector: ${connectorFixture}`);
-  console.error(`  sha256:    ${connectorHash}`);
-  console.error(`  backend:   ${backendFixture}`);
-  console.error(`  sha256:    ${backendHash}`);
-  process.exit(1);
+const connectorBytes = readFileSync(connectorFixture);
+const backendBytes = readFileSync(backendFixture);
+if (!connectorBytes.equals(backendBytes)) {
+  console.error("provenance golden vector mismatch");
+  console.error(`connector: ${connectorFixture}`);
+  console.error(`backend:   ${backendFixture}`);
+  process.exitCode = 1;
+} else {
+  console.log(`provenance golden vector synchronized (${connectorBytes.length} bytes)`);
+  console.log(`connector: ${connectorFixture}`);
+  console.log(`backend:   ${backendFixture}`);
 }
-
-console.log("provenance golden vector 一致");
-console.log(`  connector: ${connectorFixture}`);
-console.log(`  backend:   ${backendFixture}`);
-console.log(`  sha256:    ${connectorHash}`);

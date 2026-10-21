@@ -80,7 +80,7 @@ pnpm run verify:real-pms:agent-suite
 ## 7. 文档与跨仓库一致性
 
 - connector 与 backend 都必须包含同一份 `draft-provenance/v1` golden vector；运行
-  `node scripts/verify-provenance-fixture-sync.mjs`，输出必须确认两侧字节一致。
+  `pnpm run verify:provenance-fixtures`，输出必须确认两侧字节一致。
 - `docs/orchestrator-session-contract.md`、backend 的
   `docs/agent-contracts/orchestrator/ai-orchestrator-v1.md`、本清单和
   `skills/pms-project-management/SKILL.md` 的资源矩阵、状态/事件边界、版本轴、组件
