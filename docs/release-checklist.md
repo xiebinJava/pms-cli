@@ -88,3 +88,18 @@ pnpm run verify:real-pms:agent-suite
 - Markdown 静态检查、`git diff --check`、connector typecheck/build、Connector
   unit/contract tests、backend Orchestrator 回归测试均是发布前门禁；任何一项失败都不
   得以“代码已提交”替代。
+
+## 8. 本轮闭环证据
+
+- 四资源真实矩阵运行：隔离 run `codex20261021matrix4`。通过
+  `resource-scenario-real-pms.test.ts`、需求分析、故事节点、项目节点和专题节点
+  五个套件；首次因宿主机没有 `mysql` 命令失败，随后使用
+  `scripts/e2e-mysql-client.sh` 在 MySQL 容器内查询并通过。
+- Orchestrator 恢复运行：隔离 run `codex20261021resume2`。项目会话验证了
+  `PLAN_READY → PREVIEW → WAITING_CONFIRMATION → CONFIRM → SUCCEEDED → NO_ACTION`
+  的只读 `resume` 投影，并通过回读、幂等重放、版本冲突、非法来源和多组件守卫。
+- 两个隔离 run 均在测试结束后通过 `scripts/stop-ai-e2e.sh` 销毁数据库卷和网络；
+  不得把这些一次性 run 当作共享环境配置。
+- `resume` 的用户可见命令是：
+  `pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n>]`。
+  它只读会话和事件，不生成 turn、preview、execute 或新的幂等键。

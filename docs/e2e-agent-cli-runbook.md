@@ -163,7 +163,13 @@ pms scenario resource-orchestrator preview <plan-id>
 pms scenario resource-orchestrator confirm <plan-id> --idempotency-key <key>
 pms scenario resource-orchestrator events <conversation-id> --after-sequence 0
 pms scenario resource-orchestrator session <conversation-id>
+pms scenario resource-orchestrator resume <conversation-id> --after-sequence 0
 ```
+
+`resume` 是只读恢复投影，不会创建 turn、preview、execute 或新的幂等键。它返回
+`nextAction`：`PROVIDE_INPUT` 表示“补上缺失字段”后重新发起 turn，`CONFIRM` 表示
+“重新确认上次预览”时复用原 Plan，`RETRY_SAME_IDEMPOTENCY` 表示“核对未知写入结果”时
+先读操作/事件和 focused context，并复用原幂等键；成功终态返回 `NO_ACTION`。
 
 测试草稿必须使用当前 focused context 返回的 `nodeContract`、可写
 `saveContract`、字段来源和版本；不能猜节点 ID、组件键或把 project 实体

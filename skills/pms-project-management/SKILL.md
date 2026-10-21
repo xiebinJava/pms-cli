@@ -83,6 +83,7 @@ pms scenario resource-orchestrator preview <plan-id>
 pms scenario resource-orchestrator confirm <plan-id> --idempotency-key <key>
 pms scenario resource-orchestrator events <conversation-id> --after-sequence 0
 pms scenario resource-orchestrator session <conversation-id>
+pms scenario resource-orchestrator resume <conversation-id> [--after-sequence <n>]
 ```
 
 `progression run` 是无状态 Agent 节点写入的标准入口；`resource-orchestrator` 是
@@ -96,6 +97,12 @@ turn 前仍须读取当前 focused context。`nodeVersion` 只能取 `nodeContra
 恰好一个可写 `saveContract` 时可省略组件；多个必须显式指定，零个只读并返回
 `writeCapable=false`。`project-basic-info` 使用 `project.update`，不伪装为节点字段写入。
 会话 Plan 的 `NEEDS_INPUT` 是当前 Plan 终态；补充信息生成新 Plan，不把它当状态机回环。
+
+`resume` 只读取会话和事件游标，并返回 `nextAction`：`NEEDS_INPUT` 映射为
+`PROVIDE_INPUT`，`WAITING_CONFIRMATION` 映射为 `CONFIRM`，`WRITE_RESULT_UNKNOWN`
+映射为 `RETRY_SAME_IDEMPOTENCY`，终态成功映射为 `NO_ACTION`。它不会创建 turn、preview、
+execute 或新的幂等键；“继续刚才的项目”“补上缺失字段”“重新确认上次预览”“核对未知写入结果”
+分别由外部 Agent 根据该动作调用既有的 turn、confirm 或只读回读命令。
 
 ## 自然语言单轮推进
 

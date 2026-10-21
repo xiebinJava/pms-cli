@@ -10,13 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-19-four-resource-agent-orchestrator-roadmap-design.md`
 
-## 实施状态（2026-10-20）
+## 实施状态（2026-10-21）
 
-- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；Task 5 的代码、单元/契约验证和项目/专题 E2E 测试已落地，但真实隔离 E2E 尚未运行，不能据此宣称发布通过。
+- Milestone 0–4 的已实施代码、契约和文档任务已按提交记录同步；四资源 Orchestrator 代码、恢复投影和真实隔离 E2E 已完成。发布仍受 Task 3.2 剩余 story 专属测试和最终回归门禁约束。
 - Task 3.1 的 `expectedVersions` 已由 PMS preview 生成并回传，CLI 会在带 provenance 的写入计划阶段校验版本冲突；旧的 `expected_versions_json` 仍保留变更列表格式，供既有命令执行守卫兼容读取。
 - Task 3.2 的 `userFacing.targetNode` 和 `userFacing.fieldChanges` 已落地，字段摘要会名称化并遮蔽内部 ID。
-- Milestone 4 的真实隔离 PMS E2E 尚未在本轮运行；代码和门禁已准备好，不能据此宣称真实链路已通过。
-- Milestone 5（扩展现有 Orchestrator 到四类资源）已完成代码和静态验证；真实隔离验收仍是发布门禁，未通过前不能合并到默认发布分支。
+- Milestone 4 的四资源真实隔离 PMS E2E 已在 `codex20261021matrix4` 运行通过；项目 `resume` 恢复闭环在 `codex20261021resume2` 运行通过。两次运行均使用容器内 MySQL 客户端，结束后销毁隔离数据库卷和网络。
+- Milestone 5（扩展现有 Orchestrator 到四类资源）已完成代码、静态验证和最小恢复闭环；发布前仍需保留隔离 E2E、契约和构建门禁。
 
 ## Global Constraints
 
@@ -354,7 +354,7 @@
 - [x] 验证 preview/operation/audit/readback/provenance 关联。
 - [x] Review：确认失败能通过 requestId/operationId 定位，且清理策略真实可执行。
 - [x] 提交：实现提交为 `02eb0bc test(cli): extend resource fixtures to node writes`。
-- [ ] 在真实隔离 PMS/MySQL 环境实际运行四资源 E2E；当前仅完成测试代码、fixture 和门禁，未将跳过状态误报为通过。
+- [x] 在真实隔离 PMS/MySQL 环境实际运行四资源 E2E；`codex20261021matrix4` 覆盖需求、故事、项目、专题和资源场景，且使用容器内 MySQL 客户端完成审计查询。
 
 ### Task 4.2：统一发布检查与 unknown 核验手册
 
@@ -411,6 +411,7 @@
 - [x] 支持 confirm 的幂等重放：同一 conversation、同一 preview、同一 draftDigest 下的 `idempotency_key` 返回同一 operation/result；不同 draft、不同 digest 或不同 preview 不得复用。
 - [x] 覆盖断线、版本冲突、执行未知和事件序列缺口：未知状态进入 `WRITE_RESULT_UNKNOWN`，第一阶段只通过同一 conversation、同一 preview、同一 draftDigest 下的幂等键重放收敛；真实 fault-injection 仍由后续基础设施补齐。
 - [x] 用已有 orchestrator E2E 验证，不新建平行 harness；新增 project/topic 会话测试并接入统一五资源套件。
+- [x] 增加 CLI 只读 `resume` 投影；`codex20261021resume2` 验证计划、预览和成功终态的恢复动作不触发额外写入。
 - [x] Review：确认 Orchestrator 失败不会破坏现有 CLI progression run。
 
 ## 发布顺序
@@ -436,7 +437,7 @@
 - [x] provenance 不支持时 progression 写入被阻止；旧入口标记 legacy 和 `PROVENANCE_NOT_AUDITED`。
 - [x] 用户默认看到名称和业务术语，机器字段保留内部 ID。
 - [x] 旧写入口兼容但不再是 Agent 节点写入标准入口。
-- [ ] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（测试代码已准备，真实隔离环境尚未运行）。
+- [x] 现有资源场景、story、orchestrator 隔离 E2E 扩展通过（`codex20261021matrix4`；项目恢复投影另由 `codex20261021resume2` 验证）。
 - [x] project/topic 节点 E2E 使用隔离 fixture creator，不依赖人工预置 ID。
-- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展代码已完成，真实隔离 E2E 仍是发布门禁。
+- [x] Orchestrator 复用现有表、接口和 PlanView，未产生平行会话模型；四资源扩展和只读恢复投影已完成，真实隔离 E2E 仍是发布门禁。
 - [ ] 每个任务都经过聚焦测试、review 和回归测试（Task 3.2 剩余 story 专属项完成后再关闭）。

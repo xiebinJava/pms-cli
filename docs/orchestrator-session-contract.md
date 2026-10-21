@@ -24,6 +24,25 @@ load the session again, and continue from the returned cursor without carrying
 local state. The session endpoint reads the conversation, latest plan, and
 events in one read-only transaction.
 
+`resource-orchestrator resume` is a CLI-side read-only projection over that
+same session endpoint. It does not create a turn, preview, confirmation,
+operation, or idempotency key. The projection returns `nextAction` so an
+external Agent can continue after a process restart without guessing from
+event names:
+
+| Session fact | `nextAction` | Agent follow-up |
+| --- | --- | --- |
+| latest plan is `NEEDS_INPUT` | `PROVIDE_INPUT` | collect missing information and append a new turn |
+| latest plan is `PLAN_READY` or `PREVIEWED` | `PREVIEW` | preview the existing plan if it has not been previewed |
+| latest plan is `WAITING_CONFIRMATION` | `CONFIRM` | confirm the existing preview with its idempotency key |
+| latest plan is `WRITE_RESULT_UNKNOWN` | `RETRY_SAME_IDEMPOTENCY` | re-read operation/events and retry only with the original key |
+| latest plan is executing or verifying | `READ_RESULT` | poll the read-only session/readback projection |
+| latest plan is succeeded or cancelled | `NO_ACTION` | report the terminal result |
+
+This projection is advisory: the PMS state machine and preview preconditions
+remain authoritative. A `nextAction` value never authorizes a new write by
+itself.
+
 ## Conversation lifecycle
 
 Natural-language agents should keep the lifecycle explicit:
@@ -64,6 +83,7 @@ pms scenario resource-orchestrator preview 88
 pms scenario resource-orchestrator confirm 88 --idempotency-key project-42-node-123-1
 pms scenario resource-orchestrator events 61 --after-sequence 0
 pms scenario resource-orchestrator session 61
+pms scenario resource-orchestrator resume 61 --after-sequence 0
 
 # 专题使用同一入口，只替换资源类型和当前上下文中的节点/组件
 pms scenario resource-orchestrator create topic 18
