@@ -19,6 +19,7 @@ function requirementClient(risk: Risk = "medium") {
     workflow: {
       nodes: [{
         id: 101,
+        version: 5,
         key: "testing",
         label: "测试中",
         components: [{
@@ -600,7 +601,7 @@ describe("agent progression run", () => {
         intent: "COMPLETE_NODE",
         requestedCompletion: true,
         versionSnapshot: {
-          nodeVersion: null,
+          nodeVersion: 5,
           entityVersion: 3,
           workflowInstanceVersion: null,
           componentVersion: 5,

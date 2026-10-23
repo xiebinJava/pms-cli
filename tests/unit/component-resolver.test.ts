@@ -5,7 +5,7 @@ import {
   resolveWorkflowComponent,
 } from "../../apps/pms-cli/src/commands/core/componentResolver.js";
 
-function node(components: ContextNode["components"]): ContextNode {
+function node(components: ContextNode["components"], completionContract?: Record<string, unknown>): ContextNode {
   return {
     id: 101,
     key: "development",
@@ -15,6 +15,7 @@ function node(components: ContextNode["components"]): ContextNode {
     fields: [],
     fieldValues: {},
     version: 3,
+    ...(completionContract === undefined ? {} : { completionContract }),
   };
 }
 
@@ -108,6 +109,24 @@ describe("workflow component resolver", () => {
     ]), { componentKey: "missing", mode: "read" })).toThrowError(ComponentResolutionError);
   });
 
+  it("resolves an explicit direct-completion contract on an empty node", () => {
+    const result = resolveWorkflowComponent(node([], {
+      command: "development-item.node.complete",
+      completionSupported: true,
+    }), { mode: "write" });
+
+    expect(result.saveContract?.command).toBe("development-item.node.complete");
+    expect(result.writableFields).toEqual([]);
+    expect(result.writeCapable).toBe(true);
+  });
+
+  it("rejects a component selector when the node has no components", () => {
+    expect(() => resolveWorkflowComponent(node([], {
+      command: "development-item.node.complete",
+      completionSupported: true,
+    }), { componentKey: "missing", mode: "write" })).toThrowError(/只能使用节点直接完成能力/);
+  });
+
   it("normalizes project workbench as the same component selector", () => {
     const result = resolveWorkflowComponent(node([
       component("project-workbench", {
@@ -128,4 +147,13 @@ describe("workflow component resolver", () => {
       /componentKey 与 workbench 不一致/,
     );
   });
+});
+
+it("supports root node save and completion behind a readonly component without masking selectors", () => {
+  const entry = { ...node([]), saveContract: { command: "development-item.node.field.update", fieldValuesPath: "$", writableFields: ["requirement-title"] } };
+  expect(resolveWorkflowComponent(entry, { mode: "write" }).writableFields).toEqual(["requirement-title"]);
+  const execution = node([component("requirement-execution", null)], { command: "development-item.node.complete-with-data", completionSupported: true, writableFields: [] });
+  expect(resolveWorkflowComponent(execution, { mode: "write" }).saveContract?.command).toBe("development-item.node.complete-with-data");
+  expect(() => resolveWorkflowComponent(execution, { mode: "write", componentKey: "missing" })).toThrow(/COMPONENT_NOT_FOUND/);
+  expect(() => resolveWorkflowComponent(execution, { mode: "write", componentKey: "requirement-execution" })).toThrow(/COMPONENT_NOT_WRITABLE/);
 });

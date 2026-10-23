@@ -94,6 +94,50 @@ function makeContext(options: {
   };
 }
 
+function makeDirectCompletionContext(): WorkflowContext {
+  const context = makeContext();
+  return {
+    ...context,
+    workflow: {
+      nodes: [{
+        id: 101,
+        key: "requirement-release",
+        label: "需求上线",
+        version: 3,
+        components: [],
+        fields: [],
+        completionContract: {
+          contractVersion: "node-completion/v1",
+          command: "development-item.node.complete",
+          itemType: "REQUIREMENT",
+          itemId: 42,
+          nodeId: 101,
+          version: 3,
+          completionSupported: true,
+          completionCommand: "development-item.node.complete",
+          writableFields: [],
+          effectiveWritableFields: [],
+          protectedFields: ["status"],
+        },
+      }],
+    },
+    allowedActions: ["development-item.node.complete"],
+  };
+}
+
+function withDirectCompletionStatus(context: WorkflowContext, status: number): WorkflowContext {
+  const node = context.workflow?.nodes?.[0];
+  return {
+    ...context,
+    workflow: {
+      nodes: [{
+        ...(node ?? {}),
+        status,
+      }],
+    },
+  };
+}
+
 const action = (name: string, inputSchema: Record<string, { type: string; label: string; required: boolean; options?: string[] }>) => ({
   name,
   label: name,
@@ -146,6 +190,12 @@ const catalog = {
         fieldValues: { type: "object", label: "字段", required: true },
         version: { type: "integer", label: "节点版本", required: true },
       }),
+      action("development-item.node.complete", {
+        itemType: { type: "string", label: "类型", required: true },
+        itemId: { type: "integer", label: "需求 ID", required: true },
+        nodeId: { type: "integer", label: "节点 ID", required: true },
+        version: { type: "integer", label: "节点版本", required: true },
+      }),
     ],
   }],
   scopes: ["pms:development:write"],
@@ -155,18 +205,25 @@ const catalog = {
 function fakeClient(options: {
   context?: WorkflowContext;
   afterContext?: WorkflowContext;
+  afterFocusedContext?: WorkflowContext;
   readbackFails?: boolean;
 } = {}) {
   const context = options.context ?? makeContext();
   const afterContext = options.afterContext ?? makeContext({ version: 4, patch: { analysisNote: "已保存" } });
   let getCalls = 0;
   let contextCalls = 0;
+  let focusedContextCalls = 0;
   const client = {
     capabilities: vi.fn(async () => catalog),
     context: vi.fn(async (_resource: unknown, contextOptions?: { view?: string; nodeId?: number }) => {
       contextCalls += 1;
       if (options.readbackFails && contextOptions === undefined && contextCalls > 1) throw new Error("context service unavailable");
-      if (contextOptions?.view === "focused") return context;
+      if (contextOptions?.view === "focused") {
+        focusedContextCalls += 1;
+        return options.afterFocusedContext && focusedContextCalls > 1
+          ? options.afterFocusedContext
+          : context;
+      }
       return afterContext;
     }),
     get: vi.fn(async () => {
@@ -206,6 +263,7 @@ describe("requirement resource scenario contract", () => {
       "requirement.execution-target.change",
       "requirement.execution-target.unlink",
       "development-item.node.field.update",
+      "development-item.node.complete",
     ]) {
       expect(requirementScenarioAdapter.supports(operation)).toBe(true);
     }
@@ -240,6 +298,65 @@ describe("requirement resource scenario contract", () => {
       operation: "requirement.update",
       arguments: { title: "标题", version: 7 },
     }, createResourceScenarioRegistry([requirementScenarioAdapter]))).rejects.toThrow(/上下文/);
+  });
+
+  it("plans direct completion for a node with no fields or components", async () => {
+    const registry = createResourceScenarioRegistry([requirementScenarioAdapter]);
+    const client = fakeClient({ context: makeDirectCompletionContext() });
+    const plan = await planResourceScenario(client, {
+      contractVersion: resourceScenarioContractVersion,
+      resourceType: "requirement",
+      resourceId: 42,
+      operation: "development-item.node.complete",
+      nodeId: 101,
+      contextVersion: "3",
+      arguments: {},
+    }, registry);
+
+    expect(plan.normalizedArguments).toEqual({
+      itemType: "REQUIREMENT",
+      itemId: 42,
+      nodeId: 101,
+      version: 3,
+    });
+    expect(plan.preview.command).toBe("development-item.node.complete");
+  });
+
+  it("only reports direct completion as verified when the node is actually completed", async () => {
+    const registry = createResourceScenarioRegistry([requirementScenarioAdapter]);
+    const beforeContext = makeDirectCompletionContext();
+    const completedContext = withDirectCompletionStatus(makeDirectCompletionContext(), 2);
+    const client = fakeClient({
+      context: beforeContext,
+      afterContext: completedContext,
+      afterFocusedContext: completedContext,
+    });
+    const input = {
+      resourceType: "requirement" as const,
+      resourceId: 42,
+      operation: "development-item.node.complete",
+      nodeId: 101,
+      expectedPatch: {},
+      previewOperationId: "preview-development-item.node.complete",
+      idempotencyKey: "requirement-42-complete-v1",
+    };
+
+    const result = await executeResourceScenario(client, input, registry);
+    expect(result.status).toBe("SUCCEEDED");
+    expect(result.verification.patchApplied).toBe(true);
+
+    const unchangedContext = makeDirectCompletionContext();
+    const failedResult = await executeResourceScenario(
+      fakeClient({
+        context: unchangedContext,
+        afterContext: unchangedContext,
+        afterFocusedContext: unchangedContext,
+      }),
+      { ...input, idempotencyKey: "requirement-42-complete-v2" },
+      registry,
+    );
+    expect(failedResult.status).toBe("WRITE_RESULT_UNKNOWN");
+    expect(failedResult.verification.patchApplied).toBe(false);
   });
 
   it("uses the focused saveContract for node fields and rejects unknown or protected fields before preview", async () => {

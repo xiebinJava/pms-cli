@@ -203,6 +203,9 @@ export const workflowContextNodeSchema = z.object({
   endDate: z.string().nullable().optional(),
   fieldValueVersions: z.record(z.string(), z.number().int().nonnegative()).nullable().optional(),
   fieldValuesState: z.enum(["LOADED", "NOT_REQUESTED", "UNAVAILABLE"]).nullable().optional(),
+  saveContract: workflowContextSaveContractSchema.nullable().optional(),
+  /** Node-level completion capability for nodes with no writable fields/components. */
+  completionContract: workflowContextSaveContractSchema.nullable().optional(),
   permissions: z.unknown().nullable().optional(),
   taskSummary: z.object({
     total: z.number().int().nonnegative(),

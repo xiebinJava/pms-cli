@@ -60,7 +60,20 @@ export function resolveWorkflowComponent(
 ): ResolvedWorkflowComponent {
   const requestedComponentKey = normalizeComponentKey(options);
   const components = node.components ?? [];
+  const nodeContract = components.length === 0 && node.saveContract
+    ? node.saveContract : node.completionContract;
+  const nodeFields = nodeContract?.effectiveWritableFields ?? nodeContract?.writableFields ?? [];
+  const nodeCompletion = nodeContract?.completionSupported === true
+    && ["development-item.node.complete", "development-item.node.complete-with-data"].includes(nodeContract.command ?? "");
+  if (requestedComponentKey === undefined && nodeContract
+    && (components.length === 0 || components.every(candidate => writableFields(candidate).length === 0))
+    && (nodeFields.length > 0 || nodeCompletion)) {
+    return { node, saveContract: nodeContract, writableFields: nodeFields, writeCapable: true };
+  }
   if (components.length === 0) {
+    if (requestedComponentKey !== undefined) {
+      throw new ComponentResolutionError("COMPONENT_NOT_FOUND", `节点没有组件 ${requestedComponentKey}，只能使用节点直接完成能力`);
+    }
     if (options.mode === "write") {
       throw new ComponentResolutionError(
         "COMPONENT_NOT_WRITABLE",
@@ -176,6 +189,10 @@ function writableFields(component: ContextComponent): string[] {
   if (!contract) return [];
   const effective = contract.effectiveWritableFields ?? contract.writableFields ?? [];
   return [...new Set(effective.filter((field) => typeof field === "string" && field.trim() !== ""))];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeString(value: string | undefined): string | undefined {

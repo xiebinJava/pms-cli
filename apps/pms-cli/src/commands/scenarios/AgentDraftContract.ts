@@ -346,7 +346,11 @@ export function planAgentProgressionDraft(
   const hasLowConfidenceHighRiskInference = diagnostics.unresolvedDecisions.some((reason) =>
     reason.includes("低置信度推断不能自动写入高风险业务结论"));
   let writeDecision: AgentProgressionPlanDetails["writeDecision"] = "READY";
-  if (contract.writableFields.length === 0 || !contract.command) writeDecision = "CAPABILITY_UNAVAILABLE";
+  const completionOnly = ["development-item.node.complete", "development-item.node.complete-with-data"].includes(contract.command ?? "") && intent === "COMPLETE_NODE"
+    && contract.completionSupported === true;
+  if ((!completionOnly && contract.writableFields.length === 0) || !contract.command) {
+    writeDecision = "CAPABILITY_UNAVAILABLE";
+  }
   else if (diagnostics.unknownFields.length > 0 || diagnostics.protectedFields.length > 0) {
     writeDecision = "CAPABILITY_UNAVAILABLE";
   } else if (
@@ -471,6 +475,7 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number, compo
   labels: Map<string, string>;
   currentValues: Map<string, unknown>;
   completionRequiredMetadata: string[];
+  completionSupported?: boolean;
   completionMode?: string;
   completionAutomaticConfirmation?: boolean;
   completionBlockReason?: string;
@@ -487,15 +492,21 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number, compo
     };
   }
   let component: Record<string, any> | undefined;
+  let resolvedSaveContract: Record<string, any> | undefined;
   try {
-    component = resolveWorkflowComponent(node as any, {
+    const resolution = resolveWorkflowComponent(node as any, {
       componentKey,
       mode: "read",
-    }).component as Record<string, any> | undefined;
+    });
+    component = resolution.component as Record<string, any> | undefined;
+    resolvedSaveContract = resolution.saveContract as Record<string, any> | undefined;
   } catch {
     component = undefined;
+    resolvedSaveContract = undefined;
   }
-  const saveContract = component && isRecord(component.saveContract) ? component.saveContract : undefined;
+  const saveContract = component && isRecord(component.saveContract)
+    ? component.saveContract
+    : resolvedSaveContract;
   const labels = new Map<string, string>();
   const currentValues = new Map<string, unknown>();
   if (Array.isArray(saveContract?.fieldContracts)) {
@@ -509,6 +520,9 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number, compo
     if (component && isRecord(component.content)
       && Object.prototype.hasOwnProperty.call(component.content, key)) {
       currentValues.set(key, component.content[key]);
+    } else if (saveContract?.fieldValuesPath === "$" && isRecord(node.fieldValues)
+      && Object.prototype.hasOwnProperty.call(node.fieldValues, key)) {
+      currentValues.set(key, node.fieldValues[key]);
     }
   }
   const requiredFields = new Set(stringArray(saveContract?.requiredFields));
@@ -524,6 +538,8 @@ function readNodeDetailContract(context: WorkflowContext, nodeId?: number, compo
     labels,
     currentValues,
     completionRequiredMetadata: stringArray(saveContract?.completionRequiredMetadata),
+    ...(typeof saveContract?.completionSupported === "boolean"
+      ? { completionSupported: saveContract.completionSupported } : {}),
     ...(typeof saveContract?.completionMode === "string"
       ? { completionMode: saveContract.completionMode } : {}),
     ...(typeof saveContract?.completionAutomaticConfirmation === "boolean"

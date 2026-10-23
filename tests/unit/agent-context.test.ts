@@ -140,6 +140,54 @@ describe("Agent context mapping", () => {
     expect(node.missingInputRules).toContain("当前节点/组件未公开 saveContract，禁止生成写入预览");
   });
 
+  it("exposes a no-field node as direct-completion capable", () => {
+    const empty = context({
+      resource: { type: "requirement", id: 24 },
+      currentNode: { id: 401, key: "release", label: "需求上线" },
+      allowedActions: ["development-item.node.complete"],
+      meta: { ...context().meta!, selectedNodeId: 401, selectedComponentKey: null },
+      workflow: {
+        templateVersionId: 88,
+        templateVersionNo: 4,
+        nodes: [{
+          id: 401,
+          key: "release",
+          label: "需求上线",
+          position: 0,
+          status: 1,
+          fields: [],
+          components: [],
+          completionContract: {
+            command: "development-item.node.complete",
+            completionSupported: true,
+            writableFields: [],
+            itemType: "REQUIREMENT",
+            itemId: 24,
+            nodeId: 401,
+            version: 1,
+          },
+          fieldValues: {},
+          version: 1,
+        }],
+      },
+    });
+
+    const node = buildNodeContract(empty, 401);
+    expect(node).toMatchObject({
+      nodeId: 401,
+      writableFields: [],
+      allowedActions: ["development-item.node.complete"],
+      completionSupported: true,
+      writeCapable: true,
+    });
+    expect(node.missingInputRules).toEqual([]);
+    expect(buildAgentContext(empty).nodeContract).toMatchObject({
+      completionSupported: true,
+      writeCapable: true,
+      writableFields: [],
+    });
+  });
+
   it("keeps a save contract read-only when the effective actions omit its command", () => {
     const node = buildNodeContract(context({ allowedActions: [] }), 383, "story-node-workbench");
 
