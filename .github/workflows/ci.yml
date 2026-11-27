@@ -35,12 +35,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
-      - name: Unit, contract and install tests
+      - name: Unit, contract and npm tarball installation tests
         run: pnpm test
-      - name: Build the standalone CLI
-        run: pnpm build:cli
-      - name: Smoke-test the installed executable
-        run: node dist/pms-cli.js doctor --format json
 
   readonly-e2e:
     name: Optional isolated PMS readonly E2E

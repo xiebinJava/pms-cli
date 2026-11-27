@@ -1,3 +1,4 @@
+import packageMetadata from "../../package.json" with { type: "json" };
 import { describe, expect, it, vi } from "vitest";
 import { PmsClientError } from "../../packages/pms-client/src/index.js";
 import type { CliDependencies } from "../../apps/pms-cli/src/cli/runCli.js";
@@ -102,7 +103,7 @@ describe("CLI runner", () => {
     const version = makeDeps();
     await runCli(["--version"], version.deps);
     expect(version.deps.createRuntime).not.toHaveBeenCalled();
-    expect(version.stdout[0]).toBe("0.1.1\n");
+    expect(version.stdout[0]).toBe(packageMetadata.version + "\n");
   });
 
   it("runs the requirement-analysis shadow command with the fixed provider", async () => {
