@@ -28,6 +28,7 @@ const REQUIREMENT_OPERATIONS = new Set([
   "requirement.execution-target.change",
   "requirement.execution-target.unlink",
   "development-item.node.field.update",
+  "development-item.node.complete",
   "development-item.node.complete-with-data",
 ]);
 
@@ -37,7 +38,8 @@ type SaveContract = {
   itemId: number;
   nodeId: number;
   version: number;
-  fieldValuesPath: string;
+  fieldValuesPath?: string;
+  componentKey?: string;
   writableFields: string[];
   protectedFields: string[];
   completionCommand?: string;
@@ -58,6 +60,7 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
     const requirementId = requireResourceId(input);
     const focused = input.operation === "requirement.analysis.save"
       || input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete"
       || input.operation === "development-item.node.complete-with-data";
     const requestedComponent = input.componentKey;
     const context = await client.context(
@@ -101,17 +104,40 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
       };
     }
 
+    if (input.operation === "development-item.node.complete") {
+      const nodeId = requireNodeId(input);
+      const completion = readSaveContract(rawContext, nodeId, input.componentKey);
+      if (completion.command !== input.operation || !completion.completionSupported) {
+        throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点未声明直接完成能力");
+      }
+      return {
+        itemType: completion.itemType,
+        itemId: completion.itemId,
+        nodeId: completion.nodeId,
+        version: completion.version,
+      };
+    }
+
     if (input.operation === "development-item.node.field.update"
       || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       const saveContract = readSaveContract(rawContext, nodeId, input.componentKey);
+      if (!saveContract.fieldValuesPath && saveContract.command === "development-item.node.field.update") {
+        throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点 saveContract.fieldValuesPath 不能为空");
+      }
       const patch = readPatch(input);
+      if (saveContract.command !== "development-item.node.field.update"
+        && (input.operation !== "development-item.node.complete-with-data" || Object.keys(patch).length > 0)) {
+        throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "完成专用节点不允许写入字段");
+      }
       const normalized = {
         itemType: saveContract.itemType,
         itemId: saveContract.itemId,
         nodeId: saveContract.nodeId,
         version: saveContract.version,
-        fieldValues: fieldValuesAtPath(saveContract.fieldValuesPath, patch),
+        ...(saveContract.command === "development-item.node.field.update"
+          && (input.operation !== "development-item.node.complete-with-data" || Object.keys(patch).length > 0)
+          ? { fieldValues: fieldValuesAtPath(saveContract.fieldValuesPath!, patch) } : {}),
       };
       if (input.operation === "development-item.node.complete-with-data") {
         if (!saveContract.completionSupported || saveContract.completionCommand !== input.operation) {
@@ -160,6 +186,7 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
 
     if (input.operation === "requirement.analysis.save"
       || input.operation === "development-item.node.field.update"
+      || input.operation === "development-item.node.complete"
       || input.operation === "development-item.node.complete-with-data") {
       const nodeId = requireNodeId(input);
       if (rawContext.currentNode?.id !== nodeId) {
@@ -171,6 +198,8 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
       if (input.operation === "requirement.analysis.save") {
         const draft = toAnalysisDraft(input);
         AnalysisDraftValidator.validate(draft, rawContext);
+      } else if (input.operation === "development-item.node.complete") {
+        validateCompletionArguments(rawContext, nodeId, normalizedArguments, input.componentKey);
       } else {
         validateNodeFieldArguments(rawContext, nodeId, normalizedArguments, input.componentKey);
       }
@@ -189,11 +218,21 @@ export const requirementScenarioAdapter: ResourceScenarioAdapter = {
   },
 
   verifyReadback(before, after, verificationInput, operation) {
-    return publicVerification(buildVerificationResult({
+    const verification = buildVerificationResult({
       ...(verificationInput as Partial<ReadbackVerificationInput>),
       resourceType: "requirement",
       protectedFields: ["status", "ownerId"],
-    }, before, after, operation));
+    }, before, after, operation);
+    if (verificationInput.operation === "development-item.node.complete") {
+      return publicVerification({
+        ...verification,
+        patchApplied: verification.patchApplied && completedNode(
+          after.context,
+          typeof verificationInput.nodeId === "number" ? verificationInput.nodeId : undefined,
+        ),
+      });
+    }
+    return publicVerification(verification);
   },
 };
 
@@ -259,25 +298,51 @@ function toAnalysisDraft(input: ParsedResourceScenarioInput): AnalysisDraft {
 
 function readSaveContract(context: WorkflowContext, nodeId: number, componentKey?: string): SaveContract {
   const node = readNode(context, nodeId);
-  if (!node || !Array.isArray(node.components)) {
+  if (!node) {
     throw new ResourceScenarioError("CONTEXT_CONFLICT", `需求上下文中不存在节点 ${nodeId}`);
   }
-  let component: Record<string, any> | undefined;
+  let resolution;
   try {
-    component = resolveWorkflowComponent(node as any, { componentKey, mode: "write" })
-      .component as Record<string, any> | undefined;
+    resolution = resolveWorkflowComponent(node as any, { componentKey, mode: "write" });
   } catch (error) {
     if (error instanceof ComponentResolutionError) {
       throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", error.message);
     }
     throw error;
   }
-  if (!isRecord(component) || !isRecord(component.saveContract)) {
+  const component = resolution.component as Record<string, any> | undefined;
+  const raw = isRecord(component?.saveContract)
+    ? component.saveContract
+    : isRecord(resolution.saveContract) ? resolution.saveContract : null;
+  if (!isRecord(raw)) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "所选需求节点没有可写 saveContract");
   }
-  const raw = component.saveContract;
+  if (["development-item.node.complete", "development-item.node.complete-with-data"].includes(raw.command)) {
+    if (!isPositiveInteger(raw.itemId) || raw.itemId !== context.resource.id
+      || !isPositiveInteger(raw.nodeId) || !isNonNegativeInteger(raw.version)
+      || raw.itemType !== "REQUIREMENT" || raw.completionSupported !== true
+      || raw.completionCommand !== raw.command
+      || raw.nodeId !== nodeId || raw.version !== node.version) {
+      throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点 completionContract 不完整");
+    }
+    return {
+      command: raw.command,
+      itemType: raw.itemType,
+      itemId: raw.itemId,
+      nodeId: raw.nodeId,
+      version: raw.version,
+      writableFields: [],
+      protectedFields: isStringArray(raw.protectedFields) ? raw.protectedFields : [],
+      completionSupported: true,
+      completionCommand: raw.completionCommand,
+      ...(typeof raw.completionMode === "string" ? { completionMode: raw.completionMode } : {}),
+      ...(typeof raw.completionAutomaticConfirmation === "boolean"
+        ? { completionAutomaticConfirmation: raw.completionAutomaticConfirmation } : {}),
+      ...(typeof raw.completionBlockReason === "string" ? { completionBlockReason: raw.completionBlockReason } : {}),
+    };
+  }
   if (!isPositiveInteger(raw.itemId) || raw.itemId !== context.resource.id
-    || !isPositiveInteger(raw.nodeId) || !isNonNegativeInteger(raw.version)
+    || !isPositiveInteger(raw.nodeId) || raw.nodeId !== nodeId || raw.version !== node.version || !isNonNegativeInteger(raw.version)
     || raw.command !== "development-item.node.field.update"
     || raw.itemType !== "REQUIREMENT" || typeof raw.fieldValuesPath !== "string"
     || !isStringArray(raw.effectiveWritableFields ?? raw.writableFields)) {
@@ -290,6 +355,7 @@ function readSaveContract(context: WorkflowContext, nodeId: number, componentKey
     nodeId: raw.nodeId,
     version: raw.version,
     fieldValuesPath: raw.fieldValuesPath,
+    componentKey: typeof raw.componentKey === "string" ? raw.componentKey : undefined,
     writableFields: isStringArray(raw.effectiveWritableFields)
       ? raw.effectiveWritableFields
       : raw.writableFields,
@@ -318,6 +384,13 @@ function validateNodeFieldArguments(
     || normalizedArguments.version !== contract.version) {
     throw new ResourceScenarioError("CONTEXT_CONFLICT", "节点写入参数与 saveContract 不一致");
   }
+  if (contract.command !== "development-item.node.field.update") {
+    if (normalizedArguments.fieldValues !== undefined) throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "完成专用节点不允许写入字段");
+    return;
+  }
+  if (!contract.fieldValuesPath) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点 saveContract.fieldValuesPath 不能为空");
+  }
   const values = nestedFieldValues(contract.fieldValuesPath, normalizedArguments.fieldValues);
   const unknownField = Object.keys(values).find((field) => !contract.writableFields.includes(field));
   if (unknownField) {
@@ -326,6 +399,24 @@ function validateNodeFieldArguments(
   const protectedField = Object.keys(values).find((field) => contract.protectedFields.includes(field));
   if (protectedField) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", `草稿字段 ${protectedField} 是受保护字段`);
+  }
+}
+
+function validateCompletionArguments(
+  context: WorkflowContext,
+  nodeId: number,
+  normalizedArguments: Record<string, unknown>,
+  componentKey?: string,
+): void {
+  const contract = readSaveContract(context, nodeId, componentKey);
+  if (contract.command !== "development-item.node.complete" || !contract.completionSupported) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "需求节点未声明直接完成能力");
+  }
+  if (normalizedArguments.itemType !== contract.itemType
+    || normalizedArguments.itemId !== contract.itemId
+    || normalizedArguments.nodeId !== contract.nodeId
+    || normalizedArguments.version !== contract.version) {
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "节点完成参数与 completionContract 不一致");
   }
 }
 
@@ -352,6 +443,7 @@ function validateSuppliedArguments(
     return;
   }
   if (input.operation === "development-item.node.field.update"
+    || input.operation === "development-item.node.complete"
     || input.operation === "development-item.node.complete-with-data") {
     const nodeId = requireNodeId(input);
     const contract = readSaveContract(context, nodeId, input.componentKey);
@@ -375,6 +467,13 @@ function readNode(context: WorkflowContext, nodeId: number): Record<string, any>
   return isRecord(node) ? node : null;
 }
 
+function completedNode(snapshot: unknown, nodeId?: number): boolean {
+  if (!isRecord(snapshot) || nodeId === undefined) return false;
+  const context = snapshot as WorkflowContext;
+  const node = readNode(context, nodeId);
+  return Number(node?.status) === 2;
+}
+
 function resolveReadComponent(
   context: WorkflowContext,
   nodeId: number,
@@ -391,6 +490,7 @@ function resolveReadComponent(
 
 function nestedFieldValues(path: string, fieldValues: unknown): Record<string, unknown> {
   if (!isRecord(fieldValues)) return {};
+  if (path === "$") return fieldValues;
   const segments = path.split(".").filter(Boolean);
   let current: unknown = fieldValues;
   for (const segment of segments) {
@@ -401,6 +501,7 @@ function nestedFieldValues(path: string, fieldValues: unknown): Record<string, u
 }
 
 function fieldValuesAtPath(path: string, patch: Record<string, unknown>): Record<string, unknown> {
+  if (path === "$") return patch;
   const segments = path.split(".").map((segment) => segment.trim()).filter(Boolean);
   if (segments.length === 0) throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "saveContract.fieldValuesPath 不能为空");
   let result: Record<string, unknown> = patch;

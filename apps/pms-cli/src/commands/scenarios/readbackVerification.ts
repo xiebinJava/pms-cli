@@ -16,6 +16,7 @@ export type VerificationComparison = {
 
 export type ReadbackVerificationInput = {
   resourceType: ReadbackResourceType;
+  operation?: string;
   resourceId?: number;
   nodeId?: number;
   componentKey?: string;
@@ -73,6 +74,7 @@ export function extractComponentContent(
   } catch {
     return undefined;
   }
+  if (!component && (node.saveContract as Record<string, unknown> | undefined)?.fieldValuesPath === "$") return isRecord(node.fieldValues) ? node.fieldValues : undefined;
   if (!component) return undefined;
   if (component.contentState === "NOT_REQUESTED" || component.contentState === "UNSUPPORTED") {
     return undefined;
@@ -109,11 +111,11 @@ export function extractComponentSaveContract(
   if (!context || !node) return undefined;
   const requestedComponent = componentKey ?? context.meta?.selectedComponentKey ?? undefined;
   try {
-    const component = resolveWorkflowComponent(node as any, {
+    const resolution = resolveWorkflowComponent(node as any, {
       componentKey: requestedComponent,
       mode: "read",
-    }).component as Record<string, unknown> | undefined;
-    return isRecord(component?.saveContract) ? component.saveContract : undefined;
+    });
+    return isRecord(resolution.saveContract) ? resolution.saveContract : undefined;
   } catch {
     return undefined;
   }

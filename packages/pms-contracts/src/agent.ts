@@ -67,13 +67,16 @@ export const nodeContractSchema = z.object({
   completionMode: z.enum(["AUTO_CONFIRM", "VALIDATE_ONLY", "REQUIRES_DOMAIN_CONFIRMATION"]).optional(),
   completionAutomaticConfirmation: z.boolean().optional(),
   completionBlockReason: z.string().trim().min(1).optional(),
+  /** True when the node can advance through a node-level completion command without fields. */
+  completionSupported: z.boolean().optional(),
+  completionRequiredMetadata: z.array(z.string().trim().min(1)).optional(),
   writeCapable: z.boolean(),
 }).strict().superRefine((value, ctx) => {
-  if (value.writeCapable && value.writableFields.length === 0) {
+  if (value.writeCapable && value.writableFields.length === 0 && value.completionSupported !== true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
       path: ["writableFields"],
-      message: "可写节点必须声明 writableFields",
+      message: "可写节点必须声明 writableFields，或声明 completionSupported",
     });
   }
   if (value.writeCapable && value.nodeId === null) {

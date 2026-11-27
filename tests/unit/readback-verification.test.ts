@@ -208,3 +208,16 @@ describe("shared readback verification", () => {
     });
   });
 });
+
+it("reads root requirement fields and honors only declared bound-field mutations", () => {
+  const ctx = context("topic", undefined) as any;
+  ctx.resource.type = "requirement";
+  ctx.meta = {};
+  ctx.workflow.nodes[0].components = [];
+  ctx.workflow.nodes[0].fieldValues = { "requirement-title": "Updated" };
+  ctx.workflow.nodes[0].saveContract = { command: "development-item.node.field.update", fieldValuesPath: "$", writableFields: ["requirement-title"] };
+  const snap = { context: ctx } as ResourceScenarioSnapshot;
+  expect(extractComponentContent(snap, "requirement")).toEqual({ "requirement-title": "Updated" });
+  expect(compareProtectedFields({ ownerId: 1 }, { ownerId: 2 }, ["ownerId"], ["ownerId"]).matches).toBe(true);
+  expect(compareProtectedFields({ ownerId: 1 }, { ownerId: 2 }, ["ownerId"], []).matches).toBe(false);
+});

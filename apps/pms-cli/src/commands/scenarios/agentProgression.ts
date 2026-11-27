@@ -1,3 +1,4 @@
+import { readProjectProfileContract } from "./projectScenarioAdapter.js";
 import type {
   ActionCapability,
   AgentProgressionPlan,
@@ -74,15 +75,19 @@ export async function planAgentProgression(
     };
   }
 
-  const operation = resourceOperation(parsed.resourceType, parsed.intent);
+  let preflightContext = needsOperationPreflightContext(parsed)
+    ? await readFocusedProgressionContext(client, parsed)
+    : undefined;
+  const operation = resourceOperation(parsed.resourceType, parsed.intent, preflightContext);
   const declaredCapability = await actionFor(client, operation);
   if (declaredCapability.mode === "read") {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "读取能力不能走节点写入入口");
   }
-  const preflightContext = await readFocusedProgressionContext(client, parsed);
-  const preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
+  let preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
   const executionMode = deriveProgressionExecutionMode(declaredCapability);
   if (parsed.provenance) {
+    if (!preflightContext) preflightContext = await readFocusedProgressionContext(client, parsed);
+    preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
     const provenanceIssue = validateProgressionProvenance(parsed, parsed.provenance, preflightContext);
     if (provenanceIssue) {
       return {
@@ -159,6 +164,13 @@ export async function planAgentProgression(
         blockers: progressionWarnings(draftPlan),
       }),
     };
+  }
+  // The capability check above intentionally happens before context I/O so a
+  // read-only action is rejected cheaply. Once the write capability is known,
+  // all remaining plan branches return a context-backed envelope.
+  if (!preflightContext) {
+    preflightContext = await readFocusedProgressionContext(client, parsed);
+    preflightComponentKey = parsed.componentKey ?? contextComponentKey(preflightContext);
   }
   const provenanceState = await new CapabilityResolver(client).provenanceState();
   if (provenanceState === "unsupported") {
@@ -331,7 +343,10 @@ export async function executeAgentProgression(
   }
   if (parsed.resourceType === "story") return executeStoryProgression(client, parsed);
 
-  const operation = resourceOperation(parsed.resourceType, parsed.intent);
+  const preflightContext = needsOperationPreflightContext(parsed)
+    ? await readFocusedProgressionContext(client, parsed)
+    : undefined;
+  const operation = resourceOperation(parsed.resourceType, parsed.intent, preflightContext);
   const capability = await actionFor(client, operation);
   if (!mayExecuteProgression(capability, parsed.executeMode)) {
     return waitingForConfirmation(parsed, deriveProgressionExecutionMode(capability));
@@ -541,8 +556,7 @@ function rejectedCompletionResult(
 }
 
 function completionOperation(resourceType: ParsedAgentProgressionInput["resourceType"]): string {
-  if (resourceType === "project") return "node.complete-with-data";
-  return "development-item.node.complete-with-data";
+  return resourceType === "project" ? "node.complete-with-data" : "development-item.node.complete-with-data";
 }
 
 function versionFields(context: any, nodeId?: number): {
@@ -564,9 +578,21 @@ function versionFields(context: any, nodeId?: number): {
 function resourceOperation(
   resourceType: Exclude<ParsedAgentProgressionInput["resourceType"], "story">,
   intent: ParsedAgentProgressionInput["intent"],
+  context?: any,
 ): string {
   if (intent === "COMPLETE_NODE") {
-    if (resourceType === "project") return "node.complete-with-data";
+    if (resourceType === "project") {
+      if (selectedWorkflowNode(context)?.saveContract?.contractVersion === "project-profile/v1") {
+        throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目资料节点仅支持 SAVE，不支持完成节点");
+      }
+      return "node.complete-with-data";
+    }
+    const node = selectedWorkflowNode(context);
+    const completion = node?.completionContract;
+    if (isRecord(completion) && completion.command === "development-item.node.complete"
+      && completion.completionSupported === true) {
+      return completion.command;
+    }
     return "development-item.node.complete-with-data";
   }
   if (intent !== "UPDATE_NODE_FIELDS") {
@@ -575,7 +601,31 @@ function resourceOperation(
       `${resourceType} 当前没有注册 ${intent} 能力`,
     );
   }
-  return resourceType === "project" ? "node.field.update" : "development-item.node.field.update";
+  if (resourceType === "project") {
+    const node = selectedWorkflowNode(context);
+    if (node?.saveContract?.command === "project.update" || node?.saveContract?.contractVersion === "project-profile/v1") {
+      readProjectProfileContract(context, context.resource.id, node.id);
+      return "project.update";
+    }
+    return "node.field.update";
+  }
+  return "development-item.node.field.update";
+}
+
+function needsOperationPreflightContext(input: ParsedAgentProgressionInput): boolean {
+  // Selected project nodes choose SAVE from their declared profile contract.
+  // Requests without a node retain the capability-first resource behavior.
+  return (input.resourceType === "project" && input.nodeId !== undefined) || (input.intent === "COMPLETE_NODE" && input.resourceType === "requirement");
+}
+
+function selectedWorkflowNode(context: any): Record<string, any> | undefined {
+  if (!isRecord(context)) return undefined;
+  const raw = context as Record<string, any>;
+  const selectedId = raw.meta?.selectedNodeId ?? raw.currentNode?.id;
+  const nodes = Array.isArray(raw.workflow?.nodes) ? raw.workflow.nodes : [];
+  const node = nodes.find((candidate: unknown) => isRecord(candidate)
+    && candidate.id === selectedId);
+  return isRecord(node) ? node : undefined;
 }
 
 function progressionArguments(input: ParsedAgentProgressionInput): Record<string, unknown> {

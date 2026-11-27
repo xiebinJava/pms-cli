@@ -151,8 +151,19 @@ export function buildNodeContract(
     throw componentMappingError(error);
   }
   const component = resolution.component;
-  const fields = component?.fields ?? node.fields;
-  const saveContract = asRecord(component?.saveContract);
+  const saveContract = asRecord(resolution.saveContract);
+  const fields = saveContract?.contractVersion === "project-profile/v1"
+    && Array.isArray(saveContract.fieldContracts)
+    ? saveContract.fieldContracts.filter((field): field is Record<string, unknown> =>
+      typeof field === "object" && field !== null && typeof (field as any).key === "string")
+      .map((field) => ({
+        key: field.key as string,
+        label: typeof field.label === "string" ? field.label : field.key as string,
+        type: typeof field.type === "string" ? field.type : null,
+        required: field.required === true,
+        options: undefined as string[] | undefined,
+      }))
+    : component?.fields ?? node.fields;
   const writableFields = stringArray(saveContract?.effectiveWritableFields ?? saveContract?.writableFields);
   const protectedFields = stringArray(saveContract?.protectedFields).length > 0
     ? stringArray(saveContract?.protectedFields)
@@ -160,9 +171,11 @@ export function buildNodeContract(
   const effectiveAllowedActions = unique(context.allowedActions ?? []);
   const saveCommand = typeof saveContract?.command === "string" ? saveContract.command : undefined;
   const actionAuthorized = saveCommand !== undefined && effectiveAllowedActions.includes(saveCommand);
+  const completionOnly = ["development-item.node.complete", "development-item.node.complete-with-data"].includes(saveCommand ?? "")
+    && saveContract?.completionSupported === true;
   const writeCapable = saveContract !== undefined
     && actionAuthorized
-    && writableFields.length > 0
+    && (writableFields.length > 0 || completionOnly)
     && node.id !== null
     && node.version !== null
     && node.version !== undefined;
@@ -173,6 +186,7 @@ export function buildNodeContract(
     ? saveContract.completionAutomaticConfirmation : undefined;
   const completionBlockReason = typeof saveContract?.completionBlockReason === "string"
     ? saveContract.completionBlockReason : undefined;
+  const completionSupported = saveContract?.completionSupported === true;
   if (resolution.reason === "MULTIPLE_WRITABLE_COMPONENTS") {
     missingInputRules.push("当前节点存在多个可写组件，请显式指定 componentKey");
   } else if (!saveContract) {
@@ -194,7 +208,9 @@ export function buildNodeContract(
   const componentActions = component
     ? component.actions.filter((action) => effectiveAllowedActions.includes(action))
     : [];
-  const actions = writeCapable && componentActions.length > 0
+  const actions = completionOnly && writeCapable
+    ? [saveCommand!]
+    : writeCapable && componentActions.length > 0
     ? componentActions
     : writeCapable ? effectiveAllowedActions : [];
   return {
@@ -207,11 +223,13 @@ export function buildNodeContract(
     protectedFields: unique(protectedFields),
     allowedActions: unique(actions),
     allowedTransitions: stringArray(saveContract?.allowedTransitions),
+    completionRequiredMetadata: stringArray(saveContract?.completionRequiredMetadata),
     missingInputRules: unique(missingInputRules),
     ...(completionMode === "AUTO_CONFIRM" || completionMode === "VALIDATE_ONLY"
       || completionMode === "REQUIRES_DOMAIN_CONFIRMATION" ? { completionMode } : {}),
     ...(completionAutomaticConfirmation === undefined ? {} : { completionAutomaticConfirmation }),
     ...(completionBlockReason === undefined ? {} : { completionBlockReason }),
+    ...(completionSupported ? { completionSupported: true } : {}),
     writeCapable,
   };
 }

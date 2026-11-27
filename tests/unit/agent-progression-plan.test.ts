@@ -98,6 +98,7 @@ function requirementClient() {
     workflow: {
       nodes: [{
         id: 101,
+        version: 5,
         key: "testing",
         label: "测试中",
         components: [{
@@ -235,6 +236,278 @@ describe("agent progression plan", () => {
     expect(result.writeDecision).toBe("READY");
     expect(result.operation).toBe("development-item.node.complete-with-data");
     expect(result.preview).toMatchObject({ command: "development-item.node.complete-with-data" });
+  });
+
+  it("selects direct completion for a requirement node with no fields or components", async () => {
+    const client = requirementClient();
+    const directContext = {
+      ...client.contextData,
+      currentNode: { id: 102, key: "release", label: "需求上线" },
+      workflow: {
+        nodes: [{
+          id: 102,
+          key: "release",
+          label: "需求上线",
+          version: 6,
+          components: [],
+          fields: [],
+          completionContract: {
+            command: "development-item.node.complete",
+            completionSupported: true,
+            completionCommand: "development-item.node.complete",
+            writableFields: [],
+            itemType: "REQUIREMENT",
+            itemId: 24,
+            nodeId: 102,
+            version: 6,
+          },
+        }],
+      },
+      version: 6,
+      allowedActions: ["development-item.node.complete"],
+    };
+    client.context = vi.fn(async () => directContext);
+    client.capabilities = vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "requirement",
+        actions: [{
+          name: "development-item.node.complete",
+          label: "完成节点",
+          description: "完成无字段节点",
+          mode: "automatic",
+          risk: "medium",
+          scopes: [],
+          inputSchema: { itemType: {}, itemId: {}, nodeId: {}, version: {} },
+          requiresContext: true,
+          refreshScopes: [],
+        }],
+      }],
+      scopes: [], workflowTypes: [],
+    }));
+
+    const result = await planAgentProgression(client, {
+      ...input("COMPLETE_NODE", {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: {}, requestedCompletion: true,
+      }),
+      resourceType: "requirement",
+      resourceId: 24,
+      nodeId: 102,
+    });
+
+    expect(result.writeDecision).toBe("READY");
+    expect(result.operation).toBe("development-item.node.complete");
+    expect(result.normalizedArguments).toEqual({
+      itemType: "REQUIREMENT", itemId: 24, nodeId: 102, version: 6,
+    });
+    expect(client.preview.mock.calls[0]?.[0].operation).toBe("development-item.node.complete");
+  });
+
+  it("completes a readonly execution node with metadata and no fieldValues", async () => {
+    const client = requirementClient();
+    const directContext = {
+      ...client.contextData,
+      currentNode: { id: 102, key: "release", label: "需求上线" },
+      workflow: {
+        nodes: [{
+          id: 102,
+          key: "release",
+          label: "需求上线",
+          version: 6,
+          components: [{ key: "requirement-execution", fields: [], actions: [], contentState: "UNSUPPORTED" }],
+          fields: [],
+          completionContract: {
+            command: "development-item.node.complete-with-data",
+            completionSupported: true,
+            completionCommand: "development-item.node.complete-with-data",
+            writableFields: [],
+            completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+            itemType: "REQUIREMENT",
+            itemId: 24,
+            nodeId: 102,
+            version: 6,
+          },
+        }],
+      },
+      version: 6,
+      allowedActions: ["development-item.node.complete-with-data"],
+    };
+    client.context = vi.fn(async () => directContext);
+    client.capabilities = vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "requirement",
+        actions: [{
+          name: "development-item.node.complete-with-data",
+          label: "完成节点",
+          description: "完成无字段节点",
+          mode: "automatic",
+          risk: "medium",
+          scopes: [],
+          inputSchema: { itemType: {}, itemId: {}, nodeId: {}, version: {}, ownerId: {}, startDate: {}, endDate: {} },
+          requiresContext: true,
+          refreshScopes: [],
+        }],
+      }],
+      scopes: [], workflowTypes: [],
+    }));
+
+    const result = await planAgentProgression(client, {
+      ...input("COMPLETE_NODE", {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: {}, requestedCompletion: true, ownerId: 2, startDate: "2026-10-10", endDate: "2026-10-20",
+      }),
+      resourceType: "requirement",
+      resourceId: 24,
+      nodeId: 102,
+    });
+
+    expect(result.writeDecision).toBe("READY");
+    expect(result.operation).toBe("development-item.node.complete-with-data");
+    expect(result.normalizedArguments).toEqual({
+      itemType: "REQUIREMENT", itemId: 24, nodeId: 102, version: 6, ownerId: 2, startDate: "2026-10-10", endDate: "2026-10-20",
+    });
+    expect(client.preview.mock.calls[0]?.[0].operation).toBe("development-item.node.complete-with-data");
+  });
+
+  it("completes a root entry with metadata and an empty patch", async () => {
+    const client = requirementClient();
+    const directContext = {
+      ...client.contextData,
+      currentNode: { id: 102, key: "release", label: "需求上线" },
+      workflow: {
+        nodes: [{
+          id: 102,
+          key: "release",
+          label: "需求上线",
+          version: 6,
+          components: [],
+          fieldValues: { "requirement-title": "Existing title" },
+          fields: [],
+          saveContract: {
+            command: "development-item.node.field.update",
+            fieldValuesPath: "$",
+            completionSupported: true,
+            completionCommand: "development-item.node.complete-with-data",
+            writableFields: ["requirement-title"],
+            requiredFields: ["requirement-title"],
+            completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+            itemType: "REQUIREMENT",
+            itemId: 24,
+            nodeId: 102,
+            version: 6,
+          },
+        }],
+      },
+      version: 6,
+      allowedActions: ["development-item.node.complete-with-data"],
+    };
+    client.context = vi.fn(async () => directContext);
+    client.capabilities = vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "requirement",
+        actions: [{
+          name: "development-item.node.complete-with-data",
+          label: "完成节点",
+          description: "完成无字段节点",
+          mode: "automatic",
+          risk: "medium",
+          scopes: [],
+          inputSchema: { itemType: {}, itemId: {}, nodeId: {}, version: {}, ownerId: {}, startDate: {}, endDate: {} },
+          requiresContext: true,
+          refreshScopes: [],
+        }],
+      }],
+      scopes: [], workflowTypes: [],
+    }));
+
+    const result = await planAgentProgression(client, {
+      ...input("COMPLETE_NODE", {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: {}, requestedCompletion: true, ownerId: 2, startDate: "2026-10-10", endDate: "2026-10-20",
+      }),
+      resourceType: "requirement",
+      resourceId: 24,
+      nodeId: 102,
+    });
+
+    expect(result.writeDecision).toBe("READY");
+    expect(result.operation).toBe("development-item.node.complete-with-data");
+    expect(result.normalizedArguments).toEqual({
+      itemType: "REQUIREMENT", itemId: 24, nodeId: 102, version: 6, ownerId: 2, startDate: "2026-10-10", endDate: "2026-10-20",
+    });
+    expect(client.preview.mock.calls[0]?.[0].operation).toBe("development-item.node.complete-with-data");
+  });
+
+  it.each(["COMPLETE_NODE", "UPDATE_NODE_FIELDS"] as const)("rejects field patches for completion-only execution: %s", async (intent) => {
+    const client = requirementClient();
+    const directContext = {
+      ...client.contextData,
+      currentNode: { id: 102, key: "release", label: "需求上线" },
+      workflow: {
+        nodes: [{
+          id: 102,
+          key: "release",
+          label: "需求上线",
+          version: 6,
+          components: [{ key: "requirement-execution", fields: [], actions: [], contentState: "UNSUPPORTED" }],
+          fields: [],
+          completionContract: {
+            command: "development-item.node.complete-with-data",
+            completionSupported: true,
+            completionCommand: "development-item.node.complete-with-data",
+            writableFields: [],
+            completionRequiredMetadata: ["ownerId", "startDate", "endDate"],
+            itemType: "REQUIREMENT",
+            itemId: 24,
+            nodeId: 102,
+            version: 6,
+          },
+        }],
+      },
+      version: 6,
+      allowedActions: ["development-item.node.complete-with-data"],
+    };
+    client.context = vi.fn(async () => directContext);
+    client.capabilities = vi.fn(async () => ({
+      version: "ai-v1",
+      resources: [{
+        type: "requirement",
+        actions: [{
+          name: "development-item.node.complete-with-data",
+          label: "完成节点",
+          description: "完成无字段节点",
+          mode: "automatic",
+          risk: "medium",
+          scopes: [],
+          inputSchema: { itemType: {}, itemId: {}, nodeId: {}, version: {}, ownerId: {}, startDate: {}, endDate: {} },
+          requiresContext: true,
+          refreshScopes: [],
+        }],
+      }],
+      scopes: [], workflowTypes: [],
+    }));
+
+    const completionCapabilities = client.capabilities;
+    client.capabilities = vi.fn(async () => {
+      const capabilities = await completionCapabilities();
+      return { ...capabilities, resources: capabilities.resources.map((resource: any) => ({ ...resource, actions: [...resource.actions, { ...resource.actions[0]!, name: "development-item.node.field.update" }] })) };
+    });
+    const planned = planAgentProgression(client, {
+      ...input(intent, {
+        facts: [], inferences: [], assumptions: [], unresolvedDecisions: [],
+        patch: { target: 999 }, fieldSources: { target: { sourceType: "conversation", sourceRefs: ["conversation:latest"], confidence: "high" } }, requestedCompletion: true, ownerId: 2, startDate: "2026-10-10", endDate: "2026-10-20",
+      }),
+      resourceType: "requirement",
+      resourceId: 24,
+      nodeId: 102,
+    });
+
+    if (intent === "UPDATE_NODE_FIELDS") await expect(planned).rejects.toThrow(/完成专用节点/);
+    else expect((await planned).writeDecision).toBe("CAPABILITY_UNAVAILABLE");
+    expect(client.preview).not.toHaveBeenCalled();
   });
 
   it("executes a requirement completion preview and verifies the readback", async () => {

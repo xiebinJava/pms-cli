@@ -53,7 +53,7 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
   async loadContext(client, input) {
     if (input.operation === "project.create") return null;
     const projectId = requireProjectId(input);
-    const focused = input.operation === "node.field.update" || input.operation === "node.complete-with-data";
+    const focused = (input.operation === "project.update" && (input.nodeId !== undefined || input.draft !== undefined)) || input.operation === "node.field.update" || input.operation === "node.complete-with-data";
     const requestedComponent = input.componentKey ?? readString(input.arguments.workbench);
     const context = await client.context(
       { type: "project", id: projectId },
@@ -84,6 +84,14 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
     if (input.operation === "project.create") return { ...input.arguments };
     const projectId = requireProjectId(input);
     if (input.operation === "project.update") {
+      if (input.nodeId !== undefined || input.draft !== undefined) {
+        const project = readProjectContext(context);
+        if (!project) throw new ResourceScenarioError("RESOURCE_NOT_FOUND", "项目上下文不存在");
+        const contract = readProjectProfileContract(project, projectId, requireNodeId(input));
+        const patch = readPatch(input);
+        validateNodeFields({ ...contract, dynamicFields: false }, patch);
+        return { ...patch, projectId };
+      }
       return { ...input.arguments, projectId };
     }
 
@@ -128,6 +136,10 @@ export const projectScenarioAdapter: ResourceScenarioAdapter = {
       throw new ResourceScenarioError("CONTEXT_CONFLICT", "项目上下文版本与请求版本不一致");
     }
     if (input.operation === "project.update") {
+      if (input.nodeId !== undefined || input.draft !== undefined) {
+        const contract = readProjectProfileContract(project, projectId, requireNodeId(input));
+        validateNodeFields({ ...contract, dynamicFields: false }, readPatch(input));
+      }
       if (normalizedArguments.projectId !== projectId) {
         throw new ResourceScenarioError("CONTEXT_CONFLICT", "写入参数中的项目 ID 与资源 ID 不一致");
       }
@@ -248,7 +260,7 @@ function readSaveContract(
   };
 }
 
-function validateNodeFields(contract: SaveContract, fields: unknown): void {
+function validateNodeFields(contract: Pick<SaveContract, "dynamicFields" | "writableFields" | "protectedFields">, fields: unknown): void {
   if (!isRecord(fields) || Object.keys(fields).length === 0) {
     throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "fields 必须包含至少一个字段");
   }
@@ -347,4 +359,30 @@ function isPositiveInteger(value: unknown): value is number {
 
 function isNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+}
+
+const PROFILE_FIELDS = new Set(["description", "priority", "projectLevel", "orgUnitId", "projectManagerId", "startDate", "endDate"]);
+export function readProjectProfileContract(context: WorkflowContext, projectId: number, nodeId: number) {
+  const node = readNode(context, nodeId);
+  const raw = node?.saveContract;
+  const permissions = isRecord(node?.permissions) ? node.permissions : undefined;
+  const projectStatus = context.resourceDetails?.status;
+  if (permissions?.readOnly === true || node?.status === 2 || node?.status === 3
+    || projectStatus === 2 || projectStatus === 3 || projectStatus === 4) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "只读项目或流程节点不能保存立项资料");
+  }
+  if (!node || !isRecord(raw) || raw.command !== "project.update"
+    || raw.contractVersion !== "project-profile/v1" || raw.fieldValuesPath !== "$"
+    || raw.completionSupported !== false || !isNonNegativeInteger(raw.nodeVersion)
+    || !isNonNegativeInteger(raw.projectVersion) || !isStringArray(raw.writableFields)
+    || raw.writableFields.length === 0 || raw.writableFields.some((field: string) => !PROFILE_FIELDS.has(field))) {
+    throw new ResourceScenarioError("CAPABILITY_UNAVAILABLE", "项目节点没有受支持的 project-profile/v1 SAVE 合约");
+  }
+  if (context.resource.type !== "project" || context.resource.id !== projectId
+    || raw.projectId !== projectId || raw.nodeId !== nodeId || node.version !== raw.nodeVersion
+    || (context.entityVersion ?? context.version) !== raw.projectVersion
+    || (context.meta?.selectedNodeId ?? context.currentNode?.id) !== nodeId) {
+    throw new ResourceScenarioError("CONTEXT_CONFLICT", "项目资料 SAVE 合约目标或版本不一致");
+  }
+  return { ...raw, writableFields: raw.writableFields as string[], protectedFields: [...(isStringArray(raw.protectedFields) ? raw.protectedFields : []), "members", "followers", "memberIds", "followerIds", "status", "projectId", "nodeId"] };
 }

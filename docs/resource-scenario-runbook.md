@@ -39,10 +39,23 @@ pms scenario progression run project --name "PMS 项目管理系统" --intent RE
 pms scenario progression run project --name "PMS 项目管理系统" --intent UPDATE_NODE_FIELDS \
   --execute-mode plan --node-id <node-id> \
   --draft-json '<agent-progression/v2 draft>' --format json
+
+# 需求当前节点无 components/fields 时，draft 只表达完成意图，不需要伪造 patch 字段
+pms scenario progression run requirement 42 --intent COMPLETE_NODE \
+  --execute-mode plan --node-id <node-id> \
+  --draft-json '{"facts":[],"inferences":[],"assumptions":[],"unresolvedDecisions":[],"patch":{},"requestedCompletion":true}' \
+  --format json
 ```
 
 这里由 Claude/Codex/DeepSeek 负责把自然语言整理成草稿，CLI 只读取 PMS、生成 preview、执行并回读。模型凭据留在外部工作台，不传入 CLI；写入字段必须引用本次 context 返回的 `saveContract`，不能猜测 nodeId 或字段 key。低/中风险且用户已明确要求时可使用 `--execute-mode auto`；高风险必须使用 `confirm`，并始终携带幂等键。
 项目节点支持读取、字段更新，以及在 PMS 能力目录和当前节点 `saveContract` 都声明时使用 `node.complete-with-data` 原子保存并完成。若任一侧未声明完成能力，`COMPLETE_NODE` 会返回 `CAPABILITY_UNAVAILABLE`，不会绕过能力合同或拆成多次写入。
+
+当需求当前节点的 `components` 和 `fields` 都为空时，PMS focused context 会显式返回
+`completionContract`（`node-completion/v1`）。这表示该节点没有详情字段可填写，且后端已授权
+`development-item.node.complete`；CLI 会直接使用节点 `id`/`version` 完成节点，不会伪造组件或发送空字段补丁。
+执行后 CLI 必须回读目标节点状态为已完成（后端状态值 `2`），否则返回
+`WRITE_RESULT_UNKNOWN`。该能力当前只在需求适配器开放，专题和故事仍以各自的
+`saveContract` 声明为准。
 
 ## plan → 确认 → execute
 
