@@ -1,3 +1,4 @@
+import packageMetadata from "../../../../package.json" with { type: "json" };
 import type { PmsClient } from "../../../../packages/pms-client/src/index.js";
 import { PmsClientError, safeErrorMessage } from "../../../../packages/pms-client/src/index.js";
 import {
@@ -148,7 +149,6 @@ const HELP = [
   "Options accept both --name value and --name=value forms.",
   "",
 ].join("\n");
-const VERSION = "0.1.1";
 
 export interface CliRuntime {
   client: PmsClient;
@@ -178,7 +178,7 @@ export async function runCli(argv: string[], deps: CliDependencies): Promise<voi
       return;
     }
     if (invocation.options.version === "true" || invocation.options.v !== undefined) {
-      deps.writeStdout(VERSION + "\n");
+      deps.writeStdout(packageMetadata.version + "\n");
       return;
     }
 
